@@ -55,25 +55,39 @@ const Elephant: FC<ElephantProps> = ({ state, speechText }) => {
       case "thinking":
         return (
           <div className="relative">
-            <div className="w-72 h-72 mx-auto" dangerouslySetInnerHTML={{ __html: elephantSvg }} />
-            <div className="absolute top-8 right-24">
-              <div className="flex space-x-1">
-                <motion.div
-                  className="w-3 h-3 bg-primary rounded-full"
-                  animate={{ y: [0, -10, 0] }}
-                  transition={{ repeat: Infinity, duration: 0.8, delay: 0 }}
-                />
-                <motion.div
-                  className="w-3 h-3 bg-primary rounded-full"
-                  animate={{ y: [0, -10, 0] }}
-                  transition={{ repeat: Infinity, duration: 0.8, delay: 0.2 }}
-                />
-                <motion.div
-                  className="w-3 h-3 bg-primary rounded-full"
-                  animate={{ y: [0, -10, 0] }}
-                  transition={{ repeat: Infinity, duration: 0.8, delay: 0.4 }}
-                />
-              </div>
+            <motion.div 
+              className="w-72 h-72 mx-auto"
+              animate={{ scale: [1, 1.03, 1] }}
+              transition={{ repeat: Infinity, duration: 2 }}
+              dangerouslySetInnerHTML={{ __html: elephantSvg }} 
+            />
+            
+            {/* Thinking animation - enhanced version */}
+            <div className="absolute top-0 left-0 right-0 flex justify-center">
+              <motion.div 
+                className="mt-8 px-5 py-3 bg-white rounded-full shadow-lg border-2 border-primary"
+                initial={{ y: -10, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="flex space-x-2">
+                  <motion.div
+                    className="w-4 h-4 bg-primary rounded-full"
+                    animate={{ scale: [1, 1.5, 1] }}
+                    transition={{ repeat: Infinity, duration: 0.6, delay: 0 }}
+                  />
+                  <motion.div
+                    className="w-4 h-4 bg-primary rounded-full"
+                    animate={{ scale: [1, 1.5, 1] }}
+                    transition={{ repeat: Infinity, duration: 0.6, delay: 0.2 }}
+                  />
+                  <motion.div
+                    className="w-4 h-4 bg-primary rounded-full"
+                    animate={{ scale: [1, 1.5, 1] }}
+                    transition={{ repeat: Infinity, duration: 0.6, delay: 0.4 }}
+                  />
+                </div>
+              </motion.div>
             </div>
           </div>
         );

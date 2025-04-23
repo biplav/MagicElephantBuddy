@@ -74,11 +74,17 @@ export default function Home() {
     }
   };
 
+  // Start recording automatically when ready
+  useEffect(() => {
+    if (isReady && appState === "interaction" && !isRecording && !isProcessing) {
+      startRecording();
+    }
+  }, [isReady, appState, isRecording, isProcessing, startRecording]);
+
+  // Handle microphone button to stop current recording and trigger processing
   const handleMicrophoneButton = () => {
     if (isRecording) {
       stopRecording();
-    } else {
-      startRecording();
     }
   };
 
@@ -163,30 +169,50 @@ export default function Home() {
               <div className="w-full px-4 py-6 bg-white bg-opacity-80 rounded-t-3xl shadow-lg">
                 <div className="flex flex-col items-center space-y-4">
                   <p className="text-primary font-medium text-lg">
-                    {isRecording 
-                      ? "Appu is listening..." 
-                      : isProcessing 
-                        ? "Appu is thinking..." 
-                        : elephantState === "speaking" 
-                          ? "Appu is speaking..." 
-                          : "Tap the microphone to talk with Appu!"}
+                    {isProcessing 
+                      ? "Appu is thinking..." 
+                      : elephantState === "speaking" 
+                        ? "Appu is speaking..." 
+                        : isRecording 
+                          ? "Appu is listening..." 
+                          : "Appu is getting ready to listen..."}
                   </p>
                   
-                  <Button 
-                    className={`w-20 h-20 rounded-full shadow-lg transition transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-pink-300 flex items-center justify-center ${
-                      isRecording 
-                        ? "bg-[hsl(var(--success))] hover:bg-green-600" 
-                        : "bg-accent hover:bg-pink-400"
-                    }`}
-                    onClick={handleMicrophoneButton}
-                    disabled={!isReady || isProcessing}
-                  >
-                    <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                    </svg>
-                  </Button>
+                  {isProcessing ? (
+                    <div className="w-20 h-20 rounded-full shadow-lg bg-yellow-400 flex items-center justify-center animate-pulse">
+                      <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                  ) : (
+                    <Button 
+                      className={`w-20 h-20 rounded-full shadow-lg transition transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-pink-300 flex items-center justify-center ${
+                        isRecording 
+                          ? "bg-[hsl(var(--success))] hover:bg-green-600" 
+                          : "bg-accent hover:bg-pink-400"
+                      }`}
+                      onClick={handleMicrophoneButton}
+                      disabled={!isReady || isProcessing}
+                    >
+                      {isRecording ? (
+                        <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                        </svg>
+                      ) : (
+                        <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                        </svg>
+                      )}
+                    </Button>
+                  )}
                   
-                  <p className="text-neutral text-sm">Appu can hear you when the microphone is active</p>
+                  <p className="text-neutral text-sm">
+                    {isProcessing 
+                      ? "Please wait while Appu thinks..." 
+                      : isRecording 
+                        ? "Appu is listening to you now! Tap when you're done talking" 
+                        : "Tap to start talking with Appu!"}
+                  </p>
                 </div>
               </div>
             </motion.div>
