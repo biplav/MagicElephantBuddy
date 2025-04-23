@@ -1,9 +1,15 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { WebSocketServer, WebSocket } from 'ws';
+
+// Define a custom interface for the request with file
+interface MulterRequest extends Request {
+  file?: Express.Multer.File;
+}
 
 // Configure multer for audio uploads
 const upload = multer({ 
@@ -15,19 +21,21 @@ const upload = multer({
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Handle audio processing
-  app.post('/api/process-audio', upload.single('audio'), (req, res) => {
+  app.post('/api/process-audio', upload.single('audio'), (req: MulterRequest, res: Response) => {
     if (!req.file) {
       return res.status(400).json({ error: 'No audio file provided' });
     }
 
+    console.log(`Received audio file of size: ${req.file.size} bytes`);
+
     // Simulate processing delay (1-2 seconds)
     setTimeout(() => {
       try {
-        // In a real implementation, we would process the audio and generate a response
-        // For now, we'll just return a dummy audio file
+        // Create a response object with both audio data and text
+        const responseText = "Thank you for reaching out";
         
-        // Create a simple audio response (silence)
-        // In a real implementation, this would be a proper text-to-speech response
+        // In a real implementation, we would generate proper audio
+        // For now, we'll just return a dummy audio file
         const dummyAudio = Buffer.from([
           // Simple WAV file header (44 bytes) followed by silence
           0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 
@@ -38,8 +46,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           0x00, 0x00, 0x00, 0x00
         ]);
         
-        res.set('Content-Type', 'audio/wav');
-        res.send(dummyAudio);
+        // Return a JSON response with both the text and Base64 encoded audio
+        res.json({
+          text: responseText,
+          audioData: dummyAudio.toString('base64'),
+          contentType: 'audio/wav'
+        });
       } catch (error) {
         console.error('Error processing audio:', error);
         res.status(500).json({ error: 'Failed to process audio' });
@@ -48,6 +60,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
+  
+  // Set up WebSocket server for real-time communication (future use)
+  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  
+  wss.on('connection', (ws) => {
+    console.log('WebSocket client connected');
+    
+    ws.on('message', (message) => {
+      console.log('Received message:', message);
+      
+      // Echo back for now
+      if (ws.readyState === ws.OPEN) {
+        ws.send(JSON.stringify({ message: 'Received message' }));
+      }
+    });
+    
+    ws.on('close', () => {
+      console.log('WebSocket client disconnected');
+    });
+  });
 
   return httpServer;
 }

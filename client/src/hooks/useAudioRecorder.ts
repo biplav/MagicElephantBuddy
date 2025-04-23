@@ -76,22 +76,21 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
         throw new Error('Failed to process audio');
       }
       
-      // Read the audio response
-      const audioResponse = await response.blob();
+      // Read the JSON response containing both text and audio data
+      const responseData = await response.json();
+      
+      // Get the text response
+      const responseText = responseData.text || "Thank you for reaching out";
+      
+      // Convert Base64 audio data to a Blob
+      const responseAudioBlob = base64ToBlob(
+        responseData.audioData,
+        responseData.contentType || 'audio/wav'
+      );
       
       // Play the audio response
-      const audioUrl = URL.createObjectURL(audioResponse);
+      const audioUrl = URL.createObjectURL(responseAudioBlob);
       const audio = new Audio(audioUrl);
-      
-      // Generate a random response text (this would normally come from the server)
-      const responses = [
-        "That sounds interesting! Tell me more about it.",
-        "I love that! Let's talk more about it.",
-        "Wow! I've never heard about that before.",
-        "That's amazing! Do you want to know what I think?",
-        "How fun! Let's play a game together next!"
-      ];
-      const responseText = responses[Math.floor(Math.random() * responses.length)];
       
       // Play the audio and trigger the callback
       audio.onloadedmetadata = () => {
@@ -111,6 +110,19 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
     } finally {
       setIsProcessing(false);
     }
+  };
+  
+  // Helper function to convert Base64 to Blob
+  const base64ToBlob = (base64: string, contentType: string): Blob => {
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    
+    const byteArray = new Uint8Array(byteNumbers);
+    return new Blob([byteArray], { type: contentType });
   };
 
   return {
