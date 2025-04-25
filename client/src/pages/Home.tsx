@@ -64,12 +64,20 @@ export default function Home() {
       // Set the speech text
       setSpeechText(text);
       
-      // Return to idle state after speaking
+      // Return to idle state after speaking and restart recording
       setTimeout(() => {
         setElephantState("idle");
+        
+        // Small delay to allow state to update and animations to complete
         setTimeout(() => {
           setSpeechText(undefined);
-        }, 5000);
+          
+          // Auto-restart recording after Appu finishes speaking
+          if (isReady && appState === "interaction" && !isRecording && !isProcessing) {
+            console.log("Auto-restarting recording after Appu finished speaking");
+            startRecording();
+          }
+        }, 1000);
       }, 4000);
     }
   });
@@ -84,11 +92,17 @@ export default function Home() {
           setElephantState("idle");
           setTimeout(() => {
             setSpeechText(undefined);
-          }, 5000);
+            
+            // Auto-restart recording after initial greeting
+            if (isReady && appState === "interaction" && !isRecording && !isProcessing) {
+              console.log("Auto-restarting recording after initial greeting");
+              startRecording();
+            }
+          }, 1000);
         }, 3000);
       }, 1000);
     }
-  }, [isReady, appState]);
+  }, [isReady, appState, isRecording, isProcessing, startRecording]);
 
   useEffect(() => {
     if (isRecording) {
@@ -127,9 +141,26 @@ export default function Home() {
   // Start recording automatically when ready
   useEffect(() => {
     if (isReady && appState === "interaction" && !isRecording && !isProcessing) {
+      console.log("Auto-starting recording because system is ready and not busy");
       startRecording();
     }
   }, [isReady, appState, isRecording, isProcessing, startRecording]);
+  
+  // Restart recording after processing is complete
+  useEffect(() => {
+    // Only trigger when processing changes from true to false
+    if (!isProcessing && isReady && appState === "interaction" && elephantState !== "speaking") {
+      // Small delay to ensure everything is reset properly
+      const timer = setTimeout(() => {
+        if (!isRecording && !isProcessing) {
+          console.log("Restarting recording after processing completed");
+          startRecording();
+        }
+      }, 1000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isProcessing, isReady, appState, elephantState, isRecording, startRecording]);
 
   // Handle microphone button to stop current recording and trigger processing
   const handleMicrophoneButton = () => {
@@ -180,12 +211,20 @@ export default function Home() {
       // Clear the input
       setDirectTextInput("");
       
-      // Return to idle state after speaking
+      // Return to idle state after speaking and restart recording
       setTimeout(() => {
         setElephantState("idle");
+        
+        // Small delay to allow state to update and animations to complete
         setTimeout(() => {
           setSpeechText(undefined);
-        }, 5000);
+          
+          // Auto-restart recording after Appu finishes speaking
+          if (isReady && appState === "interaction" && !isRecording && !isProcessing) {
+            console.log("Auto-restarting recording after processing text input response");
+            startRecording();
+          }
+        }, 1000);
       }, 4000);
       
     } catch (error: any) {
@@ -220,9 +259,17 @@ export default function Home() {
       // Reset to idle state after showing the error message
       setTimeout(() => {
         setElephantState("idle");
+        
+        // Small delay to allow state to update and animations to complete
         setTimeout(() => {
           setSpeechText(undefined);
-        }, 5000);
+          
+          // Auto-restart recording after error message
+          if (isReady && appState === "interaction" && !isRecording && !isProcessing) {
+            console.log("Auto-restarting recording after error message");
+            startRecording();
+          }
+        }, 1000);
       }, 4000);
     } finally {
       setIsProcessingText(false);
