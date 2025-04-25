@@ -5,13 +5,14 @@ import Elephant from "@/components/Elephant";
 import { motion, AnimatePresence } from "framer-motion";
 import useAudioRecorder from "@/hooks/useAudioRecorder";
 import PermissionModal from "@/components/PermissionModal";
+// Will implement error handling later
 
 type AppState = "welcome" | "interaction";
 
 export default function Home() {
   const [appState, setAppState] = useState<AppState>("welcome");
   const [permissionModalOpen, setPermissionModalOpen] = useState(false);
-  const [elephantState, setElephantState] = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
+  const [elephantState, setElephantState] = useState<"idle" | "listening" | "thinking" | "speaking" | "error" | "rateLimit" | "network" | "auth" | "serviceUnavailable">("idle");
   const [speechText, setSpeechText] = useState<string | undefined>(undefined);
   const [transcribedText, setTranscribedText] = useState<string>("");
   const [showDebug, setShowDebug] = useState<boolean>(false);
@@ -117,7 +118,12 @@ export default function Home() {
       });
       
       if (!response.ok) {
-        throw new Error('Failed to process text');
+        // Parse the error response
+        const errorData = await response.json();
+        // Create an error object with the response data
+        const error: any = new Error(errorData.error || 'Failed to process text');
+        error.response = { data: errorData };
+        throw error;
       }
       
       const responseData = await response.json();
@@ -140,8 +146,42 @@ export default function Home() {
         }, 5000);
       }, 4000);
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error processing text:', error);
+      
+      // Check if it's an API error response with an error type
+      if (error.response && error.response.data && error.response.data.errorType) {
+        // Set the elephant state based on the error type
+        const errorType = error.response.data.errorType;
+        if (errorType === 'rateLimit') {
+          setElephantState('rateLimit');
+          setSpeechText("I'm feeling a bit tired right now. Can we talk again in a little bit?");
+        } else if (errorType === 'network') {
+          setElephantState('network');
+          setSpeechText("I can't hear you very well. Please check your internet connection and try again.");
+        } else if (errorType === 'auth') {
+          setElephantState('auth');
+          setSpeechText("I need to take a quick break. Please try again later.");
+        } else if (errorType === 'serviceUnavailable') {
+          setElephantState('serviceUnavailable');
+          setSpeechText("I'm having trouble thinking right now. Can we try again soon?");
+        } else {
+          setElephantState('error');
+          setSpeechText("Oops! Something went wrong. Let's try again.");
+        }
+      } else {
+        // Generic error handling
+        setElephantState('error');
+        setSpeechText("Oops! Something went wrong. Let's try again.");
+      }
+      
+      // Reset to idle state after showing the error message
+      setTimeout(() => {
+        setElephantState("idle");
+        setTimeout(() => {
+          setSpeechText(undefined);
+        }, 5000);
+      }, 4000);
     } finally {
       setIsProcessingText(false);
     }

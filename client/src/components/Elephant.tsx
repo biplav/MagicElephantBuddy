@@ -102,6 +102,35 @@ const Elephant: FC<ElephantProps> = ({ state, speechText }) => {
           />
         );
       
+      // Error states - show sad/confused elephant
+      case "error":
+      case "rateLimit":
+      case "network":
+      case "auth":
+      case "serviceUnavailable":
+        return (
+          <div className="relative">
+            <motion.div
+              className="w-72 h-72 mx-auto"
+              animate={{ rotate: [-1, 1, -1] }}
+              transition={{ repeat: Infinity, duration: 4 }}
+              dangerouslySetInnerHTML={{ __html: elephantSvg }}
+            />
+            <div className="absolute top-0 left-0 right-0 flex justify-center">
+              <motion.div 
+                className="mt-8 px-5 py-3 bg-white rounded-full shadow-lg border-2 border-red-400"
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="text-red-500 font-bold">
+                  !
+                </div>
+              </motion.div>
+            </div>
+          </div>
+        );
+      
       default:
         return (
           <div className="w-72 h-72 mx-auto" dangerouslySetInnerHTML={{ __html: elephantSvg }} />
