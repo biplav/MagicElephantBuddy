@@ -15,6 +15,8 @@ export default function Home() {
   const [speechText, setSpeechText] = useState<string | undefined>(undefined);
   const [transcribedText, setTranscribedText] = useState<string>("");
   const [showDebug, setShowDebug] = useState<boolean>(false);
+  const [directTextInput, setDirectTextInput] = useState<string>("");
+  const [isProcessingText, setIsProcessingText] = useState<boolean>(false);
 
   const {
     isReady,
@@ -90,6 +92,58 @@ export default function Home() {
   const handleMicrophoneButton = () => {
     if (isRecording) {
       stopRecording();
+    }
+  };
+  
+  // Process direct text input (for debugging)
+  const processDirectTextInput = async () => {
+    if (!directTextInput.trim() || isProcessingText) return;
+    
+    try {
+      setIsProcessingText(true);
+      setElephantState("thinking");
+      setSpeechText(undefined);
+      
+      // Set the transcribed text immediately since we're bypassing Whisper
+      setTranscribedText(directTextInput);
+      
+      // Send the text to the backend for processing
+      const response = await fetch('/api/process-text', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text: directTextInput }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to process text');
+      }
+      
+      const responseData = await response.json();
+      
+      // Process the response
+      const responseText = responseData.text;
+      
+      // Simulate audio playback 
+      setElephantState("speaking");
+      setSpeechText(responseText);
+      
+      // Clear the input
+      setDirectTextInput("");
+      
+      // Return to idle state after speaking
+      setTimeout(() => {
+        setElephantState("idle");
+        setTimeout(() => {
+          setSpeechText(undefined);
+        }, 5000);
+      }, 4000);
+      
+    } catch (error) {
+      console.error('Error processing text:', error);
+    } finally {
+      setIsProcessingText(false);
     }
   };
 
@@ -243,18 +297,45 @@ export default function Home() {
       
       {/* Debug Panel - only visible when debug mode is enabled */}
       {showDebug && (
-        <div className="fixed bottom-0 left-0 right-0 bg-gray-800 text-white p-4 z-50 max-h-60 overflow-auto">
+        <div className="fixed bottom-0 left-0 right-0 bg-gray-800 text-white p-4 z-50 max-h-80 overflow-auto">
           <h3 className="font-bold mb-2">Debug Information</h3>
-          <div className="grid grid-cols-2 gap-2 text-sm">
+          <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
               <p><span className="font-semibold">State:</span> {elephantState}</p>
               <p><span className="font-semibold">Recording:</span> {isRecording ? 'Yes' : 'No'}</p>
-              <p><span className="font-semibold">Processing:</span> {isProcessing ? 'Yes' : 'No'}</p>
+              <p><span className="font-semibold">Processing:</span> {isProcessing || isProcessingText ? 'Yes' : 'No'}</p>
+              
+              <div className="mt-3">
+                <p><span className="font-semibold">Direct Text Input:</span></p>
+                <div className="flex items-center mt-1">
+                  <input
+                    type="text"
+                    value={directTextInput}
+                    onChange={(e) => setDirectTextInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        processDirectTextInput();
+                      }
+                    }}
+                    placeholder="Type here instead of speaking..."
+                    className="flex-grow p-2 rounded bg-gray-700 text-white mr-2"
+                    disabled={isProcessingText || isProcessing}
+                  />
+                  <Button
+                    onClick={processDirectTextInput}
+                    disabled={isProcessingText || isProcessing || !directTextInput.trim()}
+                    className="bg-primary hover:bg-primary-dark px-3 py-1.5 rounded"
+                  >
+                    {isProcessingText ? 'Processing...' : 'Send'}
+                  </Button>
+                </div>
+              </div>
             </div>
+            
             <div>
               <p><span className="font-semibold">Transcribed:</span></p>
               <p className="bg-gray-700 p-2 rounded">{transcribedText || '(Nothing yet)'}</p>
-              <p><span className="font-semibold">Response:</span></p>
+              <p className="mt-2"><span className="font-semibold">Response:</span></p>
               <p className="bg-gray-700 p-2 rounded">{speechText || '(Nothing yet)'}</p>
             </div>
           </div>
