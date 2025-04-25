@@ -159,26 +159,37 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
         
         console.log(`Generated audio blob size: ${audioBlob.size} bytes`);
         
-        // Check if we have valid audio data - must be at least 1KB to be meaningful
-        if (audioBlob.size > 1024) {
-          // Create a short test to see if we can play it locally (sanity check)
-          try {
-            const testUrl = URL.createObjectURL(audioBlob);
-            const testAudio = new Audio(testUrl);
-            testAudio.muted = true;
-            await testAudio.load();
-            URL.revokeObjectURL(testUrl);
-            console.log("Audio blob seems valid");
-          } catch (e) {
-            console.warn("Audio playback test failed but continuing anyway:", e);
+        // Always try to process the audio, even if it's small
+        // Whisper can sometimes understand very short utterances
+        try {
+          if (audioBlob.size < 1024) {
+            console.warn(`Audio blob is small (${audioBlob.size} bytes) but will attempt to process anyway`);
+          } else {
+            console.log(`Processing audio blob of size ${audioBlob.size} bytes`);
           }
-          
+            
+          // Save a copy of the audio blob to the console for debugging
+          const blobUrl = URL.createObjectURL(audioBlob);
+          console.log(`Debug: Audio blob URL (copy to browser to test): ${blobUrl}`);
+            
+          // Create a direct link to test in debug panel
+          const testElement = document.createElement('a');
+          testElement.href = blobUrl;
+          testElement.textContent = 'Test Audio';
+          testElement.target = '_blank';
+          testElement.style.display = 'none';
+          document.body.appendChild(testElement);
+          // Auto-click in dev mode
+          // testElement.click();
+            
+          // Process the audio
           await processAudio(audioBlob);
-        } else {
-          console.error("Generated audio blob is too small or empty");
-          
-          // If audio blob is too small, we might be in a "hot mic" situation
-          // where the user didn't say anything. Start recording again.
+            
+        } catch (error) {
+          console.error("Error during audio processing:", error);
+            
+          // If processing failed, start recording again
+          console.log("Restarting recording after audio processing failed");
           startRecording();
         }
       };
@@ -260,32 +271,86 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
         
         // Play the audio response
         const audioUrl = URL.createObjectURL(responseAudioBlob);
+        
+        // Create a visible audio element for testing/debugging
+        const audioElement = document.createElement('audio');
+        audioElement.controls = true;
+        audioElement.style.display = 'none'; // Set to 'block' to make visible for debugging
+        document.body.appendChild(audioElement);
+        
+        // Create the audio object for programmatic playback
         const audio = new Audio();
         
         // Add all event listeners before setting src
-        audio.oncanplaythrough = () => {
+        audio.addEventListener('canplaythrough', () => {
           console.log("Audio can play through, starting playback");
-          audio.play().catch(e => {
-            console.error("Error during audio.play():", e);
-          });
-        };
+          
+          // Try to play with user interaction (this should help with Chrome's autoplay policy)
+          const playPromise = audio.play();
+          
+          if (playPromise !== undefined) {
+            playPromise.then(() => {
+              console.log("Audio playback started successfully");
+            }).catch(e => {
+              console.error("Error during audio.play():", e);
+              
+              // If autoplay fails, show a temporary play button
+              const tempButton = document.createElement('button');
+              tempButton.textContent = "Play Appu's Response";
+              tempButton.style.position = 'fixed';
+              tempButton.style.bottom = '20px';
+              tempButton.style.left = '50%';
+              tempButton.style.transform = 'translateX(-50%)';
+              tempButton.style.zIndex = '1000';
+              tempButton.style.padding = '10px 20px';
+              tempButton.style.backgroundColor = '#9D78C9';
+              tempButton.style.color = 'white';
+              tempButton.style.border = 'none';
+              tempButton.style.borderRadius = '20px';
+              tempButton.style.cursor = 'pointer';
+              
+              tempButton.onclick = () => {
+                audio.play();
+                document.body.removeChild(tempButton);
+              };
+              
+              document.body.appendChild(tempButton);
+              
+              // Auto-remove the button after 10 seconds
+              setTimeout(() => {
+                if (document.body.contains(tempButton)) {
+                  document.body.removeChild(tempButton);
+                }
+              }, 10000);
+            });
+          }
+        }, false);
         
-        audio.onended = () => {
+        audio.addEventListener('ended', () => {
           console.log("Audio playback ended");
-          URL.revokeObjectURL(audioUrl); // Clean up
-        };
+          URL.revokeObjectURL(audioUrl);
+          if (document.body.contains(audioElement)) {
+            document.body.removeChild(audioElement);
+          }
+        }, false);
         
-        audio.onerror = (error) => {
+        audio.addEventListener('error', (error) => {
           console.error('Error playing audio:', error);
-          URL.revokeObjectURL(audioUrl); // Clean up
-        };
+          URL.revokeObjectURL(audioUrl);
+          if (document.body.contains(audioElement)) {
+            document.body.removeChild(audioElement);
+          }
+        }, false);
+        
+        // For debugging - set the same source for both elements
+        audioElement.src = audioUrl;
+        audio.src = audioUrl;
         
         // Trigger the callback immediately so the UI can update
         options?.onResponseReceived?.(responseText);
         
-        // Set the source after attaching event listeners
-        audio.src = audioUrl;
-        audio.load(); // Important: explicitly load the audio
+        // Explicitly load the audio
+        audio.load();
       } catch (audioError) {
         console.error('Error setting up audio playback:', audioError);
         options?.onResponseReceived?.(responseText);

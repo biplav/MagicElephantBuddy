@@ -165,7 +165,38 @@ export default function Home() {
   // Handle microphone button to stop current recording and trigger processing
   const handleMicrophoneButton = () => {
     if (isRecording) {
+      console.log("Stopping recording manually via microphone button");
       stopRecording();
+      
+      // Add a small delay before processing
+      setTimeout(() => {
+        // Log current state after stopping
+        console.log("Current state after stopping recording:", { 
+          isRecording, 
+          isProcessing, 
+          elephantState
+        });
+      }, 100);
+    } else {
+      console.log("Starting recording manually via microphone button");
+      
+      // Reset state if needed
+      if (elephantState !== "idle" && elephantState !== "listening") {
+        console.log("Resetting elephant state before starting recording");
+        setElephantState("idle");
+      }
+      
+      // Start recording
+      startRecording();
+      
+      // Log current state after starting
+      setTimeout(() => {
+        console.log("Current state after starting recording:", { 
+          isRecording, 
+          isProcessing, 
+          elephantState
+        });
+      }, 100);
     }
   };
   
@@ -470,21 +501,61 @@ export default function Home() {
               <div className="mt-3">
                 <p><span className="font-semibold">Audio Debug:</span></p>
                 <div className="mt-1 flex flex-col gap-2">
-                  <Button
-                    onClick={() => startRecording()}
-                    disabled={isRecording || isProcessing}
-                    className="bg-green-700 hover:bg-green-800 px-3 py-1.5 rounded"
-                  >
-                    Force Start Recording
-                  </Button>
+                  <p><span className="text-xs">Microphone State: {isRecording ? 'Recording' : 'Not Recording'}</span></p>
+                  <p><span className="text-xs">Processing State: {isProcessing ? 'Processing' : 'Not Processing'}</span></p>
+                  <p><span className="text-xs">Elephant State: {elephantState}</span></p>
                   
-                  <Button
-                    onClick={() => stopRecording()}
-                    disabled={!isRecording || isProcessing}
-                    className="bg-red-700 hover:bg-red-800 px-3 py-1.5 rounded"
-                  >
-                    Force Stop Recording
-                  </Button>
+                  <div className="flex flex-row gap-2 mt-2">
+                    <Button
+                      onClick={() => startRecording()}
+                      disabled={isRecording || isProcessing}
+                      className="bg-green-700 hover:bg-green-800 px-3 py-1.5 rounded text-sm"
+                    >
+                      Force Start Mic
+                    </Button>
+                    
+                    <Button
+                      onClick={() => stopRecording()}
+                      disabled={!isRecording || isProcessing}
+                      className="bg-red-700 hover:bg-red-800 px-3 py-1.5 rounded text-sm"
+                    >
+                      Force Stop Mic
+                    </Button>
+                  </div>
+                  
+                  <div className="flex flex-row gap-2 mt-2">
+                    <Button
+                      onClick={() => {
+                        setElephantState("idle");
+                        setSpeechText(undefined);
+                      }}
+                      className="bg-blue-700 hover:bg-blue-800 px-3 py-1.5 rounded text-sm"
+                    >
+                      Reset Elephant
+                    </Button>
+                    
+                    <Button
+                      onClick={() => {
+                        fetch('/api/process-text', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ text: "test" })
+                        })
+                        .then(res => res.json())
+                        .then(data => {
+                          console.log("Test API response:", data);
+                          alert("API test successful - check console");
+                        })
+                        .catch(err => {
+                          console.error("API test failed:", err);
+                          alert("API test failed - check console");
+                        });
+                      }}
+                      className="bg-purple-700 hover:bg-purple-800 px-3 py-1.5 rounded text-sm"
+                    >
+                      Test API
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
