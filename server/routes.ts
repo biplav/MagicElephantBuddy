@@ -7,6 +7,7 @@ import fs from "fs";
 import { WebSocketServer, WebSocket } from 'ws';
 import { transcribeAudio, generateResponse } from "./openai-service";
 import bodyParser from "body-parser";
+import { getErrorMessage } from "../shared/errorMessages";
 
 // Define a custom interface for the request with file
 interface MulterRequest extends Request {
@@ -61,9 +62,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error('Error processing text:', error);
+      
+      // Get the appropriate error type and message
+      const errorType = error.message || 'generic';
+      const errorState = getErrorMessage(errorType);
+      
       res.status(500).json({ 
         error: 'Failed to process text', 
-        message: error.message || 'Unknown error'
+        message: error.message || 'Unknown error',
+        errorType: errorType,
+        userMessage: errorState.userMessage,
+        debugMessage: errorState.debugMessage
       });
     }
   });
@@ -108,9 +117,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error('Error processing audio:', error);
+      
+      // Get the appropriate error type and message
+      const errorType = error.message || 'generic';
+      const errorState = getErrorMessage(errorType);
+      
       res.status(500).json({ 
         error: 'Failed to process audio', 
-        message: error.message || 'Unknown error'
+        message: error.message || 'Unknown error',
+        errorType: errorType,
+        userMessage: errorState.userMessage,
+        debugMessage: errorState.debugMessage
       });
     }
   });

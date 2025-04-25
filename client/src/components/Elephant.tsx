@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { FC } from "react";
 import SoundWave from "./SoundWave";
 
-export type ElephantState = "idle" | "listening" | "thinking" | "speaking";
+export type ElephantState = "idle" | "listening" | "thinking" | "speaking" | "error" | "rateLimit" | "network" | "auth" | "serviceUnavailable";
 
 interface ElephantProps {
   state: ElephantState;

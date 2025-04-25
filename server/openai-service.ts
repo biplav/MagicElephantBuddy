@@ -40,9 +40,26 @@ export async function transcribeAudio(audioBuffer: Buffer, fileName: string): Pr
     console.log(`Transcription result: ${transcription.text}`);
     
     return transcription.text;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error transcribing audio:', error);
-    throw error;
+    
+    // Check for rate limit errors (code 429)
+    if (error.status === 429 || (error.error && error.error.type === 'insufficient_quota')) {
+      throw new Error('rateLimit');
+    }
+    
+    // Check for authentication errors (code 401)
+    if (error.status === 401) {
+      throw new Error('auth');
+    }
+    
+    // Check for service unavailable errors (codes 500, 502, 503)
+    if (error.status && [500, 502, 503].includes(error.status)) {
+      throw new Error('serviceUnavailable');
+    }
+    
+    // For transcription-specific errors
+    throw new Error('transcriptionFailed');
   }
 }
 
@@ -78,8 +95,25 @@ Respond to: "${transcribedText}"`;
     console.log(`Generated response: ${generatedText}`);
     
     return generatedText;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error generating response:', error);
-    throw error;
+    
+    // Check for rate limit errors (code 429)
+    if (error.status === 429 || (error.error && error.error.type === 'insufficient_quota')) {
+      throw new Error('rateLimit');
+    }
+    
+    // Check for authentication errors (code 401)
+    if (error.status === 401) {
+      throw new Error('auth');
+    }
+    
+    // Check for service unavailable errors (codes 500, 502, 503)
+    if (error.status && [500, 502, 503].includes(error.status)) {
+      throw new Error('serviceUnavailable');
+    }
+    
+    // For network errors or other unclassified errors
+    throw new Error('generic');
   }
 }
