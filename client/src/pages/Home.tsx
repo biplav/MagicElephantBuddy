@@ -5,7 +5,7 @@ import Elephant from "@/components/Elephant";
 import { motion, AnimatePresence } from "framer-motion";
 import useAudioRecorder from "@/hooks/useAudioRecorder";
 import PermissionModal from "@/components/PermissionModal";
-// Will implement error handling later
+import { getErrorMessage } from "../shared/errorMessages";
 
 type AppState = "welcome" | "interaction";
 

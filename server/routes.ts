@@ -64,14 +64,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error processing text:', error);
       
       // Get the appropriate error type and message
-      const errorType = error.message || 'generic';
+      let errorType = 'generic';
+      
+      // Map the error message to an error type
+      if (error.message === 'rateLimit') {
+        errorType = 'rateLimit';
+      } else if (error.message === 'auth') {
+        errorType = 'auth';
+      } else if (error.message === 'serviceUnavailable') {
+        errorType = 'serviceUnavailable';
+      } else if (error.message === 'network') {
+        errorType = 'network';
+      } else if (error.message === 'audioProcessingError') {
+        errorType = 'audioProcessingError';
+      } else if (error.message === 'textProcessingError') {
+        errorType = 'textProcessingError';
+      }
+      
       const errorState = getErrorMessage(errorType);
       
       res.status(500).json({ 
-        error: 'Failed to process text', 
-        message: error.message || 'Unknown error',
+        error: errorState.userMessage,
         errorType: errorType,
-        userMessage: errorState.userMessage,
         debugMessage: errorState.debugMessage
       });
     }
@@ -119,14 +133,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error processing audio:', error);
       
       // Get the appropriate error type and message
-      const errorType = error.message || 'generic';
+      let errorType = 'generic';
+      
+      // Map the error message to an error type
+      if (error.message === 'rateLimit') {
+        errorType = 'rateLimit';
+      } else if (error.message === 'auth') {
+        errorType = 'auth';
+      } else if (error.message === 'serviceUnavailable') {
+        errorType = 'serviceUnavailable';
+      } else if (error.message === 'network') {
+        errorType = 'network';
+      } else if (error.message === 'audioProcessingError') {
+        errorType = 'audioProcessingError';
+      } else if (error.message === 'textProcessingError') {
+        errorType = 'textProcessingError';
+      }
+      
       const errorState = getErrorMessage(errorType);
       
       res.status(500).json({ 
-        error: 'Failed to process audio', 
-        message: error.message || 'Unknown error',
+        error: errorState.userMessage,
         errorType: errorType,
-        userMessage: errorState.userMessage,
         debugMessage: errorState.debugMessage
       });
     }

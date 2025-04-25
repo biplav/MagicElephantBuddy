@@ -68,11 +68,24 @@ export async function transcribeAudio(audioBuffer: Buffer, fileName: string): Pr
  */
 export async function generateResponse(transcribedText: string): Promise<string> {
   try {
-    // Construct a child-friendly prompt with the transcribed text
-    const prompt = `You are Appu, a friendly, magical elephant who's speaking with a child. 
-You respond with kindness, positivity, and simple language appropriate for children.
-Always keep your responses brief (1-3 sentences) and focus on being supportive and engaging.
-Respond to: "${transcribedText}"`;
+    // Import the system prompt and child profile
+    const { APPU_SYSTEM_PROMPT } = await import('../shared/appuPrompts');
+    const { DEFAULT_PROFILE, getCurrentTimeContext } = await import('../shared/childProfile');
+    
+    // Get current time context
+    const timeContext = getCurrentTimeContext();
+    
+    // Prepare child profile and time context for the model
+    const childProfileJSON = JSON.stringify(DEFAULT_PROFILE, null, 2);
+    const timeContextJSON = JSON.stringify(timeContext, null, 2);
+    
+    // User prompt with the transcribed text and context
+    const userPrompt = `
+Child profile: ${childProfileJSON}
+
+Time context: ${timeContextJSON}
+
+The child says: "${transcribedText}"`;
 
     // Call OpenAI's chat completions API
     // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
@@ -81,14 +94,14 @@ Respond to: "${transcribedText}"`;
       messages: [
         { 
           role: "system", 
-          content: "You are Appu, a friendly elephant character for children. Keep responses short, positive, and child-appropriate."
+          content: APPU_SYSTEM_PROMPT
         },
         { 
           role: "user", 
-          content: prompt 
+          content: userPrompt 
         }
       ],
-      max_tokens: 150,
+      max_tokens: 200,
     });
     
     const generatedText = response.choices[0].message.content || "";
