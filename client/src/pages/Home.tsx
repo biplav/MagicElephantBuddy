@@ -28,6 +28,9 @@ export default function Home() {
       setElephantState("thinking");
       setSpeechText(undefined);
     },
+    onTranscriptionReceived: (transcription) => {
+      setTranscribedText(transcription);
+    },
     onResponseReceived: (text) => {
       setElephantState("speaking");
       setSpeechText(text);
@@ -102,7 +105,7 @@ export default function Home() {
               <ellipse cx="12" cy="14" rx="8" ry="7" fill="white"/>
               <circle cx="10" cy="12.5" r="0.75" fill="black"/>
               <circle cx="14" cy="12.5" r="0.75" fill="black"/>
-              <path d="M11 15C11 15 12 16 13 15" stroke="black" stroke-width="0.5" stroke-linecap="round"/>
+              <path d="M11 15C11 15 12 16 13 15" stroke="black" strokeWidth="0.5" strokeLinecap="round"/>
             </svg>
           </div>
           <h1 className="font-bold text-xl text-primary">Appu</h1>
@@ -154,9 +157,9 @@ export default function Home() {
                   <circle cx="217" cy="250" r="5" fill="black"/>
                   <circle cx="296" cy="250" r="15" fill="white"/>
                   <circle cx="297" cy="250" r="5" fill="black"/>
-                  <path d="M236 300C236 300 256 320 276 300" stroke="black" stroke-width="4" stroke-linecap="round"/>
-                  <path d="M256 330C256 330 256 380 216 400" stroke="#9D78C9" stroke-width="20" stroke-linecap="round"/>
-                  <path d="M243 370H269" stroke="black" stroke-width="4" stroke-linecap="round"/>
+                  <path d="M236 300C236 300 256 320 276 300" stroke="black" strokeWidth="4" strokeLinecap="round"/>
+                  <path d="M256 330C256 330 256 380 216 400" stroke="#9D78C9" strokeWidth="20" strokeLinecap="round"/>
+                  <path d="M243 370H269" stroke="black" strokeWidth="4" strokeLinecap="round"/>
                 </svg>
               </motion.div>
               
@@ -237,6 +240,26 @@ export default function Home() {
         onClose={() => setPermissionModalOpen(false)} 
         onAllow={handleAllowPermission} 
       />
+      
+      {/* Debug Panel - only visible when debug mode is enabled */}
+      {showDebug && (
+        <div className="fixed bottom-0 left-0 right-0 bg-gray-800 text-white p-4 z-50 max-h-60 overflow-auto">
+          <h3 className="font-bold mb-2">Debug Information</h3>
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <div>
+              <p><span className="font-semibold">State:</span> {elephantState}</p>
+              <p><span className="font-semibold">Recording:</span> {isRecording ? 'Yes' : 'No'}</p>
+              <p><span className="font-semibold">Processing:</span> {isProcessing ? 'Yes' : 'No'}</p>
+            </div>
+            <div>
+              <p><span className="font-semibold">Transcribed:</span></p>
+              <p className="bg-gray-700 p-2 rounded">{transcribedText || '(Nothing yet)'}</p>
+              <p><span className="font-semibold">Response:</span></p>
+              <p className="bg-gray-700 p-2 rounded">{speechText || '(Nothing yet)'}</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

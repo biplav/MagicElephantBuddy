@@ -59,9 +59,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         audioData: dummyAudio.toString('base64'),
         contentType: 'audio/wav'
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error processing audio:', error);
-      res.status(500).json({ error: 'Failed to process audio', message: error.message });
+      res.status(500).json({ 
+        error: 'Failed to process audio', 
+        message: error.message || 'Unknown error'
+      });
     }
   });
 

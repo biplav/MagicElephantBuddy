@@ -4,6 +4,7 @@ import { apiRequest } from '@/lib/queryClient';
 interface UseAudioRecorderOptions {
   onProcessingStart?: () => void;
   onResponseReceived?: (text: string) => void;
+  onTranscriptionReceived?: (transcription: string) => void;
 }
 
 export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
@@ -79,8 +80,14 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
       // Read the JSON response containing both text and audio data
       const responseData = await response.json();
       
-      // Get the text response
+      // Get the text response and transcription
       const responseText = responseData.text || "Thank you for reaching out";
+      const transcribedText = responseData.transcribedText || "";
+      
+      // Call the transcription callback if provided
+      if (transcribedText) {
+        options?.onTranscriptionReceived?.(transcribedText);
+      }
       
       // Convert Base64 audio data to a Blob
       const responseAudioBlob = base64ToBlob(
