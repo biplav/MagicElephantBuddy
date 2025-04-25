@@ -414,25 +414,39 @@ export default function Home() {
                       </svg>
                     </div>
                   ) : (
-                    <Button 
-                      className={`w-20 h-20 rounded-full shadow-lg transition transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-pink-300 flex items-center justify-center ${
-                        isRecording 
-                          ? "bg-[hsl(var(--success))] hover:bg-green-600" 
-                          : "bg-accent hover:bg-pink-400"
-                      }`}
-                      onClick={handleMicrophoneButton}
-                      disabled={!isReady || isProcessing}
-                    >
-                      {isRecording ? (
-                        <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-                        </svg>
-                      ) : (
-                        <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                        </svg>
+                    <div className="relative">
+                      {/* Audio level indicator rings - visible when recording */}
+                      {isRecording && (
+                        <>
+                          <div className="absolute inset-0 w-20 h-20 rounded-full bg-green-400 opacity-20 animate-ping-slow"></div>
+                          <div className="absolute inset-0 w-20 h-20 rounded-full bg-green-300 opacity-10 animate-ping"></div>
+                        </>
                       )}
-                    </Button>
+                      
+                      <Button 
+                        className={`w-20 h-20 rounded-full shadow-lg transition transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-pink-300 flex items-center justify-center relative z-10 ${
+                          isRecording 
+                            ? "bg-[hsl(var(--success))] hover:bg-green-600" 
+                            : "bg-accent hover:bg-pink-400"
+                        }`}
+                        onClick={handleMicrophoneButton}
+                        disabled={!isReady || isProcessing}
+                      >
+                        {isRecording ? (
+                          <div className="relative">
+                            <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                            </svg>
+                            {/* Recording indicator pulse */}
+                            <div className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                          </div>
+                        ) : (
+                          <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                          </svg>
+                        )}
+                      </Button>
+                    </div>
                   )}
                   
                   <p className="text-neutral text-sm">

@@ -194,18 +194,63 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
         }
       };
       
-      // Request data right away plus get more frequently 
-      // to ensure we get audio chunks even for short recordings
-      mediaRecorder.requestData(); // Request a data packet immediately
-      
       // Start recording with shorter timeslices (200ms) to get data more frequently
       // Smaller timeslice helps ensure we get data even for very short recordings
       mediaRecorder.start(200);
+      
+      // Wait a short moment before requesting data to ensure recorder is ready
+      setTimeout(() => {
+        try {
+          // Only request data if the recorder is still in the recording state
+          if (mediaRecorder.state === "recording") {
+            mediaRecorder.requestData();
+            console.log("Successfully requested initial data from MediaRecorder");
+          } else {
+            console.warn("Cannot request data: MediaRecorder not in recording state");
+          }
+        } catch (reqError) {
+          console.error("Error requesting data from MediaRecorder:", reqError);
+          // Continue recording even if requestData fails
+        }
+      }, 500);
       console.log("MediaRecorder started");
       setIsRecording(true);
     } catch (error) {
       console.error("Error starting MediaRecorder:", error);
       setIsRecording(false);
+      
+      // Attempt to recover from MediaRecorder errors
+      // First, release any existing resources
+      if (mediaRecorderRef.current) {
+        try {
+          mediaRecorderRef.current = null;
+          audioChunksRef.current = [];
+        } catch (cleanupError) {
+          console.error("Error cleaning up MediaRecorder:", cleanupError);
+        }
+      }
+      
+      // Wait a moment then try to restart the recording
+      setTimeout(() => {
+        console.log("Attempting to recover from MediaRecorder error...");
+        
+        try {
+          // Re-request microphone access
+          navigator.mediaDevices.getUserMedia({ audio: true })
+            .then(stream => {
+              console.log("Successfully re-acquired microphone stream");
+              setMicrophoneStream(stream);
+              
+              // Don't auto-start recording immediately, let the user initiate it
+              setIsReady(true);
+            })
+            .catch(streamError => {
+              console.error("Failed to re-acquire microphone stream:", streamError);
+            });
+        } catch (recoveryError) {
+          console.error("Failed to recover from MediaRecorder error:", recoveryError);
+        }
+      }, 2000);
     }
   }, []);
 
