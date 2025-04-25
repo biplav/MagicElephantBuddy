@@ -466,6 +466,27 @@ export default function Home() {
               <p className="bg-gray-700 p-2 rounded">{transcribedText || '(Nothing yet)'}</p>
               <p className="mt-2"><span className="font-semibold">Response:</span></p>
               <p className="bg-gray-700 p-2 rounded">{speechText || '(Nothing yet)'}</p>
+              
+              <div className="mt-3">
+                <p><span className="font-semibold">Audio Debug:</span></p>
+                <div className="mt-1 flex flex-col gap-2">
+                  <Button
+                    onClick={() => startRecording()}
+                    disabled={isRecording || isProcessing}
+                    className="bg-green-700 hover:bg-green-800 px-3 py-1.5 rounded"
+                  >
+                    Force Start Recording
+                  </Button>
+                  
+                  <Button
+                    onClick={() => stopRecording()}
+                    disabled={!isRecording || isProcessing}
+                    className="bg-red-700 hover:bg-red-800 px-3 py-1.5 rounded"
+                  >
+                    Force Stop Recording
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

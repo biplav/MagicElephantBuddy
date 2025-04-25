@@ -19,11 +19,23 @@ const openai = new OpenAI({
  */
 export async function transcribeAudio(audioBuffer: Buffer, fileName: string): Promise<string> {
   try {
+    // Check if the audio buffer is empty
+    if (!audioBuffer || audioBuffer.length === 0) {
+      console.error("Empty audio buffer received");
+      throw new Error("Empty audio buffer");
+    }
+    
+    // Ensure the file extension is correct - fix it if needed
+    let correctedFileName = fileName;
+    if (!correctedFileName.match(/\.(mp3|mp4|mpeg|mpga|m4a|wav|webm)$/i)) {
+      correctedFileName = correctedFileName.replace(/\.[^/.]+$/, "") + ".webm";
+    }
+    
     // Save the audio buffer to a temporary file
-    const tempFilePath = path.join(tempDir, fileName);
+    const tempFilePath = path.join(tempDir, correctedFileName);
     fs.writeFileSync(tempFilePath, audioBuffer);
     
-    console.log(`Saved audio file to ${tempFilePath}`);
+    console.log(`Saved audio file to ${tempFilePath} with size ${audioBuffer.length} bytes`);
     
     // Create a readable stream from the file
     const audioReadStream = fs.createReadStream(tempFilePath);

@@ -137,19 +137,45 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
         
         // Use the same MIME type that was supported for recording
         const mimeType = mediaRecorder.mimeType || 'audio/webm';
-        console.log(`Creating audio blob with MIME type: ${mimeType}`);
+        console.log(`Creating audio blob with MIME type: ${mimeType} from ${audioChunksRef.current.length} chunks`);
+        
+        // Log the sizes of chunks to debug
+        audioChunksRef.current.forEach((chunk, index) => {
+          console.log(`Audio chunk ${index} size: ${chunk.size} bytes`);
+        });
+        
+        // Create a blob with the correct MIME type
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
         
-        // Check if we have valid audio data
-        if (audioBlob.size > 0) {
+        console.log(`Generated audio blob size: ${audioBlob.size} bytes`);
+        
+        // Check if we have valid audio data - must be at least 1KB to be meaningful
+        if (audioBlob.size > 1024) {
+          // Create a short test to see if we can play it locally (sanity check)
+          try {
+            const testUrl = URL.createObjectURL(audioBlob);
+            const testAudio = new Audio(testUrl);
+            testAudio.muted = true;
+            await testAudio.load();
+            URL.revokeObjectURL(testUrl);
+            console.log("Audio blob seems valid");
+          } catch (e) {
+            console.warn("Audio playback test failed but continuing anyway:", e);
+          }
+          
           await processAudio(audioBlob);
         } else {
-          console.error("Generated audio blob is empty");
+          console.error("Generated audio blob is too small or empty");
+          
+          // If audio blob is too small, we might be in a "hot mic" situation
+          // where the user didn't say anything. Start recording again.
+          startRecording();
         }
       };
       
-      // Start recording with 1 second timeslices to get data more frequently
-      mediaRecorder.start(1000);
+      // Start recording with 500ms timeslices to get data more frequently
+      // Smaller timeslice helps ensure we get data
+      mediaRecorder.start(500);
       console.log("MediaRecorder started");
       setIsRecording(true);
     } catch (error) {
@@ -209,26 +235,47 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
         options?.onTranscriptionReceived?.(transcribedText);
       }
       
-      // Convert Base64 audio data to a Blob
-      const responseAudioBlob = base64ToBlob(
-        responseData.audioData,
-        responseData.contentType || 'audio/wav'
-      );
-      
-      // Play the audio response
-      const audioUrl = URL.createObjectURL(responseAudioBlob);
-      const audio = new Audio(audioUrl);
-      
-      // Play the audio and trigger the callback
-      audio.onloadedmetadata = () => {
-        audio.play();
+      try {
+        // Convert Base64 audio data to a Blob
+        const responseAudioBlob = base64ToBlob(
+          responseData.audioData,
+          responseData.contentType || 'audio/wav'
+        );
+        
+        console.log(`Received audio blob size: ${responseAudioBlob.size} bytes, type: ${responseAudioBlob.type}`);
+        
+        // Play the audio response
+        const audioUrl = URL.createObjectURL(responseAudioBlob);
+        const audio = new Audio();
+        
+        // Add all event listeners before setting src
+        audio.oncanplaythrough = () => {
+          console.log("Audio can play through, starting playback");
+          audio.play().catch(e => {
+            console.error("Error during audio.play():", e);
+          });
+        };
+        
+        audio.onended = () => {
+          console.log("Audio playback ended");
+          URL.revokeObjectURL(audioUrl); // Clean up
+        };
+        
+        audio.onerror = (error) => {
+          console.error('Error playing audio:', error);
+          URL.revokeObjectURL(audioUrl); // Clean up
+        };
+        
+        // Trigger the callback immediately so the UI can update
         options?.onResponseReceived?.(responseText);
-      };
-      
-      audio.onerror = (error) => {
-        console.error('Error playing audio:', error);
+        
+        // Set the source after attaching event listeners
+        audio.src = audioUrl;
+        audio.load(); // Important: explicitly load the audio
+      } catch (audioError) {
+        console.error('Error setting up audio playback:', audioError);
         options?.onResponseReceived?.(responseText);
-      };
+      }
     } catch (error: any) {
       console.error('Error processing audio:', error);
       
