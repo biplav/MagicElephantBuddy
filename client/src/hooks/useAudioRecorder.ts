@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { apiRequest } from '@/lib/queryClient';
 
 interface ResponseData {
@@ -12,14 +12,123 @@ interface UseAudioRecorderOptions {
   onTranscriptionReceived?: (transcription: string) => void;
 }
 
+// Helper to create a visual indicator of the MediaRecorder state
+function createOrUpdateRecordingIndicator(state: string) {
+  // Check if we're in the browser environment
+  if (typeof document === 'undefined') return;
+  
+  // Remove any existing indicator
+  const existingIndicator = document.getElementById('media-recorder-status');
+  if (existingIndicator) {
+    document.body.removeChild(existingIndicator);
+  }
+  
+  // Create a new indicator
+  const indicator = document.createElement('div');
+  indicator.id = 'media-recorder-status';
+  
+  // Style based on state
+  let bgColor = 'green';
+  let statusText = 'Recording';
+  
+  if (state === 'paused') {
+    bgColor = 'orange';
+    statusText = 'Paused';
+  } else if (state === 'inactive') {
+    bgColor = 'gray';
+    statusText = 'Stopped';
+  } else if (state === 'error') {
+    bgColor = 'red';
+    statusText = 'Error';
+  }
+  
+  // Apply styles
+  Object.assign(indicator.style, {
+    position: 'fixed',
+    top: '10px',
+    right: '10px',
+    padding: '5px 10px',
+    backgroundColor: bgColor,
+    color: 'white',
+    borderRadius: '4px',
+    fontSize: '12px',
+    zIndex: '9999',
+    opacity: '0.9',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '5px',
+    fontFamily: 'sans-serif'
+  });
+  
+  // Add a recording indicator dot for the recording state
+  if (state === 'recording') {
+    const dot = document.createElement('div');
+    Object.assign(dot.style, {
+      width: '8px',
+      height: '8px',
+      backgroundColor: 'red',
+      borderRadius: '50%',
+      animation: 'pulse 1s infinite'
+    });
+    indicator.appendChild(dot);
+    
+    // Add the animation
+    const styleId = 'recording-indicator-style';
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style');
+      style.id = styleId;
+      style.innerHTML = `
+        @keyframes pulse {
+          0% { opacity: 1; }
+          50% { opacity: 0.3; }
+          100% { opacity: 1; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+  }
+  
+  // Add the status text
+  const text = document.createTextNode(`MediaRecorder: ${statusText}`);
+  indicator.appendChild(text);
+  
+  // Add to DOM
+  document.body.appendChild(indicator);
+  
+  // Auto-hide after 5 seconds if stopped/error
+  if (state === 'inactive' || state === 'error') {
+    setTimeout(() => {
+      if (document.body.contains(indicator)) {
+        indicator.style.opacity = '0';
+        indicator.style.transition = 'opacity 0.5s';
+        setTimeout(() => {
+          if (document.body.contains(indicator)) {
+            document.body.removeChild(indicator);
+          }
+        }, 500);
+      }
+    }, 5000);
+  }
+  
+  return indicator;
+}
+
 export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
   const [isReady, setIsReady] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [recorderState, setRecorderState] = useState<string>('inactive');
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  
+  // Effect to update visual indicator when recorder state changes
+  useEffect(() => {
+    if (recorderState) {
+      createOrUpdateRecordingIndicator(recorderState);
+    }
+  }, [recorderState]);
   
   const requestMicrophonePermission = useCallback(async () => {
     try {
@@ -134,12 +243,33 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
         }
       };
       
+      // Add event handlers to track and visualize recorder state
+      mediaRecorder.onstart = () => {
+        console.log("MediaRecorder started");
+        setRecorderState('recording');
+      };
+      
+      mediaRecorder.onpause = () => {
+        console.log("MediaRecorder paused");
+        setRecorderState('paused');
+      };
+      
+      mediaRecorder.onresume = () => {
+        console.log("MediaRecorder resumed");
+        setRecorderState('recording');
+      };
+      
       mediaRecorder.onerror = (event) => {
         console.error("MediaRecorder error:", event);
         setIsRecording(false);
+        setRecorderState('error');
+        createOrUpdateRecordingIndicator('error');
       };
       
       mediaRecorder.onstop = async () => {
+        console.log("MediaRecorder stopped");
+        setRecorderState('inactive');
+        
         if (audioChunksRef.current.length === 0) {
           console.error("No audio data captured");
           return;
@@ -239,7 +369,10 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
           navigator.mediaDevices.getUserMedia({ audio: true })
             .then(stream => {
               console.log("Successfully re-acquired microphone stream");
-              setMicrophoneStream(stream);
+              streamRef.current = stream;
+              
+              // Update state to show recovery
+              setRecorderState('inactive');
               
               // Don't auto-start recording immediately, let the user initiate it
               setIsReady(true);
@@ -256,8 +389,21 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
+      try {
+        console.log("Manually stopping MediaRecorder");
+        mediaRecorderRef.current.stop();
+        setIsRecording(false);
+        // State update will happen through the onstop event handler
+      } catch (error) {
+        console.error("Error stopping MediaRecorder:", error);
+        setIsRecording(false);
+        setRecorderState('error');
+        createOrUpdateRecordingIndicator('error');
+      }
+    } else {
+      console.log("Cannot stop MediaRecorder - already inactive or null");
       setIsRecording(false);
+      setRecorderState('inactive');
     }
   }, []);
 
