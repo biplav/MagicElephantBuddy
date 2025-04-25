@@ -39,7 +39,7 @@ export default function Home() {
       let errorType: string | undefined;
       
       // Check if the response is an object with error information
-      if (typeof textOrData === 'object' && textOrData !== null) {
+      if (typeof textOrData === 'object' && textOrData !== null && 'text' in textOrData) {
         text = textOrData.text;
         errorType = textOrData.errorType;
         
@@ -57,7 +57,7 @@ export default function Home() {
         }
       } else {
         // It's a regular text response
-        text = textOrData as string;
+        text = String(textOrData);
         setElephantState("speaking");
       }
       

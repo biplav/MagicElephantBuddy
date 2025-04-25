@@ -88,8 +88,32 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
       }
       
       console.log("Creating MediaRecorder with stream");
+      
+      // Check what MIME types are supported
+      const supportedMimeTypes = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/wav',
+        'audio/mp4'
+      ].filter(mimeType => {
+        try {
+          return MediaRecorder.isTypeSupported(mimeType);
+        } catch (e) {
+          return false;
+        }
+      });
+      
+      if (supportedMimeTypes.length === 0) {
+        console.error("No supported MIME types found for MediaRecorder");
+        throw new Error("Browser does not support required audio formats");
+      }
+      
+      console.log("Supported MIME types:", supportedMimeTypes);
+      
+      // Use the first supported MIME type
       const mediaRecorder = new MediaRecorder(streamRef.current, {
-        mimeType: 'audio/webm;codecs=opus'
+        mimeType: supportedMimeTypes[0]
       });
       mediaRecorderRef.current = mediaRecorder;
       
@@ -111,7 +135,10 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
           return;
         }
         
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        // Use the same MIME type that was supported for recording
+        const mimeType = mediaRecorder.mimeType || 'audio/webm';
+        console.log(`Creating audio blob with MIME type: ${mimeType}`);
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
         
         // Check if we have valid audio data
         if (audioBlob.size > 0) {
@@ -145,7 +172,20 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
       
       // Create FormData to send the audio file
       const formData = new FormData();
-      formData.append('audio', audioBlob, 'recording.webm');
+      
+      // Determine the appropriate file extension based on MIME type
+      let fileExtension = 'webm';
+      if (audioBlob.type.includes('wav')) {
+        fileExtension = 'wav';
+      } else if (audioBlob.type.includes('mp4')) {
+        fileExtension = 'mp4';
+      } else if (audioBlob.type.includes('ogg')) {
+        fileExtension = 'ogg';
+      }
+      
+      const filename = `recording.${fileExtension}`;
+      console.log(`Sending audio with filename: ${filename}, type: ${audioBlob.type}`);
+      formData.append('audio', audioBlob, filename);
       
       // Send audio to backend for processing
       const response = await fetch('/api/process-audio', {

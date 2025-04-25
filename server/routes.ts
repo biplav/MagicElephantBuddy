@@ -102,7 +102,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Step 1: Transcribe audio using OpenAI's Whisper API
       const audioBuffer = req.file.buffer;
-      const transcribedText = await transcribeAudio(audioBuffer, `recording-${Date.now()}.webm`);
+      
+      // Determine the file extension based on mime type
+      let fileExtension = 'webm';
+      const mimeType = req.file.mimetype;
+      
+      if (mimeType.includes('wav')) {
+        fileExtension = 'wav';
+      } else if (mimeType.includes('mp4')) {
+        fileExtension = 'mp4';
+      } else if (mimeType.includes('ogg')) {
+        fileExtension = 'ogg';
+      }
+      
+      console.log(`Processing audio file with MIME type: ${mimeType}`);
+      const transcribedText = await transcribeAudio(audioBuffer, `recording-${Date.now()}.${fileExtension}`);
       
       // Step 2: Generate a response using OpenAI's GPT model
       const responseText = await generateResponse(transcribedText);
