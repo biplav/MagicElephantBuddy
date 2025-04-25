@@ -26,8 +26,10 @@ export default function Home() {
     startRecording,
     stopRecording,
     requestMicrophonePermission,
-    isProcessing
+    isProcessing,
+    recorderState
   } = useAudioRecorder({
+    enableLocalPlayback,
     onProcessingStart: () => {
       setElephantState("thinking");
       setSpeechText(undefined);
@@ -516,9 +518,66 @@ export default function Home() {
               <div className="mt-3">
                 <p><span className="font-semibold">Audio Debug:</span></p>
                 <div className="mt-1 flex flex-col gap-2">
-                  <p><span className="text-xs">Microphone State: {isRecording ? 'Recording' : 'Not Recording'}</span></p>
-                  <p><span className="text-xs">Processing State: {isProcessing ? 'Processing' : 'Not Processing'}</span></p>
-                  <p><span className="text-xs">Elephant State: {elephantState}</span></p>
+                  <div className="flex gap-2 items-center">
+                    <span className="text-xs">Mic State:</span>
+                    <div className={`px-2 py-0.5 rounded-full text-xs ${
+                      isRecording 
+                        ? 'bg-green-600' 
+                        : 'bg-gray-600'
+                    }`}>
+                      {isRecording ? 'Recording' : 'Not Recording'}
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-2 items-center">
+                    <span className="text-xs">Recorder:</span>
+                    <div className={`px-2 py-0.5 rounded-full text-xs ${
+                      recorderState === 'recording' 
+                        ? 'bg-green-600' 
+                        : recorderState === 'paused'
+                          ? 'bg-yellow-600'
+                          : recorderState === 'error'
+                            ? 'bg-red-600'
+                            : 'bg-gray-600'
+                    }`}>
+                      {recorderState}
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-2 items-center">
+                    <span className="text-xs">Processing:</span>
+                    <div className={`px-2 py-0.5 rounded-full text-xs ${
+                      isProcessing ? 'bg-yellow-600' : 'bg-gray-600'
+                    }`}>
+                      {isProcessing ? 'Processing' : 'Not Processing'}
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-2 items-center">
+                    <span className="text-xs">Elephant:</span>
+                    <div className={`px-2 py-0.5 rounded-full text-xs ${
+                      elephantState === 'idle' 
+                        ? 'bg-blue-600' 
+                        : elephantState === 'listening'
+                          ? 'bg-green-600'
+                          : elephantState === 'thinking'
+                            ? 'bg-yellow-600'
+                            : elephantState === 'speaking'
+                              ? 'bg-purple-600'
+                              : 'bg-red-600'
+                    }`}>
+                      {elephantState}
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-2 items-center">
+                    <span className="text-xs">Local Playback:</span>
+                    <div className={`px-2 py-0.5 rounded-full text-xs ${
+                      enableLocalPlayback ? 'bg-green-600' : 'bg-gray-600'
+                    }`}>
+                      {enableLocalPlayback ? 'Enabled' : 'Disabled'}
+                    </div>
+                  </div>
                   
                   <div className="flex flex-row gap-2 mt-2">
                     <Button
@@ -570,6 +629,24 @@ export default function Home() {
                     >
                       Test API
                     </Button>
+                  </div>
+                  
+                  <div className="flex flex-row gap-2 mt-4 items-center justify-between bg-gray-700 p-2 rounded">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-3 h-3 rounded-full ${enableLocalPlayback ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                      <span className="text-sm">Local Audio Playback:</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="text-xs mr-2">{enableLocalPlayback ? 'Enabled' : 'Disabled'}</span>
+                      <Button 
+                        onClick={() => setEnableLocalPlayback(!enableLocalPlayback)}
+                        className={`px-3 py-1 rounded text-xs ${enableLocalPlayback 
+                          ? 'bg-green-700 hover:bg-green-800' 
+                          : 'bg-gray-500 hover:bg-gray-600'}`}
+                      >
+                        {enableLocalPlayback ? 'Disable' : 'Enable'}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>

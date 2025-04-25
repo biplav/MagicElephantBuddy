@@ -413,6 +413,65 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
       setIsProcessing(true);
       options?.onProcessingStart?.();
       
+      // If local playback is enabled, play the audio locally and bypass the server
+      if (options?.enableLocalPlayback) {
+        console.log("Local playback mode is enabled - playing audio locally");
+        
+        // Create a URL for the blob
+        const audioUrl = URL.createObjectURL(audioBlob);
+        
+        // Create an audio element for playback
+        const audio = new Audio(audioUrl);
+        
+        // Play the audio
+        audio.oncanplaythrough = () => {
+          console.log("Playing recorded audio locally");
+          audio.play()
+            .then(() => {
+              console.log("Local audio playback started");
+            })
+            .catch(e => {
+              console.error("Error playing audio locally:", e);
+            });
+        };
+        
+        audio.onended = () => {
+          console.log("Local audio playback ended");
+          URL.revokeObjectURL(audioUrl);
+        };
+        
+        // Set up error handler
+        audio.onerror = () => {
+          console.error("Error during local audio playback");
+          URL.revokeObjectURL(audioUrl);
+        };
+        
+        // Load the audio
+        audio.load();
+        
+        // Create a simulated response for the UI
+        const simulatedResponse = {
+          text: "Local playback mode - audio played back locally",
+          transcribedText: "This is a local playback test. Audio was not sent to the server."
+        };
+        
+        // Call the transcription callback if provided
+        if (simulatedResponse.transcribedText) {
+          options?.onTranscriptionReceived?.(simulatedResponse.transcribedText);
+        }
+        
+        // Call the response callback
+        options?.onResponseReceived?.(simulatedResponse.text);
+        
+        // End processing after a short delay to simulate server processing time
+        setTimeout(() => {
+          setIsProcessing(false);
+        }, 1000);
+        
+        return;
+      }
+      
+      // Normal processing mode - send to server
       // Create FormData to send the audio file
       const formData = new FormData();
       
@@ -605,6 +664,7 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
     isProcessing,
     startRecording,
     stopRecording,
-    requestMicrophonePermission
+    requestMicrophonePermission,
+    recorderState  // Expose the recorder state for debugging
   };
 }
