@@ -120,7 +120,17 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
       // Add event handlers
       mediaRecorder.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) {
+          console.log(`Audio chunk available: ${event.data.size} bytes, type: ${event.data.type}`);
           audioChunksRef.current.push(event.data);
+          
+          // Log total chunks size for debugging
+          let totalSize = 0;
+          audioChunksRef.current.forEach(chunk => {
+            totalSize += chunk.size;
+          });
+          console.log(`Total audio data accumulated: ${totalSize} bytes from ${audioChunksRef.current.length} chunks`);
+        } else {
+          console.warn("Empty audio data received in ondataavailable event");
         }
       };
       
@@ -173,9 +183,13 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
         }
       };
       
-      // Start recording with 500ms timeslices to get data more frequently
-      // Smaller timeslice helps ensure we get data
-      mediaRecorder.start(500);
+      // Request data right away plus get more frequently 
+      // to ensure we get audio chunks even for short recordings
+      mediaRecorder.requestData(); // Request a data packet immediately
+      
+      // Start recording with shorter timeslices (200ms) to get data more frequently
+      // Smaller timeslice helps ensure we get data even for very short recordings
+      mediaRecorder.start(200);
       console.log("MediaRecorder started");
       setIsRecording(true);
     } catch (error) {

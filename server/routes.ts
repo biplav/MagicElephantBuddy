@@ -146,11 +146,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
 
-    console.log(`Received audio file of size: ${req.file.size} bytes`);
+    console.log(`Received audio file of size: ${req.file.size} bytes with MIME type: ${req.file.mimetype}`);
 
     try {
       // Step 1: Transcribe audio using OpenAI's Whisper API
       const audioBuffer = req.file.buffer;
+      
+      if (!audioBuffer || audioBuffer.length === 0) {
+        console.error("Empty audio buffer received in request");
+        return res.status(400).json({ 
+          error: "The audio data is empty or corrupted",
+          errorType: "audioProcessingError",
+          debugMessage: "Received empty audio buffer"
+        });
+      }
+      
+      console.log(`Audio buffer received, size: ${audioBuffer.length} bytes`);
+      
+      // Create a short summary of the buffer content for debugging
+      const bufferSummary = Buffer.from(audioBuffer.slice(0, 20)).toString('hex');
+      console.log(`Audio buffer starts with: ${bufferSummary}...`);
       
       // Determine the file extension based on mime type
       let fileExtension = 'webm';
@@ -164,7 +179,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fileExtension = 'ogg';
       }
       
-      console.log(`Processing audio file with MIME type: ${mimeType}`);
+      console.log(`Processing audio file with MIME type: ${mimeType}, extension: ${fileExtension}`);
       const transcribedText = await transcribeAudio(audioBuffer, `recording-${Date.now()}.${fileExtension}`);
       
       // Step 2: Generate a response using OpenAI's GPT model
