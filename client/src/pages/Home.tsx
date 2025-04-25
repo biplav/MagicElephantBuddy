@@ -5,7 +5,7 @@ import Elephant from "@/components/Elephant";
 import { motion, AnimatePresence } from "framer-motion";
 import useAudioRecorder from "@/hooks/useAudioRecorder";
 import PermissionModal from "@/components/PermissionModal";
-import { getErrorMessage } from "../shared/errorMessages";
+// Import error messages when needed
 
 type AppState = "welcome" | "interaction";
 
@@ -34,8 +34,34 @@ export default function Home() {
     onTranscriptionReceived: (transcription) => {
       setTranscribedText(transcription);
     },
-    onResponseReceived: (text) => {
-      setElephantState("speaking");
+    onResponseReceived: (textOrData) => {
+      let text: string;
+      let errorType: string | undefined;
+      
+      // Check if the response is an object with error information
+      if (typeof textOrData === 'object' && textOrData !== null) {
+        text = textOrData.text;
+        errorType = textOrData.errorType;
+        
+        // Set the proper elephant state based on error type
+        if (errorType === 'rateLimit') {
+          setElephantState('rateLimit');
+        } else if (errorType === 'network') {
+          setElephantState('network');
+        } else if (errorType === 'auth') {
+          setElephantState('auth');
+        } else if (errorType === 'serviceUnavailable') {
+          setElephantState('serviceUnavailable');
+        } else {
+          setElephantState('error');
+        }
+      } else {
+        // It's a regular text response
+        text = textOrData as string;
+        setElephantState("speaking");
+      }
+      
+      // Set the speech text
       setSpeechText(text);
       
       // Return to idle state after speaking
@@ -77,8 +103,24 @@ export default function Home() {
   const handleAllowPermission = async () => {
     setPermissionModalOpen(false);
     const granted = await requestMicrophonePermission();
+    
     if (granted) {
+      console.log("Microphone permission granted, starting interaction");
       setAppState("interaction");
+    } else {
+      console.error("Failed to get microphone permission");
+      // Show error state for microphone permission issues
+      setElephantState("error");
+      setSpeechText("I can't hear you! Please allow microphone access and try again.");
+      
+      // Reset state after showing error
+      setTimeout(() => {
+        setElephantState("idle");
+        setSpeechText(undefined);
+      }, 4000);
+      
+      // You might want to show another dialog or message here
+      // explaining how to enable microphone permissions
     }
   };
 

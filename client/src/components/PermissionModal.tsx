@@ -28,9 +28,9 @@ const PermissionModal = ({ isOpen, onClose, onAllow }: PermissionModalProps) => 
               <circle cx="217" cy="250" r="5" fill="black"/>
               <circle cx="296" cy="250" r="15" fill="white"/>
               <circle cx="297" cy="250" r="5" fill="black"/>
-              <path d="M236 300C236 300 256 320 276 300" stroke="black" stroke-width="4" stroke-linecap="round"/>
-              <path d="M256 330C256 330 256 380 216 400" stroke="#9D78C9" stroke-width="20" stroke-linecap="round"/>
-              <path d="M243 370H269" stroke="black" stroke-width="4" stroke-linecap="round"/>
+              <path d="M236 300C236 300 256 320 276 300" stroke="black" strokeWidth="4" strokeLinecap="round"/>
+              <path d="M256 330C256 330 256 380 216 400" stroke="#9D78C9" strokeWidth="20" strokeLinecap="round"/>
+              <path d="M243 370H269" stroke="black" strokeWidth="4" strokeLinecap="round"/>
             </svg>
           </div>
         </div>

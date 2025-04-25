@@ -1,9 +1,14 @@
 import { useState, useRef, useCallback } from 'react';
 import { apiRequest } from '@/lib/queryClient';
 
+interface ResponseData {
+  text: string;
+  errorType?: string;
+}
+
 interface UseAudioRecorderOptions {
   onProcessingStart?: () => void;
-  onResponseReceived?: (text: string) => void;
+  onResponseReceived?: (textOrData: string | ResponseData) => void;
   onTranscriptionReceived?: (transcription: string) => void;
 }
 
@@ -18,37 +23,112 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
   
   const requestMicrophonePermission = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // First check if the browser supports getUserMedia
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.error('Browser does not support getUserMedia API');
+        return false;
+      }
+
+      // Request permissions with explicit audio constraints
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
+      
+      // Store the stream for later use
       streamRef.current = stream;
+      
+      // Check if we actually got audio tracks
+      if (stream.getAudioTracks().length === 0) {
+        console.error('No audio tracks available in the stream');
+        return false;
+      }
+      
+      console.log('Microphone permission granted successfully');
       setIsReady(true);
       return true;
-    } catch (error) {
+    } catch (error: any) {
+      // Log specific error information to help with debugging
       console.error('Error accessing microphone:', error);
+      
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        console.error('User denied microphone permission');
+      } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+        console.error('No microphone detected on this device');
+      } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+        console.error('Microphone is already in use by another application');
+      } else if (error.name === 'OverconstrainedError' || error.name === 'ConstraintNotSatisfiedError') {
+        console.error('Constraints cannot be satisfied by available devices');
+      } else if (error.name === 'TypeError') {
+        console.error('Empty constraints object');
+      }
+      
       return false;
     }
   }, []);
 
   const startRecording = useCallback(() => {
-    if (!streamRef.current) return;
+    if (!streamRef.current) {
+      console.error("Cannot start recording: no media stream available");
+      return;
+    }
     
-    audioChunksRef.current = [];
-    
-    const mediaRecorder = new MediaRecorder(streamRef.current);
-    mediaRecorderRef.current = mediaRecorder;
-    
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        audioChunksRef.current.push(event.data);
+    try {
+      // Reset audio chunks array
+      audioChunksRef.current = [];
+      
+      // Check if the stream has active audio tracks
+      const audioTracks = streamRef.current.getAudioTracks();
+      if (audioTracks.length === 0 || !audioTracks[0].enabled) {
+        console.error("No active audio tracks in the stream");
+        return;
       }
-    };
-    
-    mediaRecorder.onstop = async () => {
-      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-      await processAudio(audioBlob);
-    };
-    
-    mediaRecorder.start();
-    setIsRecording(true);
+      
+      console.log("Creating MediaRecorder with stream");
+      const mediaRecorder = new MediaRecorder(streamRef.current, {
+        mimeType: 'audio/webm;codecs=opus'
+      });
+      mediaRecorderRef.current = mediaRecorder;
+      
+      // Add event handlers
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+      
+      mediaRecorder.onerror = (event) => {
+        console.error("MediaRecorder error:", event);
+        setIsRecording(false);
+      };
+      
+      mediaRecorder.onstop = async () => {
+        if (audioChunksRef.current.length === 0) {
+          console.error("No audio data captured");
+          return;
+        }
+        
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        
+        // Check if we have valid audio data
+        if (audioBlob.size > 0) {
+          await processAudio(audioBlob);
+        } else {
+          console.error("Generated audio blob is empty");
+        }
+      };
+      
+      // Start recording with 1 second timeslices to get data more frequently
+      mediaRecorder.start(1000);
+      console.log("MediaRecorder started");
+      setIsRecording(true);
+    } catch (error) {
+      console.error("Error starting MediaRecorder:", error);
+      setIsRecording(false);
+    }
   }, []);
 
   const stopRecording = useCallback(() => {
@@ -109,11 +189,40 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
         console.error('Error playing audio:', error);
         options?.onResponseReceived?.(responseText);
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error processing audio:', error);
       
-      // Fallback response in case of error
-      options?.onResponseReceived?.("I didn't quite catch that. Can you try again?");
+      // Check for specific error types
+      let errorMessage = "I didn't quite catch that. Can you try again?";
+      let errorType = 'generic';
+      
+      if (error.status === 429 || (error.message && error.message.includes('rate limit'))) {
+        errorMessage = "I'm feeling a bit tired right now. Can we talk again in a little bit?";
+        errorType = 'rateLimit';
+      } else if (error.status === 401 || error.status === 403) {
+        errorMessage = "I need to take a quick break. Please try again later.";
+        errorType = 'auth';
+      } else if (error.status >= 500 && error.status <= 599) {
+        errorMessage = "I'm having trouble thinking right now. Can we try again soon?";
+        errorType = 'serviceUnavailable';
+      } else if (error.message && error.message.includes('network')) {
+        errorMessage = "I can't hear you very well. Please check your internet connection and try again.";
+        errorType = 'network';
+      }
+      
+      // Get error response from the server if available
+      if (error.response && error.response.data && error.response.data.errorType) {
+        errorType = error.response.data.errorType;
+        if (error.response.data.userMessage) {
+          errorMessage = error.response.data.userMessage;
+        }
+      }
+      
+      // Send the appropriate error message
+      options?.onResponseReceived?.({
+        text: errorMessage,
+        errorType: errorType
+      });
     } finally {
       setIsProcessing(false);
     }
