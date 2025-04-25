@@ -10,6 +10,7 @@ interface UseAudioRecorderOptions {
   onProcessingStart?: () => void;
   onResponseReceived?: (textOrData: string | ResponseData) => void;
   onTranscriptionReceived?: (transcription: string) => void;
+  enableLocalPlayback?: boolean;
 }
 
 // Helper to create a visual indicator of the MediaRecorder state
