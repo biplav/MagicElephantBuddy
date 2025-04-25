@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Settings } from "lucide-react";
+import { Settings, Bug } from "lucide-react";
 import Elephant from "@/components/Elephant";
 import { motion, AnimatePresence } from "framer-motion";
 import useAudioRecorder from "@/hooks/useAudioRecorder";
@@ -13,6 +13,8 @@ export default function Home() {
   const [permissionModalOpen, setPermissionModalOpen] = useState(false);
   const [elephantState, setElephantState] = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
   const [speechText, setSpeechText] = useState<string | undefined>(undefined);
+  const [transcribedText, setTranscribedText] = useState<string>("");
+  const [showDebug, setShowDebug] = useState<boolean>(false);
 
   const {
     isReady,
@@ -105,9 +107,19 @@ export default function Home() {
           </div>
           <h1 className="font-bold text-xl text-primary">Appu</h1>
         </div>
-        <Button variant="ghost" size="icon" aria-label="Settings">
-          <Settings className="h-6 w-6 text-neutral" />
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            aria-label="Debug" 
+            onClick={() => setShowDebug(!showDebug)}
+          >
+            <Bug className="h-6 w-6 text-neutral" />
+          </Button>
+          <Button variant="ghost" size="icon" aria-label="Settings">
+            <Settings className="h-6 w-6 text-neutral" />
+          </Button>
+        </div>
       </header>
 
       {/* Main Content */}

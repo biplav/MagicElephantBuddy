@@ -1,0 +1,85 @@
+import OpenAI from "openai";
+import fs from "fs";
+import path from "path";
+import os from "os";
+
+// Create a temporary directory to store audio files
+const tempDir = path.join(os.tmpdir(), 'appu-audio');
+if (!fs.existsSync(tempDir)) {
+  fs.mkdirSync(tempDir, { recursive: true });
+}
+
+// Initialize the OpenAI client
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
+/**
+ * Transcribe audio to text using OpenAI's Whisper API
+ */
+export async function transcribeAudio(audioBuffer: Buffer, fileName: string): Promise<string> {
+  try {
+    // Save the audio buffer to a temporary file
+    const tempFilePath = path.join(tempDir, fileName);
+    fs.writeFileSync(tempFilePath, audioBuffer);
+    
+    console.log(`Saved audio file to ${tempFilePath}`);
+    
+    // Create a readable stream from the file
+    const audioReadStream = fs.createReadStream(tempFilePath);
+    
+    // Call OpenAI's transcription API
+    const transcription = await openai.audio.transcriptions.create({
+      file: audioReadStream,
+      model: "whisper-1",
+    });
+    
+    // Clean up the temporary file
+    fs.unlinkSync(tempFilePath);
+    
+    console.log(`Transcription result: ${transcription.text}`);
+    
+    return transcription.text;
+  } catch (error) {
+    console.error('Error transcribing audio:', error);
+    throw error;
+  }
+}
+
+/**
+ * Generate a response using GPT-4o
+ */
+export async function generateResponse(transcribedText: string): Promise<string> {
+  try {
+    // Construct a child-friendly prompt with the transcribed text
+    const prompt = `You are Appu, a friendly, magical elephant who's speaking with a child. 
+You respond with kindness, positivity, and simple language appropriate for children.
+Always keep your responses brief (1-3 sentences) and focus on being supportive and engaging.
+Respond to: "${transcribedText}"`;
+
+    // Call OpenAI's chat completions API
+    // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { 
+          role: "system", 
+          content: "You are Appu, a friendly elephant character for children. Keep responses short, positive, and child-appropriate."
+        },
+        { 
+          role: "user", 
+          content: prompt 
+        }
+      ],
+      max_tokens: 150,
+    });
+    
+    const generatedText = response.choices[0].message.content || "";
+    console.log(`Generated response: ${generatedText}`);
+    
+    return generatedText;
+  } catch (error) {
+    console.error('Error generating response:', error);
+    throw error;
+  }
+}
