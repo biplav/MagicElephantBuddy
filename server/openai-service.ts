@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import ffmpeg from "fluent-ffmpeg";
 
 // Create a temporary directory to store audio files
 const tempDir = path.join(os.tmpdir(), 'appu-audio');
@@ -15,9 +16,34 @@ const openai = new OpenAI({
 });
 
 /**
+ * Convert audio file to WAV format using ffmpeg
+ */
+function convertToWav(inputPath: string, outputPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    ffmpeg(inputPath)
+      .toFormat('wav')
+      .audioCodec('pcm_s16le')
+      .audioChannels(1)
+      .audioFrequency(16000)
+      .on('end', () => {
+        console.log(`Audio conversion completed: ${outputPath}`);
+        resolve();
+      })
+      .on('error', (err) => {
+        console.error('Error converting audio:', err);
+        reject(err);
+      })
+      .save(outputPath);
+  });
+}
+
+/**
  * Transcribe audio to text using OpenAI's Whisper API
  */
 export async function transcribeAudio(audioBuffer: Buffer, fileName: string): Promise<string> {
+  let tempFilePath: string | null = null;
+  let convertedFilePath: string | null = null;
+  
   try {
     // Check if the audio buffer is empty
     if (!audioBuffer || audioBuffer.length === 0) {
@@ -25,29 +51,42 @@ export async function transcribeAudio(audioBuffer: Buffer, fileName: string): Pr
       throw new Error("Empty audio buffer");
     }
     
-    // Ensure the file extension is correct - fix it if needed
-    let correctedFileName = fileName;
-    if (!correctedFileName.match(/\.(mp3|mp4|mpeg|mpga|m4a|wav|webm)$/i)) {
-      correctedFileName = correctedFileName.replace(/\.[^/.]+$/, "") + ".webm";
+    console.log(`Processing audio buffer of size ${audioBuffer.length} bytes`);
+    
+    // Generate unique file names with timestamps
+    const timestamp = Date.now();
+    const originalExt = path.extname(fileName).toLowerCase() || '.webm';
+    const baseName = `recording-${timestamp}`;
+    
+    // Save the original audio buffer to a temporary file
+    tempFilePath = path.join(tempDir, `${baseName}${originalExt}`);
+    fs.writeFileSync(tempFilePath, audioBuffer);
+    console.log(`Saved original audio file to ${tempFilePath}`);
+    
+    // Convert to WAV format for better compatibility with Whisper
+    convertedFilePath = path.join(tempDir, `${baseName}.wav`);
+    await convertToWav(tempFilePath, convertedFilePath);
+    
+    // Verify the converted file exists and has content
+    if (!fs.existsSync(convertedFilePath)) {
+      throw new Error('Audio conversion failed - output file not created');
     }
     
-    // Save the audio buffer to a temporary file
-    const tempFilePath = path.join(tempDir, correctedFileName);
-    fs.writeFileSync(tempFilePath, audioBuffer);
+    const convertedStats = fs.statSync(convertedFilePath);
+    if (convertedStats.size === 0) {
+      throw new Error('Audio conversion failed - output file is empty');
+    }
     
-    console.log(`Saved audio file to ${tempFilePath} with size ${audioBuffer.length} bytes`);
+    console.log(`Converted audio file size: ${convertedStats.size} bytes`);
     
-    // Create a readable stream from the file
-    const audioReadStream = fs.createReadStream(tempFilePath);
+    // Create a readable stream from the converted file
+    const audioReadStream = fs.createReadStream(convertedFilePath);
     
-    // Call OpenAI's transcription API
+    // Call OpenAI's transcription API with the converted WAV file
     const transcription = await openai.audio.transcriptions.create({
       file: audioReadStream,
       model: "whisper-1",
     });
-    
-    // Clean up the temporary file
-    fs.unlinkSync(tempFilePath);
     
     console.log(`Transcription result: ${transcription.text}`);
     
@@ -72,6 +111,20 @@ export async function transcribeAudio(audioBuffer: Buffer, fileName: string): Pr
     
     // For transcription-specific errors
     throw new Error('transcriptionFailed');
+  } finally {
+    // Clean up temporary files
+    try {
+      if (tempFilePath && fs.existsSync(tempFilePath)) {
+        fs.unlinkSync(tempFilePath);
+        console.log(`Cleaned up original file: ${tempFilePath}`);
+      }
+      if (convertedFilePath && fs.existsSync(convertedFilePath)) {
+        fs.unlinkSync(convertedFilePath);
+        console.log(`Cleaned up converted file: ${convertedFilePath}`);
+      }
+    } catch (cleanupError) {
+      console.error('Error cleaning up temporary files:', cleanupError);
+    }
   }
 }
 

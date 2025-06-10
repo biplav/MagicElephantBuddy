@@ -18,7 +18,7 @@ export default function Home() {
   const [showDebug, setShowDebug] = useState<boolean>(false);
   const [directTextInput, setDirectTextInput] = useState<string>("");
   const [isProcessingText, setIsProcessingText] = useState<boolean>(false);
-  const [enableLocalPlayback, setEnableLocalPlayback] = useState<boolean>(false);
+  const [enableLocalPlayback, setEnableLocalPlayback] = useState<boolean>(true); // Default to true for debugging
 
   const {
     isReady,
