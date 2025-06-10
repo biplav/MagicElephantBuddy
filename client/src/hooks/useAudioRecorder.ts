@@ -420,34 +420,60 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
         // Create a URL for the blob
         const audioUrl = URL.createObjectURL(audioBlob);
         
-        // Create an audio element for playback
-        const audio = new Audio(audioUrl);
+        // Create a visible audio element for testing and add it to the DOM
+        const audioElement = document.createElement('audio');
+        audioElement.controls = true;
+        audioElement.src = audioUrl;
+        audioElement.style.position = 'fixed';
+        audioElement.style.bottom = '60px';
+        audioElement.style.left = '50%';
+        audioElement.style.transform = 'translateX(-50%)';
+        audioElement.style.zIndex = '1000';
+        audioElement.style.backgroundColor = 'rgba(0,0,0,0.8)';
+        audioElement.style.padding = '10px';
+        audioElement.style.borderRadius = '8px';
         
-        // Play the audio
-        audio.oncanplaythrough = () => {
-          console.log("Playing recorded audio locally");
-          audio.play()
-            .then(() => {
-              console.log("Local audio playback started");
-            })
-            .catch(e => {
-              console.error("Error playing audio locally:", e);
-            });
-        };
+        // Add a label
+        const label = document.createElement('div');
+        label.textContent = 'Local Playback Test';
+        label.style.color = 'white';
+        label.style.fontSize = '12px';
+        label.style.textAlign = 'center';
+        label.style.marginBottom = '5px';
         
-        audio.onended = () => {
-          console.log("Local audio playback ended");
-          URL.revokeObjectURL(audioUrl);
-        };
+        const container = document.createElement('div');
+        container.style.position = 'fixed';
+        container.style.bottom = '60px';
+        container.style.left = '50%';
+        container.style.transform = 'translateX(-50%)';
+        container.style.zIndex = '1000';
+        container.style.backgroundColor = 'rgba(0,0,0,0.8)';
+        container.style.padding = '10px';
+        container.style.borderRadius = '8px';
         
-        // Set up error handler
-        audio.onerror = () => {
-          console.error("Error during local audio playback");
-          URL.revokeObjectURL(audioUrl);
-        };
+        container.appendChild(label);
+        container.appendChild(audioElement);
+        document.body.appendChild(container);
         
-        // Load the audio
-        audio.load();
+        console.log("Added audio element to DOM for local playback test");
+        
+        // Auto-remove after 10 seconds
+        setTimeout(() => {
+          if (document.body.contains(container)) {
+            document.body.removeChild(container);
+            URL.revokeObjectURL(audioUrl);
+            console.log("Removed local playback audio element");
+          }
+        }, 10000);
+        
+        // Try to auto-play (will likely fail due to autoplay policy)
+        audioElement.play()
+          .then(() => {
+            console.log("Local audio auto-play started successfully");
+          })
+          .catch(e => {
+            console.log("Auto-play failed (expected due to browser policy):", e.message);
+          });
         
         // Create a simulated response for the UI
         const simulatedResponse = {
@@ -523,85 +549,104 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
         // Play the audio response
         const audioUrl = URL.createObjectURL(responseAudioBlob);
         
-        // Create a visible audio element for testing/debugging
+        // Create a visible audio player that user can control
+        const audioContainer = document.createElement('div');
+        audioContainer.style.position = 'fixed';
+        audioContainer.style.bottom = '120px';
+        audioContainer.style.left = '50%';
+        audioContainer.style.transform = 'translateX(-50%)';
+        audioContainer.style.zIndex = '1000';
+        audioContainer.style.backgroundColor = 'rgba(157, 120, 201, 0.9)';
+        audioContainer.style.padding = '15px';
+        audioContainer.style.borderRadius = '12px';
+        audioContainer.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+        
+        const label = document.createElement('div');
+        label.textContent = "Appu's Response";
+        label.style.color = 'white';
+        label.style.fontSize = '14px';
+        label.style.fontWeight = 'bold';
+        label.style.textAlign = 'center';
+        label.style.marginBottom = '8px';
+        
         const audioElement = document.createElement('audio');
         audioElement.controls = true;
-        audioElement.style.display = 'none'; // Set to 'block' to make visible for debugging
-        document.body.appendChild(audioElement);
-        
-        // Create the audio object for programmatic playback
-        const audio = new Audio();
-        
-        // Add all event listeners before setting src
-        audio.addEventListener('canplaythrough', () => {
-          console.log("Audio can play through, starting playback");
-          
-          // Try to play with user interaction (this should help with Chrome's autoplay policy)
-          const playPromise = audio.play();
-          
-          if (playPromise !== undefined) {
-            playPromise.then(() => {
-              console.log("Audio playback started successfully");
-            }).catch(e => {
-              console.error("Error during audio.play():", e);
-              
-              // If autoplay fails, show a temporary play button
-              const tempButton = document.createElement('button');
-              tempButton.textContent = "Play Appu's Response";
-              tempButton.style.position = 'fixed';
-              tempButton.style.bottom = '20px';
-              tempButton.style.left = '50%';
-              tempButton.style.transform = 'translateX(-50%)';
-              tempButton.style.zIndex = '1000';
-              tempButton.style.padding = '10px 20px';
-              tempButton.style.backgroundColor = '#9D78C9';
-              tempButton.style.color = 'white';
-              tempButton.style.border = 'none';
-              tempButton.style.borderRadius = '20px';
-              tempButton.style.cursor = 'pointer';
-              
-              tempButton.onclick = () => {
-                audio.play();
-                document.body.removeChild(tempButton);
-              };
-              
-              document.body.appendChild(tempButton);
-              
-              // Auto-remove the button after 10 seconds
-              setTimeout(() => {
-                if (document.body.contains(tempButton)) {
-                  document.body.removeChild(tempButton);
-                }
-              }, 10000);
-            });
-          }
-        }, false);
-        
-        audio.addEventListener('ended', () => {
-          console.log("Audio playback ended");
-          URL.revokeObjectURL(audioUrl);
-          if (document.body.contains(audioElement)) {
-            document.body.removeChild(audioElement);
-          }
-        }, false);
-        
-        audio.addEventListener('error', (error) => {
-          console.error('Error playing audio:', error);
-          URL.revokeObjectURL(audioUrl);
-          if (document.body.contains(audioElement)) {
-            document.body.removeChild(audioElement);
-          }
-        }, false);
-        
-        // For debugging - set the same source for both elements
         audioElement.src = audioUrl;
-        audio.src = audioUrl;
+        audioElement.style.width = '300px';
+        audioElement.style.borderRadius = '8px';
+        
+        // Auto-play attempt (will likely fail, but worth trying)
+        audioElement.play()
+          .then(() => {
+            console.log("Appu's response auto-play started successfully");
+          })
+          .catch(e => {
+            console.log("Auto-play failed for Appu's response (expected):", e.message);
+          });
+        
+        // Clean up when audio ends
+        audioElement.addEventListener('ended', () => {
+          console.log("Appu's response playback ended");
+          setTimeout(() => {
+            if (document.body.contains(audioContainer)) {
+              document.body.removeChild(audioContainer);
+              URL.revokeObjectURL(audioUrl);
+            }
+          }, 1000);
+        });
+        
+        // Error handling
+        audioElement.addEventListener('error', (error) => {
+          console.error('Error playing Appu response audio:', error);
+          if (document.body.contains(audioContainer)) {
+            document.body.removeChild(audioContainer);
+            URL.revokeObjectURL(audioUrl);
+          }
+        });
+        
+        // Add close button
+        const closeButton = document.createElement('button');
+        closeButton.textContent = '×';
+        closeButton.style.position = 'absolute';
+        closeButton.style.top = '5px';
+        closeButton.style.right = '8px';
+        closeButton.style.background = 'none';
+        closeButton.style.border = 'none';
+        closeButton.style.color = 'white';
+        closeButton.style.fontSize = '18px';
+        closeButton.style.cursor = 'pointer';
+        closeButton.style.width = '20px';
+        closeButton.style.height = '20px';
+        closeButton.style.borderRadius = '50%';
+        closeButton.style.display = 'flex';
+        closeButton.style.alignItems = 'center';
+        closeButton.style.justifyContent = 'center';
+        
+        closeButton.onclick = () => {
+          if (document.body.contains(audioContainer)) {
+            document.body.removeChild(audioContainer);
+            URL.revokeObjectURL(audioUrl);
+          }
+        };
+        
+        audioContainer.appendChild(closeButton);
+        audioContainer.appendChild(label);
+        audioContainer.appendChild(audioElement);
+        document.body.appendChild(audioContainer);
+        
+        console.log("Added Appu's response audio player to DOM");
+        
+        // Auto-remove after 30 seconds if still present
+        setTimeout(() => {
+          if (document.body.contains(audioContainer)) {
+            document.body.removeChild(audioContainer);
+            URL.revokeObjectURL(audioUrl);
+            console.log("Auto-removed Appu's response audio player");
+          }
+        }, 30000);
         
         // Trigger the callback immediately so the UI can update
         options?.onResponseReceived?.(responseText);
-        
-        // Explicitly load the audio
-        audio.load();
       } catch (audioError) {
         console.error('Error setting up audio playback:', audioError);
         options?.onResponseReceived?.(responseText);
