@@ -714,7 +714,7 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
             URL.revokeObjectURL(audioUrl);
             console.log("Audio player auto-removed after timeout");
           }
-        }, 45000);
+        }, 450000);
         
         // Trigger the callback immediately so the UI can update
         options?.onResponseReceived?.(responseText);

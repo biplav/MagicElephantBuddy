@@ -25,6 +25,57 @@ const upload = multer({
 export async function registerRoutes(app: Express): Promise<Server> {
   // Configure body parser
   app.use(bodyParser.json());
+  
+  // Store generated audio in memory for testing
+  const audioCache = new Map<string, Buffer>();
+  
+  // Endpoint to generate and download audio directly
+  app.post('/api/generate-audio', async (req: Request, res: Response) => {
+    try {
+      const { text } = req.body;
+      if (!text) {
+        return res.status(400).json({ error: 'No text provided' });
+      }
+
+      console.log(`Generating downloadable audio for: ${text}`);
+      const speechAudio = await generateSpeech(text);
+      
+      // Store in cache for download
+      const audioId = `audio-${Date.now()}`;
+      audioCache.set(audioId, speechAudio);
+      
+      console.log(`Audio generated: ${speechAudio.length} bytes, ID: ${audioId}`);
+      console.log(`Download URL: http://localhost:5000/api/download-audio/${audioId}`);
+      
+      res.json({ 
+        audioId,
+        downloadUrl: `/api/download-audio/${audioId}`,
+        size: speechAudio.length
+      });
+    } catch (error) {
+      console.error('Error generating audio:', error);
+      res.status(500).json({ error: 'Failed to generate audio' });
+    }
+  });
+  
+  // Download endpoint for cached audio
+  app.get('/api/download-audio/:audioId', (req: Request, res: Response) => {
+    const { audioId } = req.params;
+    const audioBuffer = audioCache.get(audioId);
+    
+    if (!audioBuffer) {
+      return res.status(404).json({ error: 'Audio not found' });
+    }
+    
+    res.set({
+      'Content-Type': 'audio/wav',
+      'Content-Disposition': `attachment; filename="appu-speech-${audioId}.wav"`,
+      'Content-Length': audioBuffer.length
+    });
+    
+    res.send(audioBuffer);
+    console.log(`Audio downloaded: ${audioId}`);
+  });
 
   // Handle direct text input - skips audio transcription
   app.post('/api/process-text', async (req: Request, res: Response) => {
@@ -46,6 +97,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const speechAudio = await generateSpeech(responseText);
       
       console.log(`Generated speech audio: ${speechAudio.length} bytes`);
+      
+      // Save the audio file for download/testing
+      const timestamp = Date.now();
+      const audioFileName = `appu-speech-${timestamp}.wav`;
+      const publicDir = path.join(process.cwd(), 'public');
+      const audioFilePath = path.join(publicDir, audioFileName);
+      
+      // Ensure public directory exists
+      try {
+        if (!fs.existsSync(publicDir)) {
+          fs.mkdirSync(publicDir, { recursive: true });
+          console.log(`Created public directory: ${publicDir}`);
+        }
+        
+        // Save the audio file
+        fs.writeFileSync(audioFilePath, speechAudio);
+        console.log(`Speech audio saved as: ${audioFileName} (${speechAudio.length} bytes)`);
+        console.log(`Download URL: http://localhost:5000/public/${audioFileName}`);
+        console.log(`Direct file path: ${audioFilePath}`);
+      } catch (saveError) {
+        console.error(`Error saving audio file: ${saveError}`);
+      }
       
       // Return a JSON response with both the text and Base64 encoded audio
       res.json({
