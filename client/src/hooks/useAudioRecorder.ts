@@ -123,6 +123,8 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const recordingStartTimeRef = useRef<number>(0);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   // Effect to update visual indicator when recorder state changes
   useEffect(() => {
@@ -329,6 +331,9 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
       // Smaller timeslice helps ensure we get data even for very short recordings
       mediaRecorder.start(200);
       
+      // Store recording start time for minimum duration check
+      recordingStartTimeRef.current = Date.now();
+      
       // Wait a short moment before requesting data to ensure recorder is ready
       setTimeout(() => {
         try {
@@ -344,8 +349,15 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
           // Continue recording even if requestData fails
         }
       }, 500);
+      
       console.log("MediaRecorder started");
       setIsRecording(true);
+      
+      // Show recording duration timer
+      recordingTimerRef.current = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - recordingStartTimeRef.current) / 1000);
+        createOrUpdateRecordingIndicator(`recording (${elapsed}s)`);
+      }, 1000);
     } catch (error) {
       console.error("Error starting MediaRecorder:", error);
       setIsRecording(false);
@@ -389,9 +401,30 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
   }, []);
 
   const stopRecording = useCallback(() => {
+    // Clear the recording timer
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    
+    // Check minimum recording duration (at least 1 second)
+    const recordingDuration = Date.now() - recordingStartTimeRef.current;
+    const minDuration = 1000; // 1 second minimum
+    
+    if (recordingDuration < minDuration) {
+      console.warn(`Recording too short: ${recordingDuration}ms (minimum: ${minDuration}ms)`);
+      createOrUpdateRecordingIndicator(`Recording too short - need at least 1 second`);
+      
+      // Continue recording for the minimum duration
+      setTimeout(() => {
+        stopRecording();
+      }, minDuration - recordingDuration);
+      return;
+    }
+    
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       try {
-        console.log("Manually stopping MediaRecorder");
+        console.log(`Stopping MediaRecorder after ${recordingDuration}ms`);
         mediaRecorderRef.current.stop();
         setIsRecording(false);
         // State update will happen through the onstop event handler

@@ -51,6 +51,13 @@ export async function transcribeAudio(audioBuffer: Buffer, fileName: string): Pr
       throw new Error("Empty audio buffer");
     }
     
+    // Check minimum file size for valid audio (at least 2KB)
+    const minSize = 2048; // 2KB minimum for valid audio
+    if (audioBuffer.length < minSize) {
+      console.warn(`Audio file too small: ${audioBuffer.length} bytes (minimum: ${minSize} bytes)`);
+      throw new Error('audioTooSmall');
+    }
+    
     console.log(`Processing audio buffer of size ${audioBuffer.length} bytes`);
     
     // Generate unique file names with timestamps
