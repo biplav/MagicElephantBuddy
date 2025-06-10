@@ -617,15 +617,60 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
         audioElement.src = audioUrl;
         audioElement.style.width = '300px';
         audioElement.style.borderRadius = '8px';
+        audioElement.preload = 'auto';
         
-        // Auto-play attempt (will likely fail, but worth trying)
-        audioElement.play()
-          .then(() => {
-            console.log("Appu's response auto-play started successfully");
-          })
-          .catch(e => {
-            console.log("Auto-play failed for Appu's response (expected):", e.message);
-          });
+        // Set volume to ensure it's audible
+        audioElement.volume = 0.8;
+        
+        console.log(`Created audio element with src: ${audioUrl.substring(0, 50)}...`);
+        
+        // Add play button that ensures user interaction
+        const playButton = document.createElement('button');
+        playButton.textContent = '▶ Play Appu\'s Voice';
+        playButton.style.width = '100%';
+        playButton.style.padding = '8px';
+        playButton.style.marginTop = '8px';
+        playButton.style.backgroundColor = '#8B5CF6';
+        playButton.style.color = 'white';
+        playButton.style.border = 'none';
+        playButton.style.borderRadius = '6px';
+        playButton.style.cursor = 'pointer';
+        playButton.style.fontSize = '14px';
+        playButton.style.fontWeight = 'bold';
+        
+        playButton.onclick = () => {
+          console.log("User clicked play button for Appu's response");
+          audioElement.play()
+            .then(() => {
+              console.log("Manual audio playback started successfully");
+              playButton.textContent = '🔊 Playing...';
+              playButton.disabled = true;
+            })
+            .catch(e => {
+              console.error("Manual audio playback failed:", e);
+              playButton.textContent = '❌ Error playing audio';
+            });
+        };
+        
+        // Auto-play attempt (may fail due to browser policy)
+        const tryAutoPlay = () => {
+          audioElement.play()
+            .then(() => {
+              console.log("Appu's response auto-play started successfully");
+              playButton.style.display = 'none';
+            })
+            .catch(e => {
+              console.log("Auto-play failed, showing manual play button:", e.message);
+              // Keep the play button visible for manual interaction
+            });
+        };
+        
+        // Try auto-play when audio is ready
+        audioElement.addEventListener('canplaythrough', tryAutoPlay);
+        audioElement.addEventListener('loadeddata', () => {
+          console.log("Audio data loaded, attempting auto-play");
+          tryAutoPlay();
+        });
         
         // Clean up when audio ends
         audioElement.addEventListener('ended', () => {
@@ -675,6 +720,7 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
         audioContainer.appendChild(closeButton);
         audioContainer.appendChild(label);
         audioContainer.appendChild(audioElement);
+        audioContainer.appendChild(playButton);
         document.body.appendChild(audioContainer);
         
         console.log("Added Appu's response audio player to DOM");
