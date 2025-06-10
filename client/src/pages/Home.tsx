@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Settings, Bug } from "lucide-react";
+import { Settings, Bug, Speaker } from "lucide-react";
+import { Link } from "wouter";
 import Elephant from "@/components/Elephant";
 import { motion, AnimatePresence } from "framer-motion";
 import useAudioRecorder from "@/hooks/useAudioRecorder";
@@ -328,6 +329,15 @@ export default function Home() {
           <h1 className="font-bold text-xl text-primary">Appu</h1>
         </div>
         <div className="flex gap-2">
+          <Link href="/audio-test">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              aria-label="Audio Test" 
+            >
+              <Speaker className="h-6 w-6 text-neutral" />
+            </Button>
+          </Link>
           <Button 
             variant="ghost" 
             size="icon" 
