@@ -201,14 +201,16 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
       
       console.log("Creating MediaRecorder with stream");
       
-      // Check what MIME types are supported
-      const supportedMimeTypes = [
-        'audio/webm;codecs=opus',
-        'audio/webm',
-        'audio/ogg;codecs=opus',
+      // Check what MIME types are supported and prefer wav/mp4 over webm
+      const preferredMimeTypes = [
         'audio/wav',
-        'audio/mp4'
-      ].filter(mimeType => {
+        'audio/mp4',
+        'audio/ogg;codecs=opus',
+        'audio/webm;codecs=opus',
+        'audio/webm'
+      ];
+      
+      const supportedMimeTypes = preferredMimeTypes.filter(mimeType => {
         try {
           return MediaRecorder.isTypeSupported(mimeType);
         } catch (e) {
@@ -222,11 +224,19 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
       }
       
       console.log("Supported MIME types:", supportedMimeTypes);
+      console.log("Using MIME type:", supportedMimeTypes[0]);
       
-      // Use the first supported MIME type
-      const mediaRecorder = new MediaRecorder(streamRef.current, {
+      // Use the first supported MIME type with better quality settings
+      const mediaRecorderOptions: MediaRecorderOptions = {
         mimeType: supportedMimeTypes[0]
-      });
+      };
+      
+      // Add better audio quality settings if supported
+      if (supportedMimeTypes[0].includes('opus')) {
+        mediaRecorderOptions.audioBitsPerSecond = 128000; // 128 kbps
+      }
+      
+      const mediaRecorder = new MediaRecorder(streamRef.current, mediaRecorderOptions);
       mediaRecorderRef.current = mediaRecorder;
       
       // Add event handlers
