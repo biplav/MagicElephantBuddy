@@ -592,147 +592,129 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
         // Play the audio response
         const audioUrl = URL.createObjectURL(responseAudioBlob);
         
-        // Create a visible audio player that user can control
+        // Create a simple, highly visible audio player
         const audioContainer = document.createElement('div');
-        audioContainer.style.position = 'fixed';
-        audioContainer.style.bottom = '120px';
-        audioContainer.style.left = '50%';
-        audioContainer.style.transform = 'translateX(-50%)';
-        audioContainer.style.zIndex = '1000';
-        audioContainer.style.backgroundColor = 'rgba(157, 120, 201, 0.9)';
-        audioContainer.style.padding = '15px';
-        audioContainer.style.borderRadius = '12px';
-        audioContainer.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+        audioContainer.id = 'appu-audio-player';
+        audioContainer.style.cssText = `
+          position: fixed !important;
+          top: 20px !important;
+          right: 20px !important;
+          z-index: 99999 !important;
+          background: #8B5CF6 !important;
+          color: white !important;
+          padding: 20px !important;
+          border-radius: 15px !important;
+          box-shadow: 0 8px 25px rgba(0,0,0,0.4) !important;
+          font-family: Arial, sans-serif !important;
+          min-width: 300px !important;
+          border: 3px solid white !important;
+        `;
         
-        const label = document.createElement('div');
-        label.textContent = "Appu's Response";
-        label.style.color = 'white';
-        label.style.fontSize = '14px';
-        label.style.fontWeight = 'bold';
-        label.style.textAlign = 'center';
-        label.style.marginBottom = '8px';
+        // Simple title
+        const title = document.createElement('h3');
+        title.textContent = "🐘 Appu's Voice";
+        title.style.cssText = `
+          margin: 0 0 15px 0 !important;
+          font-size: 18px !important;
+          text-align: center !important;
+        `;
         
+        // Large, prominent play button
+        const playButton = document.createElement('button');
+        playButton.textContent = '▶ PLAY APPU\'S VOICE';
+        playButton.style.cssText = `
+          width: 100% !important;
+          padding: 15px !important;
+          font-size: 16px !important;
+          font-weight: bold !important;
+          background: #10B981 !important;
+          color: white !important;
+          border: none !important;
+          border-radius: 10px !important;
+          cursor: pointer !important;
+          margin-bottom: 10px !important;
+        `;
+        
+        // Create hidden audio element
         const audioElement = document.createElement('audio');
-        audioElement.controls = true;
         audioElement.src = audioUrl;
-        audioElement.style.width = '300px';
-        audioElement.style.borderRadius = '8px';
+        audioElement.volume = 0.9;
         audioElement.preload = 'auto';
         
-        // Set volume to ensure it's audible
-        audioElement.volume = 0.8;
+        console.log(`Audio element created with ${responseAudioBlob.size} bytes`);
         
-        console.log(`Created audio element with src: ${audioUrl.substring(0, 50)}...`);
-        
-        // Add play button that ensures user interaction
-        const playButton = document.createElement('button');
-        playButton.textContent = '▶ Play Appu\'s Voice';
-        playButton.style.width = '100%';
-        playButton.style.padding = '8px';
-        playButton.style.marginTop = '8px';
-        playButton.style.backgroundColor = '#8B5CF6';
-        playButton.style.color = 'white';
-        playButton.style.border = 'none';
-        playButton.style.borderRadius = '6px';
-        playButton.style.cursor = 'pointer';
-        playButton.style.fontSize = '14px';
-        playButton.style.fontWeight = 'bold';
-        
+        // Play button click handler
         playButton.onclick = () => {
-          console.log("User clicked play button for Appu's response");
+          console.log("Play button clicked");
+          playButton.textContent = '🔊 PLAYING...';
+          playButton.disabled = true;
+          
           audioElement.play()
             .then(() => {
-              console.log("Manual audio playback started successfully");
-              playButton.textContent = '🔊 Playing...';
-              playButton.disabled = true;
+              console.log("Audio playback started successfully");
             })
             .catch(e => {
-              console.error("Manual audio playback failed:", e);
-              playButton.textContent = '❌ Error playing audio';
+              console.error("Audio playback failed:", e);
+              playButton.textContent = '❌ PLAYBACK FAILED';
+              playButton.disabled = false;
             });
         };
         
-        // Auto-play attempt (may fail due to browser policy)
-        const tryAutoPlay = () => {
-          audioElement.play()
-            .then(() => {
-              console.log("Appu's response auto-play started successfully");
-              playButton.style.display = 'none';
-            })
-            .catch(e => {
-              console.log("Auto-play failed, showing manual play button:", e.message);
-              // Keep the play button visible for manual interaction
-            });
-        };
-        
-        // Try auto-play when audio is ready
-        audioElement.addEventListener('canplaythrough', tryAutoPlay);
-        audioElement.addEventListener('loadeddata', () => {
-          console.log("Audio data loaded, attempting auto-play");
-          tryAutoPlay();
-        });
-        
-        // Clean up when audio ends
+        // Reset button when audio ends
         audioElement.addEventListener('ended', () => {
-          console.log("Appu's response playback ended");
-          setTimeout(() => {
-            if (document.body.contains(audioContainer)) {
-              document.body.removeChild(audioContainer);
-              URL.revokeObjectURL(audioUrl);
-            }
-          }, 1000);
+          playButton.textContent = '▶ PLAY AGAIN';
+          playButton.disabled = false;
         });
         
-        // Error handling
-        audioElement.addEventListener('error', (error) => {
-          console.error('Error playing Appu response audio:', error);
-          if (document.body.contains(audioContainer)) {
-            document.body.removeChild(audioContainer);
-            URL.revokeObjectURL(audioUrl);
-          }
-        });
-        
-        // Add close button
+        // Simple close button
         const closeButton = document.createElement('button');
-        closeButton.textContent = '×';
-        closeButton.style.position = 'absolute';
-        closeButton.style.top = '5px';
-        closeButton.style.right = '8px';
-        closeButton.style.background = 'none';
-        closeButton.style.border = 'none';
-        closeButton.style.color = 'white';
-        closeButton.style.fontSize = '18px';
-        closeButton.style.cursor = 'pointer';
-        closeButton.style.width = '20px';
-        closeButton.style.height = '20px';
-        closeButton.style.borderRadius = '50%';
-        closeButton.style.display = 'flex';
-        closeButton.style.alignItems = 'center';
-        closeButton.style.justifyContent = 'center';
+        closeButton.textContent = '✕ Close';
+        closeButton.style.cssText = `
+          width: 100% !important;
+          padding: 8px !important;
+          background: rgba(255,255,255,0.2) !important;
+          color: white !important;
+          border: none !important;
+          border-radius: 5px !important;
+          cursor: pointer !important;
+          font-size: 12px !important;
+        `;
         
         closeButton.onclick = () => {
           if (document.body.contains(audioContainer)) {
             document.body.removeChild(audioContainer);
             URL.revokeObjectURL(audioUrl);
+            console.log("Audio player closed by user");
           }
         };
         
-        audioContainer.appendChild(closeButton);
-        audioContainer.appendChild(label);
-        audioContainer.appendChild(audioElement);
+        // Remove any existing audio player
+        const existing = document.getElementById('appu-audio-player');
+        if (existing) {
+          existing.remove();
+        }
+        
+        // Assemble the audio player
+        audioContainer.appendChild(title);
         audioContainer.appendChild(playButton);
-        document.body.appendChild(audioContainer);
+        audioContainer.appendChild(closeButton);
         
-        console.log("Added Appu's response audio player to DOM");
+        // Add to DOM with error handling
+        try {
+          document.body.appendChild(audioContainer);
+          console.log("Audio player added to DOM successfully");
+        } catch (error) {
+          console.error("Failed to add audio player to DOM:", error);
+        }
         
-        // Auto-remove after 30 seconds if still present
+        // Auto-remove after 45 seconds
         setTimeout(() => {
           if (document.body.contains(audioContainer)) {
             document.body.removeChild(audioContainer);
             URL.revokeObjectURL(audioUrl);
-            console.log("Auto-removed Appu's response audio player");
+            console.log("Audio player auto-removed after timeout");
           }
-        }, 30000);
+        }, 45000);
         
         // Trigger the callback immediately so the UI can update
         options?.onResponseReceived?.(responseText);
