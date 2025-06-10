@@ -77,6 +77,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log(`Audio downloaded: ${audioId}`);
   });
 
+  // Simple test endpoint to generate and return download URL
+  app.get('/api/test-audio', async (req: Request, res: Response) => {
+    try {
+      const testText = "Hello! Main Appu hoon, tumhara magical elephant dost! Namaste!";
+      console.log('Generating test audio...');
+      
+      const speechAudio = await generateSpeech(testText);
+      const audioId = `test-${Date.now()}`;
+      audioCache.set(audioId, speechAudio);
+      
+      const downloadUrl = `http://localhost:5000/api/download-audio/${audioId}`;
+      console.log(`Test audio ready: ${downloadUrl}`);
+      
+      res.json({ 
+        success: true,
+        text: testText,
+        audioId,
+        downloadUrl,
+        size: speechAudio.length,
+        message: 'Click the download URL to get the audio file'
+      });
+    } catch (error) {
+      console.error('Test audio generation failed:', error);
+      res.status(500).json({ error: 'Failed to generate test audio' });
+    }
+  });
+
   // Handle direct text input - skips audio transcription
   app.post('/api/process-text', async (req: Request, res: Response) => {
     try {
