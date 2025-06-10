@@ -5,7 +5,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { WebSocketServer, WebSocket } from 'ws';
-import { transcribeAudio, generateResponse } from "./openai-service";
+import { transcribeAudio, generateResponse, generateSpeech } from "./openai-service";
 import bodyParser from "body-parser";
 import { getErrorMessage } from "../shared/errorMessages";
 
@@ -42,58 +42,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`Response text: ${responseText}`);
       
-      // Generate a simple tone to make the elephant appear to be speaking
-      // In a real implementation, we would use a proper TTS service
-      // Create a WAV file with a short beep sound
-      const sampleRate = 44100;
-      const duration = 0.3; // seconds
-      const frequency = 440; // Hz (A4 note)
+      // Generate speech audio using OpenAI's TTS API
+      const speechAudio = await generateSpeech(responseText);
       
-      // Generate WAV header
-      const numSamples = Math.floor(sampleRate * duration);
-      const dataSize = numSamples * 2; // 16-bit samples = 2 bytes per sample
-      const fileSize = 36 + dataSize;
-      
-      const header = Buffer.alloc(44);
-      // "RIFF" chunk descriptor
-      header.write('RIFF', 0);
-      header.writeUInt32LE(fileSize - 8, 4);
-      header.write('WAVE', 8);
-      
-      // "fmt " sub-chunk
-      header.write('fmt ', 12);
-      header.writeUInt32LE(16, 16); // fmt chunk size
-      header.writeUInt16LE(1, 20); // audio format (1 = PCM)
-      header.writeUInt16LE(1, 22); // num channels (1 = mono)
-      header.writeUInt32LE(sampleRate, 24); // sample rate
-      header.writeUInt32LE(sampleRate * 2, 28); // byte rate (sample rate * block align)
-      header.writeUInt16LE(2, 32); // block align (channels * bits per sample / 8)
-      header.writeUInt16LE(16, 34); // bits per sample
-      
-      // "data" sub-chunk
-      header.write('data', 36);
-      header.writeUInt32LE(dataSize, 40);
-      
-      // Generate audio data (simple sine wave)
-      const audioData = Buffer.alloc(numSamples * 2);
-      for (let i = 0; i < numSamples; i++) {
-        const t = i / sampleRate;
-        // Create a fading sine wave
-        const fadeInOut = Math.sin(Math.PI * t / duration);
-        const sample = Math.sin(2 * Math.PI * frequency * t) * fadeInOut * 0.5;
-        // Convert to 16-bit PCM
-        const value = Math.floor(sample * 32767);
-        audioData.writeInt16LE(value, i * 2);
-      }
-      
-      // Combine header and audio data
-      const dummyAudio = Buffer.concat([header, audioData]);
+      console.log(`Generated speech audio: ${speechAudio.length} bytes`);
       
       // Return a JSON response with both the text and Base64 encoded audio
       res.json({
         text: responseText,
         transcribedText: text, // We use the input text as the "transcription"
-        audioData: dummyAudio.toString('base64'),
+        audioData: speechAudio.toString('base64'),
         contentType: 'audio/wav'
       });
     } catch (error: any) {

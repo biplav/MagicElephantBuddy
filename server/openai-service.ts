@@ -202,3 +202,44 @@ The child says: "${transcribedText}"`;
     throw new Error('generic');
   }
 }
+
+/**
+ * Generate speech audio from text using OpenAI's TTS API
+ */
+export async function generateSpeech(text: string): Promise<Buffer> {
+  try {
+    console.log(`Generating speech for text: ${text.substring(0, 50)}...`);
+    
+    const response = await openai.audio.speech.create({
+      model: "tts-1",
+      voice: "nova", // Child-friendly voice
+      input: text,
+      response_format: "wav"
+    });
+    
+    const audioBuffer = Buffer.from(await response.arrayBuffer());
+    console.log(`Generated speech audio: ${audioBuffer.length} bytes`);
+    
+    return audioBuffer;
+  } catch (error: any) {
+    console.error('Error generating speech:', error);
+    
+    // Check for rate limit errors
+    if (error.status === 429 || (error.error && error.error.type === 'insufficient_quota')) {
+      throw new Error('rateLimit');
+    }
+    
+    // Check for authentication errors
+    if (error.status === 401) {
+      throw new Error('auth');
+    }
+    
+    // Check for service unavailable errors
+    if (error.status && [500, 502, 503].includes(error.status)) {
+      throw new Error('serviceUnavailable');
+    }
+    
+    // For other errors
+    throw new Error('speechGenerationError');
+  }
+}
