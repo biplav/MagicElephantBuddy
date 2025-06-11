@@ -204,6 +204,17 @@ export default function Home() {
     }
   };
   
+  // Helper function to convert base64 to blob
+  const base64ToBlob = (base64: string, contentType: string): Blob => {
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    return new Blob([byteArray], { type: contentType });
+  };
+
   // Process direct text input (for debugging)
   const processDirectTextInput = async () => {
     if (!directTextInput.trim() || isProcessingText) return;
@@ -238,10 +249,29 @@ export default function Home() {
       
       // Process the response
       const responseText = responseData.text;
+      const audioData = responseData.audioBase64;
       
-      // Simulate audio playback 
+      // Play the audio if available
       setElephantState("speaking");
       setSpeechText(responseText);
+      
+      if (audioData && enableLocalPlayback) {
+        try {
+          // Convert base64 to blob and play
+          const audioBlob = base64ToBlob(audioData, 'audio/wav');
+          const audioUrl = URL.createObjectURL(audioBlob);
+          const audio = new Audio(audioUrl);
+          
+          audio.onended = () => {
+            URL.revokeObjectURL(audioUrl);
+          };
+          
+          await audio.play();
+          console.log("Playing generated audio from direct text input");
+        } catch (audioError) {
+          console.error("Error playing audio:", audioError);
+        }
+      }
       
       // Clear the input
       setDirectTextInput("");

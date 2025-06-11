@@ -567,7 +567,8 @@ export default function useAudioRecorder(options?: UseAudioRecorderOptions) {
       if (!response.ok) {
         throw new Error('Failed to process audio');
       }
-      
+
+      console.log("Response is Ok!");
       // Read the JSON response containing both text and audio data
       const responseData = await response.json();
       
