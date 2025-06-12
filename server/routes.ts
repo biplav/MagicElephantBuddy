@@ -187,6 +187,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Handle audio processing with OpenAI
+  // Endpoint to provide OpenAI API key for Realtime API
+  app.get('/api/get-openai-key', (req: Request, res: Response) => {
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({ error: 'OpenAI API key not configured' });
+    }
+    res.json({ apiKey: process.env.OPENAI_API_KEY });
+  });
+
   app.post('/api/process-audio', upload.single('audio'), async (req: MulterRequest, res: Response) => {
     if (!req.file) {
       return res.status(400).json({ 

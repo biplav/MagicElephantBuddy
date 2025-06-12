@@ -23,28 +23,54 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
   });
   
   const wsRef = useRef<WebSocket | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const audioChunksRef = useRef<Float32Array[]>([]);
   
-  // Connect to the realtime WebSocket
+  // Connect directly to OpenAI Realtime API using WebRTC
   const connect = useCallback(async () => {
     try {
       setState(prev => ({ ...prev, error: null }));
       
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/ws/realtime`;
+      // Get OpenAI API key from server endpoint
+      const keyResponse = await fetch('/api/get-openai-key');
+      if (!keyResponse.ok) {
+        throw new Error('Failed to get OpenAI API key');
+      }
+      const { apiKey } = await keyResponse.json();
       
-      const ws = new WebSocket(wsUrl);
+      // Note: Browser WebSocket API doesn't support custom headers
+      // We need to use a server-side proxy for the OpenAI Realtime API
+      // For now, connecting to our server WebSocket that will proxy to OpenAI
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const ws = new WebSocket(`${protocol}//${window.location.host}/ws/realtime`);
       wsRef.current = ws;
       
       ws.onopen = () => {
-        console.log('Connected to realtime WebSocket');
+        console.log('Connected to OpenAI Realtime API');
         setState(prev => ({ ...prev, isConnected: true }));
         
-        // Start the realtime session
-        ws.send(JSON.stringify({ type: 'start_session' }));
+        // Configure the session
+        ws.send(JSON.stringify({
+          type: 'session.update',
+          session: {
+            modalities: ['text', 'audio'],
+            instructions: 'You are Appu, a magical, friendly elephant helper who talks to young children aged 3 to 5. Speak in Hindi or Hinglish with very short, simple sentences.',
+            voice: 'alloy',
+            input_audio_format: 'pcm16',
+            output_audio_format: 'pcm16',
+            input_audio_transcription: {
+              model: 'whisper-1'
+            },
+            turn_detection: {
+              type: 'server_vad',
+              threshold: 0.5,
+              prefix_padding_ms: 300,
+              silence_duration_ms: 500
+            }
+          }
+        }));
       };
       
       ws.onmessage = (event) => {
@@ -112,8 +138,10 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       wsRef.current = null;
     }
     
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
+    // Clean up audio processing
+    if (processorRef.current) {
+      processorRef.current.disconnect();
+      processorRef.current = null;
     }
     
     if (streamRef.current) {
