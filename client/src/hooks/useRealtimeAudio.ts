@@ -28,49 +28,22 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const audioChunksRef = useRef<Float32Array[]>([]);
   
-  // Connect directly to OpenAI Realtime API using WebRTC
+  // Connect to server proxy that handles OpenAI Realtime API
   const connect = useCallback(async () => {
     try {
       setState(prev => ({ ...prev, error: null }));
       
-      // Get OpenAI API key from server endpoint
-      const keyResponse = await fetch('/api/get-openai-key');
-      if (!keyResponse.ok) {
-        throw new Error('Failed to get OpenAI API key');
-      }
-      const { apiKey } = await keyResponse.json();
-      
-      // Note: Browser WebSocket API doesn't support custom headers
-      // We need to use a server-side proxy for the OpenAI Realtime API
-      // For now, connecting to our server WebSocket that will proxy to OpenAI
+      // Connect to our server WebSocket proxy
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const ws = new WebSocket(`${protocol}//${window.location.host}/ws/realtime`);
       wsRef.current = ws;
       
       ws.onopen = () => {
-        console.log('Connected to OpenAI Realtime API');
+        console.log('Connected to realtime proxy');
         setState(prev => ({ ...prev, isConnected: true }));
         
-        // Configure the session
-        ws.send(JSON.stringify({
-          type: 'session.update',
-          session: {
-            modalities: ['text', 'audio'],
-            instructions: 'You are Appu, a magical, friendly elephant helper who talks to young children aged 3 to 5. Speak in Hindi or Hinglish with very short, simple sentences.',
-            voice: 'alloy',
-            input_audio_format: 'pcm16',
-            output_audio_format: 'pcm16',
-            input_audio_transcription: {
-              model: 'whisper-1'
-            },
-            turn_detection: {
-              type: 'server_vad',
-              threshold: 0.5,
-              prefix_padding_ms: 300,
-              silence_duration_ms: 500
-            }
-          }
-        }));
+        // Start the realtime session
+        ws.send(JSON.stringify({ type: 'start_session' }));
       };
       
       ws.onmessage = (event) => {
