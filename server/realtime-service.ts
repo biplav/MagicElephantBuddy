@@ -81,6 +81,13 @@ export function setupRealtimeWebSocket(server: any) {
 
 async function startRealtimeSession(session: RealtimeSession) {
   try {
+    console.log('Attempting to connect to OpenAI Realtime API...');
+    
+    // Check if API key exists
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error('OpenAI API key not found');
+    }
+    
     // Connect to OpenAI Realtime API
     const openaiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01', {
       headers: {
@@ -169,12 +176,17 @@ async function startRealtimeSession(session: RealtimeSession) {
       session.ws.send(JSON.stringify({ type: 'session_ended' }));
     });
     
-    openaiWs.on('error', (error) => {
+    openaiWs.on('error', (error: any) => {
       console.error('OpenAI Realtime API error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code || 'unknown',
+        type: error.type || 'unknown'
+      });
       session.isConnected = false;
       session.ws.send(JSON.stringify({ 
         type: 'error', 
-        message: 'Failed to connect to OpenAI Realtime API' 
+        message: `Failed to connect to OpenAI Realtime API: ${error.message || 'Connection failed'}` 
       }));
     });
     
