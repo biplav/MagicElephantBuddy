@@ -147,8 +147,10 @@ export default function Home() {
   // Initialize realtime connection when toggling to realtime API
   useEffect(() => {
     if (useRealtimeAPI && !realtimeAudio.isConnected) {
+      console.log('Attempting to connect to realtime API...');
       realtimeAudio.connect();
     } else if (!useRealtimeAPI && realtimeAudio.isConnected) {
+      console.log('Disconnecting from realtime API...');
       realtimeAudio.disconnect();
     }
   }, [useRealtimeAPI, realtimeAudio]);
