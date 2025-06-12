@@ -5,6 +5,7 @@ import { Link } from "wouter";
 import Elephant from "@/components/Elephant";
 import { motion, AnimatePresence } from "framer-motion";
 import useAudioRecorder from "@/hooks/useAudioRecorder";
+import useRealtimeAudio from "@/hooks/useRealtimeAudio";
 import PermissionModal from "@/components/PermissionModal";
 // Import error messages when needed
 
@@ -20,16 +21,57 @@ export default function Home() {
   const [directTextInput, setDirectTextInput] = useState<string>("");
   const [isProcessingText, setIsProcessingText] = useState<boolean>(false);
   const [enableLocalPlayback, setEnableLocalPlayback] = useState<boolean>(false); // Default to false for server testing
+  const [useRealtimeAPI, setUseRealtimeAPI] = useState<boolean>(false); // Toggle for OpenAI Realtime API
 
-  const {
-    isReady,
-    isRecording,
-    startRecording,
-    stopRecording,
-    requestMicrophonePermission,
-    isProcessing,
-    recorderState
-  } = useAudioRecorder({
+  // Initialize realtime audio hook
+  const realtimeAudio = useRealtimeAudio({
+    onTranscriptionReceived: (transcription) => {
+      setTranscribedText(transcription);
+    },
+    onResponseReceived: (text) => {
+      setElephantState("speaking");
+      setSpeechText(text);
+      
+      // Return to idle state after speaking
+      setTimeout(() => {
+        setElephantState("idle");
+        setTimeout(() => {
+          setSpeechText(undefined);
+        }, 1000);
+      }, 4000);
+    },
+    onAudioResponseReceived: (audioData) => {
+      if (enableLocalPlayback) {
+        try {
+          // Convert base64 to blob and play
+          const audioBlob = base64ToBlob(audioData, 'audio/pcm');
+          const audioUrl = URL.createObjectURL(audioBlob);
+          const audio = new Audio(audioUrl);
+          
+          audio.onended = () => {
+            URL.revokeObjectURL(audioUrl);
+          };
+          
+          audio.play();
+          console.log("Playing realtime audio response");
+        } catch (audioError) {
+          console.error("Error playing realtime audio:", audioError);
+        }
+      }
+    },
+    onError: (error) => {
+      console.error("Realtime API error:", error);
+      setElephantState("error");
+      setSpeechText("Something went wrong with the connection. Let's try again.");
+      
+      setTimeout(() => {
+        setElephantState("idle");
+        setSpeechText(undefined);
+      }, 3000);
+    }
+  });
+
+  const traditionalRecorder = useAudioRecorder({
     enableLocalPlayback,
     onProcessingStart: () => {
       setElephantState("thinking");
@@ -76,15 +118,43 @@ export default function Home() {
         setTimeout(() => {
           setSpeechText(undefined);
           
-          // Auto-restart recording after Appu finishes speaking
-          if (isReady && appState === "interaction" && !isRecording && !isProcessing) {
-            console.log("Auto-restarting recording after Appu finished speaking");
-            startRecording();
-          }
+          // Auto-restart recording after Appu finishes speaking - will be handled by currentRecorder
+          // Note: this will be updated after currentRecorder is defined
         }, 1000);
       }, 4000);
     }
   });
+
+  // Create unified recorder interface
+  const currentRecorder = useRealtimeAPI ? {
+    isReady: realtimeAudio.isConnected,
+    isRecording: realtimeAudio.isRecording,
+    isProcessing: realtimeAudio.isProcessing,
+    startRecording: realtimeAudio.startRecording,
+    stopRecording: realtimeAudio.stopRecording,
+    requestMicrophonePermission: realtimeAudio.requestMicrophonePermission,
+    recorderState: realtimeAudio.isRecording ? 'recording' : 'inactive'
+  } : {
+    isReady: traditionalRecorder.isReady,
+    isRecording: traditionalRecorder.isRecording,
+    isProcessing: traditionalRecorder.isProcessing,
+    startRecording: traditionalRecorder.startRecording,
+    stopRecording: traditionalRecorder.stopRecording,
+    requestMicrophonePermission: traditionalRecorder.requestMicrophonePermission,
+    recorderState: traditionalRecorder.recorderState
+  };
+
+  // Destructure for backward compatibility
+  const { isReady, isRecording, startRecording, stopRecording, requestMicrophonePermission, isProcessing, recorderState } = currentRecorder;
+
+  // Initialize realtime connection when toggling to realtime API
+  useEffect(() => {
+    if (useRealtimeAPI && !realtimeAudio.isConnected) {
+      realtimeAudio.connect();
+    } else if (!useRealtimeAPI && realtimeAudio.isConnected) {
+      realtimeAudio.disconnect();
+    }
+  }, [useRealtimeAPI, realtimeAudio]);
 
   useEffect(() => {
     if (isReady && appState === "interaction") {
