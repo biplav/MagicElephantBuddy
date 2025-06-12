@@ -110,16 +110,13 @@ export default function Home() {
       // Set the speech text
       setSpeechText(text);
       
-      // Return to idle state after speaking and restart recording
+      // Return to idle state after speaking
       setTimeout(() => {
         setElephantState("idle");
         
         // Small delay to allow state to update and animations to complete
         setTimeout(() => {
           setSpeechText(undefined);
-          
-          // Auto-restart recording after Appu finishes speaking - will be handled by currentRecorder
-          // Note: this will be updated after currentRecorder is defined
         }, 1000);
       }, 4000);
     }
@@ -594,8 +591,8 @@ export default function Home() {
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
               <p><span className="font-semibold">State:</span> {elephantState}</p>
-              <p><span className="font-semibold">Recording:</span> {isRecording ? 'Yes' : 'No'}</p>
-              <p><span className="font-semibold">Processing:</span> {isProcessing || isProcessingText ? 'Yes' : 'No'}</p>
+              <p><span className="font-semibold">Recording:</span> {currentRecorder.isRecording ? 'Yes' : 'No'}</p>
+              <p><span className="font-semibold">Processing:</span> {currentRecorder.isProcessing || isProcessingText ? 'Yes' : 'No'}</p>
               
               <div className="mt-3">
                 <p><span className="font-semibold">Direct Text Input:</span></p>
@@ -611,15 +608,39 @@ export default function Home() {
                     }}
                     placeholder="Type here instead of speaking..."
                     className="flex-grow p-2 rounded bg-gray-700 text-white mr-2"
-                    disabled={isProcessingText || isProcessing}
+                    disabled={isProcessingText || currentRecorder.isProcessing}
                   />
                   <Button
                     onClick={processDirectTextInput}
-                    disabled={isProcessingText || isProcessing || !directTextInput.trim()}
+                    disabled={isProcessingText || currentRecorder.isProcessing || !directTextInput.trim()}
                     className="bg-primary hover:bg-primary-dark px-3 py-1.5 rounded"
                   >
                     {isProcessingText ? 'Processing...' : 'Send'}
                   </Button>
+                </div>
+                
+                <div className="mt-3">
+                  <p><span className="font-semibold">Recording Method:</span></p>
+                  <div className="flex items-center mt-1 gap-3">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        checked={!useRealtimeAPI}
+                        onChange={() => setUseRealtimeAPI(false)}
+                        className="text-primary"
+                      />
+                      <span className="text-sm">Traditional (Upload)</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        checked={useRealtimeAPI}
+                        onChange={() => setUseRealtimeAPI(true)}
+                        className="text-primary"
+                      />
+                      <span className="text-sm">Realtime API (Streaming)</span>
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>
@@ -636,35 +657,35 @@ export default function Home() {
                   <div className="flex gap-2 items-center">
                     <span className="text-xs">Mic State:</span>
                     <div className={`px-2 py-0.5 rounded-full text-xs ${
-                      isRecording 
+                      currentRecorder.isRecording 
                         ? 'bg-green-600' 
                         : 'bg-gray-600'
                     }`}>
-                      {isRecording ? 'Recording' : 'Not Recording'}
+                      {currentRecorder.isRecording ? 'Recording' : 'Not Recording'}
                     </div>
                   </div>
                   
                   <div className="flex gap-2 items-center">
                     <span className="text-xs">Recorder:</span>
                     <div className={`px-2 py-0.5 rounded-full text-xs ${
-                      recorderState === 'recording' 
+                      currentRecorder.recorderState === 'recording' 
                         ? 'bg-green-600' 
-                        : recorderState === 'paused'
+                        : currentRecorder.recorderState === 'paused'
                           ? 'bg-yellow-600'
-                          : recorderState === 'error'
+                          : currentRecorder.recorderState === 'error'
                             ? 'bg-red-600'
                             : 'bg-gray-600'
                     }`}>
-                      {recorderState}
+                      {currentRecorder.recorderState}
                     </div>
                   </div>
                   
                   <div className="flex gap-2 items-center">
                     <span className="text-xs">Processing:</span>
                     <div className={`px-2 py-0.5 rounded-full text-xs ${
-                      isProcessing ? 'bg-yellow-600' : 'bg-gray-600'
+                      currentRecorder.isProcessing ? 'bg-yellow-600' : 'bg-gray-600'
                     }`}>
-                      {isProcessing ? 'Processing' : 'Not Processing'}
+                      {currentRecorder.isProcessing ? 'Processing' : 'Not Processing'}
                     </div>
                   </div>
                   
@@ -696,16 +717,16 @@ export default function Home() {
                   
                   <div className="flex flex-row gap-2 mt-2">
                     <Button
-                      onClick={() => startRecording()}
-                      disabled={isRecording || isProcessing}
+                      onClick={() => currentRecorder.startRecording()}
+                      disabled={currentRecorder.isRecording || currentRecorder.isProcessing}
                       className="bg-green-700 hover:bg-green-800 px-3 py-1.5 rounded text-sm"
                     >
                       Force Start Mic
                     </Button>
                     
                     <Button
-                      onClick={() => stopRecording()}
-                      disabled={!isRecording || isProcessing}
+                      onClick={() => currentRecorder.stopRecording()}
+                      disabled={!currentRecorder.isRecording || currentRecorder.isProcessing}
                       className="bg-red-700 hover:bg-red-800 px-3 py-1.5 rounded text-sm"
                     >
                       Force Stop Mic
