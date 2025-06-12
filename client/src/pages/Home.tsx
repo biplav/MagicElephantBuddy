@@ -165,21 +165,21 @@ export default function Home() {
             setSpeechText(undefined);
             
             // Auto-restart recording after initial greeting
-            if (isReady && appState === "interaction" && !isRecording && !isProcessing) {
+            if (currentRecorder.isReady && appState === "interaction" && !currentRecorder.isRecording && !currentRecorder.isProcessing) {
               console.log("Auto-restarting recording after initial greeting");
-              startRecording();
+              currentRecorder.startRecording();
             }
           }, 1000);
         }, 3000);
       }, 1000);
     }
-  }, [isReady, appState, isRecording, isProcessing, startRecording]);
+  }, [currentRecorder.isReady, appState, currentRecorder.isRecording, currentRecorder.isProcessing, currentRecorder.startRecording]);
 
   useEffect(() => {
-    if (isRecording) {
+    if (currentRecorder.isRecording) {
       setElephantState("listening");
     }
-  }, [isRecording]);
+  }, [currentRecorder.isRecording]);
 
   const handleStartButton = () => {
     setPermissionModalOpen(true);
@@ -187,7 +187,7 @@ export default function Home() {
 
   const handleAllowPermission = async () => {
     setPermissionModalOpen(false);
-    const granted = await requestMicrophonePermission();
+    const granted = await currentRecorder.requestMicrophonePermission();
     
     if (granted) {
       console.log("Microphone permission granted, starting interaction");
@@ -211,40 +211,40 @@ export default function Home() {
 
   // Start recording automatically when ready
   useEffect(() => {
-    if (isReady && appState === "interaction" && !isRecording && !isProcessing) {
+    if (currentRecorder.isReady && appState === "interaction" && !currentRecorder.isRecording && !currentRecorder.isProcessing) {
       console.log("Auto-starting recording because system is ready and not busy");
-      startRecording();
+      currentRecorder.startRecording();
     }
-  }, [isReady, appState, isRecording, isProcessing, startRecording]);
+  }, [currentRecorder.isReady, appState, currentRecorder.isRecording, currentRecorder.isProcessing, currentRecorder.startRecording]);
   
   // Restart recording after processing is complete
   useEffect(() => {
     // Only trigger when processing changes from true to false
-    if (!isProcessing && isReady && appState === "interaction" && elephantState !== "speaking") {
+    if (!currentRecorder.isProcessing && currentRecorder.isReady && appState === "interaction" && elephantState !== "speaking") {
       // Small delay to ensure everything is reset properly
       const timer = setTimeout(() => {
-        if (!isRecording && !isProcessing) {
+        if (!currentRecorder.isRecording && !currentRecorder.isProcessing) {
           console.log("Restarting recording after processing completed");
-          startRecording();
+          currentRecorder.startRecording();
         }
       }, 1000);
       
       return () => clearTimeout(timer);
     }
-  }, [isProcessing, isReady, appState, elephantState, isRecording, startRecording]);
+  }, [currentRecorder.isProcessing, currentRecorder.isReady, appState, elephantState, currentRecorder.isRecording, currentRecorder.startRecording]);
 
   // Handle microphone button to stop current recording and trigger processing
   const handleMicrophoneButton = () => {
-    if (isRecording) {
+    if (currentRecorder.isRecording) {
       console.log("Stopping recording manually via microphone button");
-      stopRecording();
+      currentRecorder.stopRecording();
       
       // Add a small delay before processing
       setTimeout(() => {
         // Log current state after stopping
         console.log("Current state after stopping recording:", { 
-          isRecording, 
-          isProcessing, 
+          isRecording: currentRecorder.isRecording, 
+          isProcessing: currentRecorder.isProcessing, 
           elephantState
         });
       }, 100);
@@ -258,13 +258,13 @@ export default function Home() {
       }
       
       // Start recording
-      startRecording();
+      currentRecorder.startRecording();
       
       // Log current state after starting
       setTimeout(() => {
         console.log("Current state after starting recording:", { 
-          isRecording, 
-          isProcessing, 
+          isRecording: currentRecorder.isRecording, 
+          isProcessing: currentRecorder.isProcessing, 
           elephantState
         });
       }, 100);
@@ -357,9 +357,9 @@ export default function Home() {
           setSpeechText(undefined);
           
           // Auto-restart recording after Appu finishes speaking
-          if (isReady && appState === "interaction" && !isRecording && !isProcessing) {
+          if (currentRecorder.isReady && appState === "interaction" && !currentRecorder.isRecording && !currentRecorder.isProcessing) {
             console.log("Auto-restarting recording after processing text input response");
-            startRecording();
+            currentRecorder.startRecording();
           }
         }, 1000);
       }, 4000);
@@ -402,9 +402,9 @@ export default function Home() {
           setSpeechText(undefined);
           
           // Auto-restart recording after error message
-          if (isReady && appState === "interaction" && !isRecording && !isProcessing) {
+          if (currentRecorder.isReady && appState === "interaction" && !currentRecorder.isRecording && !currentRecorder.isProcessing) {
             console.log("Auto-restarting recording after error message");
-            startRecording();
+            currentRecorder.startRecording();
           }
         }, 1000);
       }, 4000);
