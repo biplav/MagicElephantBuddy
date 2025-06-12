@@ -6,6 +6,7 @@ import path from "path";
 import fs from "fs";
 import { WebSocketServer, WebSocket } from 'ws';
 import { transcribeAudio, generateResponse, generateSpeech } from "./openai-service";
+import { setupRealtimeWebSocket } from "./realtime-service";
 import bodyParser from "body-parser";
 import { getErrorMessage } from "../shared/errorMessages";
 
@@ -332,6 +333,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
+  
+  // Set up OpenAI Realtime API WebSocket service
+  setupRealtimeWebSocket(httpServer);
   
   // Set up WebSocket server for real-time communication (future use)
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });

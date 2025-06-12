@@ -249,11 +249,16 @@ export default function Home() {
       
       // Process the response
       const responseText = responseData.text;
-      const audioData = responseData.audioBase64;
+      const audioData = responseData.audioData;
+
+      console.log(responseData);
       
       // Play the audio if available
       setElephantState("speaking");
       setSpeechText(responseText);
+
+      console.log("Setting it up!!!");
+      console.log(audioData);
       
       if (audioData && enableLocalPlayback) {
         try {
