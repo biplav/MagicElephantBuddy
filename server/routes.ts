@@ -230,7 +230,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const sessionData = await response.json();
       res.json({
-        client_secret: sessionData.client_secret
+        client_secret: sessionData.client_secret?.value || sessionData.client_secret,
+        expires_at: sessionData.client_secret?.expires_at
       });
     } catch (error) {
       console.error('Error creating realtime session:', error);
