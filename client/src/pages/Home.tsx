@@ -209,6 +209,26 @@ export default function Home() {
     }
   };
 
+  const handleStopSession = () => {
+    console.log("Stopping session and returning to welcome screen");
+    
+    // Stop any ongoing recording
+    if (currentRecorder.isRecording) {
+      currentRecorder.stopRecording();
+    }
+    
+    // Disconnect from realtime API if connected
+    if (useRealtimeAPI && realtimeAudio.isConnected) {
+      console.log("Disconnecting from realtime API");
+      realtimeAudio.disconnect();
+    }
+    
+    // Reset all states
+    setElephantState("idle");
+    setSpeechText(undefined);
+    setAppState("welcome");
+  };
+
   // Start recording automatically when ready (only for realtime API after connection is established)
   useEffect(() => {
     if (useRealtimeAPI && realtimeAudio.isConnected && appState === "interaction" && !currentRecorder.isRecording && !currentRecorder.isProcessing) {
@@ -571,6 +591,15 @@ export default function Home() {
                         ? "Appu is listening to you now! Tap when you're done talking" 
                         : "Tap to start talking with Appu!"}
                   </p>
+                  
+                  {/* Stop/Cancel Button */}
+                  <Button 
+                    className="mt-4 bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-6 rounded-full text-sm shadow-md transition transform hover:scale-105 active:scale-95"
+                    onClick={handleStopSession}
+                    variant="default"
+                  >
+                    Stop Talking
+                  </Button>
                 </div>
               </div>
             </motion.div>
