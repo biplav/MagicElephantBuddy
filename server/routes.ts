@@ -74,7 +74,7 @@ CURRENT DATE AND TIME INFORMATION:
 CHILD PROFILE INFORMATION:
 ${generateProfileSection(DEFAULT_PROFILE)}
 Use this information to personalize your responses and make them more engaging for ${DEFAULT_PROFILE.name}.`;
-
+  console.log(APPU_SYSTEM_PROMPT + dateTimeInfo + profileInfo);
   return APPU_SYSTEM_PROMPT + dateTimeInfo + profileInfo;
 }
 
@@ -243,6 +243,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Handle audio processing with OpenAI
   // Endpoint to create ephemeral token for OpenAI Realtime API
+  // Parent Dashboard API Routes
+  
+  // Parent registration
+  app.post('/api/parents/register', async (req: Request, res: Response) => {
+    try {
+      const { email, password, name } = req.body;
+      
+      // Check if parent already exists
+      const existingParent = await storage.getParentByEmail(email);
+      if (existingParent) {
+        return res.status(400).json({ error: 'Parent already exists with this email' });
+      }
+      
+      const parent = await storage.createParent({ email, password, name });
+      res.json({ parent: { id: parent.id, email: parent.email, name: parent.name } });
+    } catch (error) {
+      console.error('Error registering parent:', error);
+      res.status(500).json({ error: 'Failed to register parent' });
+    }
+  });
+  
+  // Parent login
+  app.post('/api/parents/login', async (req: Request, res: Response) => {
+    try {
+      const { email, password } = req.body;
+      
+      const parent = await storage.getParentByEmail(email);
+      if (!parent || parent.password !== password) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+      
+      res.json({ parent: { id: parent.id, email: parent.email, name: parent.name } });
+    } catch (error) {
+      console.error('Error logging in parent:', error);
+      res.status(500).json({ error: 'Failed to login' });
+    }
+  });
+  
+  // Get parent dashboard data
+  app.get('/api/parents/:parentId/dashboard', async (req: Request, res: Response) => {
+    try {
+      const parentId = parseInt(req.params.parentId);
+      const dashboardData = await storage.getParentDashboardData(parentId);
+      res.json(dashboardData);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      res.status(500).json({ error: 'Failed to fetch dashboard data' });
+    }
+  });
+  
+  // Create child profile
+  app.post('/api/children', async (req: Request, res: Response) => {
+    try {
+      const { parentId, name, age, profile } = req.body;
+      const child = await storage.createChild({ parentId, name, age, profile });
+      res.json(child);
+    } catch (error) {
+      console.error('Error creating child:', error);
+      res.status(500).json({ error: 'Failed to create child profile' });
+    }
+  });
+  
+  // Get conversations for a child
+  app.get('/api/children/:childId/conversations', async (req: Request, res: Response) => {
+    try {
+      const childId = parseInt(req.params.childId);
+      const limit = parseInt(req.query.limit as string) || 10;
+      const conversations = await storage.getConversationsByChild(childId, limit);
+      res.json(conversations);
+    } catch (error) {
+      console.error('Error fetching conversations:', error);
+      res.status(500).json({ error: 'Failed to fetch conversations' });
+    }
+  });
+  
+  // Get messages for a conversation
+  app.get('/api/conversations/:conversationId/messages', async (req: Request, res: Response) => {
+    try {
+      const conversationId = parseInt(req.params.conversationId);
+      const messages = await storage.getMessagesByConversation(conversationId);
+      res.json(messages);
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      res.status(500).json({ error: 'Failed to fetch messages' });
+    }
+  });
+
   app.post('/api/session', async (req: Request, res: Response) => {
     try {
       if (!process.env.OPENAI_API_KEY) {

@@ -1,26 +1,169 @@
-import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, json } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { relations } from "drizzle-orm";
 
-// User schema for storing user preferences and settings
+// Parent/User schema for authentication and profile management
+export const parents = pgTable("parents", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  password: text("password").notNull(),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Child profiles managed by parents
+export const children = pgTable("children", {
+  id: serial("id").primaryKey(),
+  parentId: integer("parent_id").notNull().references(() => parents.id),
+  name: text("name").notNull(),
+  age: integer("age").notNull(),
+  profile: json("profile").notNull(), // Stores the child profile data
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Conversation sessions between child and Appu
+export const conversations = pgTable("conversations", {
+  id: serial("id").primaryKey(),
+  childId: integer("child_id").notNull().references(() => children.id),
+  startTime: timestamp("start_time").defaultNow().notNull(),
+  endTime: timestamp("end_time"),
+  duration: integer("duration"), // in seconds
+  totalMessages: integer("total_messages").default(0).notNull(),
+});
+
+// Individual messages within conversations
+export const messages = pgTable("messages", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id").notNull().references(() => conversations.id),
+  type: text("type").notNull(), // 'child_input', 'appu_response'
+  content: text("content").notNull(),
+  transcription: text("transcription"), // For audio inputs
+  audioPath: text("audio_path"), // Path to audio file if applicable
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+  metadata: json("metadata"), // Additional data like emotion, context, etc.
+});
+
+// Analytics and insights for parent dashboard
+export const conversationInsights = pgTable("conversation_insights", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id").notNull().references(() => conversations.id),
+  emotionalTone: text("emotional_tone"), // happy, sad, excited, etc.
+  topics: text("topics").array(), // Topics discussed
+  learningGoalsAddressed: text("learning_goals_addressed").array(),
+  parentalRecommendations: text("parental_recommendations"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Relations
+export const parentsRelations = relations(parents, ({ many }) => ({
+  children: many(children),
+}));
+
+export const childrenRelations = relations(children, ({ one, many }) => ({
+  parent: one(parents, {
+    fields: [children.parentId],
+    references: [parents.id],
+  }),
+  conversations: many(conversations),
+}));
+
+export const conversationsRelations = relations(conversations, ({ one, many }) => ({
+  child: one(children, {
+    fields: [conversations.childId],
+    references: [children.id],
+  }),
+  messages: many(messages),
+  insights: many(conversationInsights),
+}));
+
+export const messagesRelations = relations(messages, ({ one }) => ({
+  conversation: one(conversations, {
+    fields: [messages.conversationId],
+    references: [conversations.id],
+  }),
+}));
+
+export const conversationInsightsRelations = relations(conversationInsights, ({ one }) => ({
+  conversation: one(conversations, {
+    fields: [conversationInsights.conversationId],
+    references: [conversations.id],
+  }),
+}));
+
+// Insert schemas
+export const insertParentSchema = createInsertSchema(parents).pick({
+  email: true,
+  password: true,
+  name: true,
+});
+
+export const insertChildSchema = createInsertSchema(children).pick({
+  parentId: true,
+  name: true,
+  age: true,
+  profile: true,
+});
+
+export const insertConversationSchema = createInsertSchema(conversations).pick({
+  childId: true,
+  endTime: true,
+  duration: true,
+  totalMessages: true,
+});
+
+export const insertMessageSchema = createInsertSchema(messages).pick({
+  conversationId: true,
+  type: true,
+  content: true,
+  transcription: true,
+  audioPath: true,
+  metadata: true,
+});
+
+export const insertConversationInsightSchema = createInsertSchema(conversationInsights).pick({
+  conversationId: true,
+  emotionalTone: true,
+  topics: true,
+  learningGoalsAddressed: true,
+  parentalRecommendations: true,
+});
+
+// Types
+export type InsertParent = z.infer<typeof insertParentSchema>;
+export type Parent = typeof parents.$inferSelect;
+
+export type InsertChild = z.infer<typeof insertChildSchema>;
+export type Child = typeof children.$inferSelect;
+
+export type InsertConversation = z.infer<typeof insertConversationSchema>;
+export type Conversation = typeof conversations.$inferSelect;
+
+export type InsertMessage = z.infer<typeof insertMessageSchema>;
+export type Message = typeof messages.$inferSelect;
+
+export type InsertConversationInsight = z.infer<typeof insertConversationInsightSchema>;
+export type ConversationInsight = typeof conversationInsights.$inferSelect;
+
+// Legacy schemas for backward compatibility
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
-
-// Recording history to track user interactions with Appu
 export const recordings = pgTable("recordings", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").references(() => users.id),
   recordingDate: timestamp("recording_date").defaultNow().notNull(),
   transcription: text("transcription"),
   response: text("response"),
+});
+
+export const insertUserSchema = createInsertSchema(users).pick({
+  username: true,
+  password: true,
 });
 
 export const insertRecordingSchema = createInsertSchema(recordings).pick({
