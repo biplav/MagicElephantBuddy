@@ -23,6 +23,35 @@ export default function Home() {
   const [enableLocalPlayback, setEnableLocalPlayback] = useState<boolean>(false); // Default to false for server testing
   const [useRealtimeAPI, setUseRealtimeAPI] = useState<boolean>(true); // Toggle for OpenAI Realtime API
 
+  // Fullscreen utility functions
+  const enterFullscreen = async () => {
+    try {
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      } else if ((document.documentElement as any).webkitRequestFullscreen) {
+        await (document.documentElement as any).webkitRequestFullscreen();
+      } else if ((document.documentElement as any).msRequestFullscreen) {
+        await (document.documentElement as any).msRequestFullscreen();
+      }
+    } catch (error) {
+      console.warn('Failed to enter fullscreen:', error);
+    }
+  };
+
+  const exitFullscreen = async () => {
+    try {
+      if (document.exitFullscreen) {
+        await document.exitFullscreen();
+      } else if ((document as any).webkitExitFullscreen) {
+        await (document as any).webkitExitFullscreen();
+      } else if ((document as any).msExitFullscreen) {
+        await (document as any).msExitFullscreen();
+      }
+    } catch (error) {
+      console.warn('Failed to exit fullscreen:', error);
+    }
+  };
+
   // Initialize realtime audio hook
   const realtimeAudio = useRealtimeAudio({
     onTranscriptionReceived: (transcription) => {
@@ -144,6 +173,52 @@ export default function Home() {
   // Destructure for backward compatibility
   const { isReady, isRecording, startRecording, stopRecording, requestMicrophonePermission, isProcessing, recorderState } = currentRecorder;
 
+  const handleStopSession = async () => {
+    console.log("Stopping session and returning to welcome screen");
+    
+    // Stop any ongoing recording
+    if (currentRecorder.isRecording) {
+      currentRecorder.stopRecording();
+    }
+    
+    // Disconnect from realtime API if connected
+    if (useRealtimeAPI && realtimeAudio.isConnected) {
+      console.log("Disconnecting from realtime API");
+      realtimeAudio.disconnect();
+    }
+    
+    // Exit fullscreen mode
+    await exitFullscreen();
+    
+    // Reset all states
+    setElephantState("idle");
+    setSpeechText(undefined);
+    setAppState("welcome");
+  };
+
+  // Handle fullscreen exit via ESC key
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      // If user exits fullscreen manually (e.g., ESC key) while in interaction mode
+      if (!document.fullscreenElement && appState === "interaction") {
+        console.log("Fullscreen exited manually, stopping session");
+        handleStopSession();
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, [appState, handleStopSession]);
+
   // Only connect when explicitly requested, not automatically
   // Removed automatic connection on toggle
 
@@ -185,6 +260,10 @@ export default function Home() {
     
     if (granted) {
       console.log("Microphone permission granted, starting interaction");
+      
+      // Enter fullscreen mode
+      await enterFullscreen();
+      
       setAppState("interaction");
       
       // Connect to realtime API only after permission is granted
@@ -207,26 +286,6 @@ export default function Home() {
       // You might want to show another dialog or message here
       // explaining how to enable microphone permissions
     }
-  };
-
-  const handleStopSession = () => {
-    console.log("Stopping session and returning to welcome screen");
-    
-    // Stop any ongoing recording
-    if (currentRecorder.isRecording) {
-      currentRecorder.stopRecording();
-    }
-    
-    // Disconnect from realtime API if connected
-    if (useRealtimeAPI && realtimeAudio.isConnected) {
-      console.log("Disconnecting from realtime API");
-      realtimeAudio.disconnect();
-    }
-    
-    // Reset all states
-    setElephantState("idle");
-    setSpeechText(undefined);
-    setAppState("welcome");
   };
 
   // Start recording automatically when ready (only for realtime API after connection is established)
