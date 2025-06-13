@@ -130,7 +130,7 @@ export class DatabaseStorage implements IStorage {
     const [conversation] = await db
       .select()
       .from(conversations)
-      .where(and(eq(conversations.childId, childId), conversations.endTime.isNull()))
+      .where(and(eq(conversations.childId, childId), isNull(conversations.endTime)))
       .orderBy(desc(conversations.startTime))
       .limit(1);
     return conversation || undefined;

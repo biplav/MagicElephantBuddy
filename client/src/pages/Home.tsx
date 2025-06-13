@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Settings, Bug, Speaker } from "lucide-react";
+import { Settings, Bug, Speaker, User } from "lucide-react";
 import { Link } from "wouter";
 import Elephant from "@/components/Elephant";
 import { motion, AnimatePresence } from "framer-motion";
@@ -539,6 +539,16 @@ export default function Home() {
               className="p-1 sm:p-2"
             >
               <Speaker className="h-4 w-4 sm:h-5 sm:w-5 text-neutral" />
+            </Button>
+          </Link>
+          <Link href="/dashboard">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              aria-label="Parent Dashboard" 
+              className="p-1 sm:p-2"
+            >
+              <User className="h-4 w-4 sm:h-5 sm:w-5 text-neutral" />
             </Button>
           </Link>
           <Button 
