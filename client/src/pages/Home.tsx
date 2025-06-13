@@ -434,12 +434,12 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Header */}
-      <header className="flex justify-between items-center p-4 bg-white bg-opacity-70 shadow-sm">
+    <div className="min-h-screen flex flex-col relative">
+      {/* Header - Reduced padding for mobile */}
+      <header className="flex justify-between items-center p-2 sm:p-4 bg-white bg-opacity-70 shadow-sm flex-shrink-0">
         <div className="flex items-center">
-          <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center text-white mr-2">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-primary flex items-center justify-center text-white mr-2">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="sm:w-6 sm:h-6">
               <path d="M18 8C18 8 19 7 20 7C21 7 22 8 22 9C22 10 21 11 20 11C19 11 18 10 18 9" fill="white"/>
               <path d="M6 8C6 8 5 7 4 7C3 7 2 8 2 9C2 10 3 11 4 11C5 11 6 10 6 9" fill="white"/>
               <ellipse cx="12" cy="14" rx="8" ry="7" fill="white"/>
@@ -448,34 +448,36 @@ export default function Home() {
               <path d="M11 15C11 15 12 16 13 15" stroke="black" strokeWidth="0.5" strokeLinecap="round"/>
             </svg>
           </div>
-          <h1 className="font-bold text-xl text-primary">Appu</h1>
+          <h1 className="font-bold text-lg sm:text-xl text-primary">Appu</h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-1 sm:gap-2">
           <Link href="/audio-test">
             <Button 
               variant="ghost" 
-              size="icon" 
+              size="sm" 
               aria-label="Audio Test" 
+              className="p-1 sm:p-2"
             >
-              <Speaker className="h-6 w-6 text-neutral" />
+              <Speaker className="h-4 w-4 sm:h-5 sm:w-5 text-neutral" />
             </Button>
           </Link>
           <Button 
             variant="ghost" 
-            size="icon" 
+            size="sm" 
             aria-label="Debug" 
             onClick={() => setShowDebug(!showDebug)}
+            className="p-1 sm:p-2"
           >
-            <Bug className="h-6 w-6 text-neutral" />
+            <Bug className="h-4 w-4 sm:h-5 sm:w-5 text-neutral" />
           </Button>
-          <Button variant="ghost" size="icon" aria-label="Settings">
-            <Settings className="h-6 w-6 text-neutral" />
+          <Button variant="ghost" size="sm" aria-label="Settings" className="p-1 sm:p-2">
+            <Settings className="h-4 w-4 sm:h-5 sm:w-5 text-neutral" />
           </Button>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col items-center justify-between p-4 md:p-6 overflow-hidden relative">
+      {/* Main Content - Optimized for mobile with Replit banner */}
+      <main className="flex-1 flex flex-col items-center justify-between p-2 sm:p-4 md:p-6 overflow-hidden relative min-h-0">
         {/* Decorative blobs in background */}
         <div className="absolute top-1/4 -left-20 w-40 h-40 blob opacity-20 z-0"></div>
         <div className="absolute bottom-1/3 -right-20 w-60 h-60 blob opacity-20 z-0"></div>
@@ -484,17 +486,17 @@ export default function Home() {
           {appState === "welcome" ? (
             <motion.div 
               key="welcome"
-              className="flex flex-col items-center justify-center space-y-4 text-center max-w-lg p-4 z-10"
+              className="flex flex-col items-center justify-center space-y-2 sm:space-y-4 text-center max-w-lg p-2 sm:p-4 z-10 flex-1"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.5 }}
             >
-              <h2 className="font-bold text-2xl text-primary">Meet Appu!</h2>
-              <p className="text-neutral text-lg">Your magical elephant friend who loves to talk and play with you!</p>
+              <h2 className="font-bold text-xl sm:text-2xl text-primary">Meet Appu!</h2>
+              <p className="text-neutral text-base sm:text-lg px-4">Your magical elephant friend who loves to talk and play with you!</p>
               
               <motion.div 
-                className="w-48 h-48 my-4"
+                className="w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 my-2 sm:my-4"
                 animate={{ y: [0, -10, 0] }}
                 transition={{ repeat: Infinity, duration: 2 }}
               >
@@ -513,7 +515,7 @@ export default function Home() {
               </motion.div>
               
               <Button 
-                className="bg-secondary hover:bg-yellow-400 text-black font-bold py-4 px-8 rounded-full text-xl shadow-lg transition transform hover:scale-105 active:scale-95"
+                className="bg-secondary hover:bg-yellow-400 text-black font-bold py-3 px-6 sm:py-4 sm:px-8 rounded-full text-lg sm:text-xl shadow-lg transition transform hover:scale-105 active:scale-95 mt-2 sm:mt-4"
                 onClick={handleStartButton}
               >
                 Let's Talk to Appu!
@@ -522,17 +524,19 @@ export default function Home() {
           ) : (
             <motion.div 
               key="interaction"
-              className="w-full max-w-xl flex-1 flex flex-col items-center justify-between space-y-4 z-10"
+              className="w-full max-w-xl flex-1 flex flex-col items-center justify-between space-y-2 sm:space-y-4 z-10 min-h-0"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.5 }}
             >
-              <Elephant state={elephantState} speechText={speechText} />
+              <div className="flex-1 flex items-center justify-center min-h-0 w-full">
+                <Elephant state={elephantState} speechText={speechText} />
+              </div>
               
-              <div className="w-full px-4 py-6 bg-white bg-opacity-80 rounded-t-3xl shadow-lg">
-                <div className="flex flex-col items-center space-y-4">
-                  <p className="text-primary font-medium text-lg">
+              <div className="w-full px-3 py-4 sm:px-4 sm:py-6 bg-white bg-opacity-80 rounded-t-3xl shadow-lg flex-shrink-0">
+                <div className="flex flex-col items-center space-y-3 sm:space-y-4">
+                  <p className="text-primary font-medium text-base sm:text-lg text-center px-2">
                     {isProcessing 
                       ? "Appu is thinking..." 
                       : elephantState === "speaking" 
@@ -543,8 +547,8 @@ export default function Home() {
                   </p>
                   
                   {isProcessing ? (
-                    <div className="w-20 h-20 rounded-full shadow-lg bg-yellow-400 flex items-center justify-center animate-pulse">
-                      <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full shadow-lg bg-yellow-400 flex items-center justify-center animate-pulse">
+                      <svg className="w-6 h-6 sm:w-8 sm:h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </div>

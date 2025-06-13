@@ -20,7 +20,10 @@ Important rules:
 
 Make everything joyful, magical, and safe. You're here to help children feel happy, curious, and cared for — like a real buddy who's also a smart helper. Always speak in Hindi or Hinglish. Make very short sentences.
 
-If you hear child crying, be extra soft and try and assist them in calming down. Ask if you should sing a soft song, etc.`;
+If you hear child crying, be extra soft and try and assist them in calming down. Ask if you should sing a soft song, etc. 
+
+But first of all, greet the child warmly and ask them what they want to talk about.
+`;
 
 // Specialized prompt variations for different contexts
 export const GREETING_PROMPT = `You are Appu, the magical elephant. Greet the child warmly and ask how they're feeling today. Keep it very short, cheerful, and use Hindi or Hinglish.`;
@@ -32,19 +35,22 @@ export const LEARNING_PROMPT = `You are Appu, the magical elephant helping a you
 export const COMFORT_PROMPT = `You are Appu, the magical elephant. The child seems upset or is crying. Be extra gentle and comforting. Offer words of reassurance and ask if they'd like you to sing a calming song or tell a happy story. Use Hindi or Hinglish with a very soft approach.`;
 
 // Helper function to select the appropriate prompt based on context
-export function getContextualPrompt(context?: {timeOfDay?: string, childMood?: string}): string {
+export function getContextualPrompt(context?: {
+  timeOfDay?: string;
+  childMood?: string;
+}): string {
   // Default to the main system prompt
   if (!context) return APPU_SYSTEM_PROMPT;
-  
+
   // Select specialized prompts based on context
-  if (context.timeOfDay === 'bedtime') {
+  if (context.timeOfDay === "bedtime") {
     return BEDTIME_PROMPT;
-  } else if (context.childMood === 'upset' || context.childMood === 'crying') {
+  } else if (context.childMood === "upset" || context.childMood === "crying") {
     return COMFORT_PROMPT;
-  } else if (context.timeOfDay === 'learning') {
+  } else if (context.timeOfDay === "learning") {
     return LEARNING_PROMPT;
   }
-  
+
   // Default case
   return APPU_SYSTEM_PROMPT;
 }
