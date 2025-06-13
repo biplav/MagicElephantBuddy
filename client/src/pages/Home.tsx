@@ -250,8 +250,29 @@ export default function Home() {
     }
   }, [currentRecorder.isRecording]);
 
-  const handleStartButton = () => {
-    setPermissionModalOpen(true);
+  const handleStartButton = async () => {
+    // Check if microphone permission is already granted
+    try {
+      const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+      if (permission.state === 'granted') {
+        // Permission already granted, proceed directly
+        console.log("Microphone permission already granted");
+        await enterFullscreen();
+        setAppState("interaction");
+        
+        if (useRealtimeAPI && !realtimeAudio.isConnected) {
+          console.log("Connecting to realtime API");
+          realtimeAudio.connect();
+        }
+      } else {
+        // Need to request permission
+        setPermissionModalOpen(true);
+      }
+    } catch (error) {
+      // Fallback if permissions API is not supported
+      console.log("Permissions API not supported, showing permission modal");
+      setPermissionModalOpen(true);
+    }
   };
 
   const handleAllowPermission = async () => {
@@ -535,8 +556,8 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main Content - Optimized for mobile with Replit banner */}
-      <main className="flex-1 flex flex-col items-center justify-between p-2 sm:p-4 md:p-6 overflow-hidden relative min-h-0">
+      {/* Main Content - Optimized for mobile with Replit banner and fullscreen */}
+      <main className="flex-1 flex flex-col items-center justify-center p-2 sm:p-4 md:p-6 overflow-hidden relative min-h-0 max-h-screen">
         {/* Decorative blobs in background */}
         <div className="absolute top-1/4 -left-20 w-40 h-40 blob opacity-20 z-0"></div>
         <div className="absolute bottom-1/3 -right-20 w-60 h-60 blob opacity-20 z-0"></div>
@@ -583,18 +604,18 @@ export default function Home() {
           ) : (
             <motion.div 
               key="interaction"
-              className="w-full max-w-xl flex-1 flex flex-col items-center justify-between space-y-2 sm:space-y-4 z-10 min-h-0"
+              className="w-full h-full flex flex-col items-center justify-center space-y-4 z-10 max-w-xl"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.5 }}
             >
-              <div className="flex-1 flex items-center justify-center min-h-0 w-full">
+              <div className="flex-1 flex items-center justify-center w-full min-h-0">
                 <Elephant state={elephantState} speechText={speechText} />
               </div>
               
-              <div className="w-full px-3 py-4 sm:px-4 sm:py-6 bg-white bg-opacity-80 rounded-t-3xl shadow-lg flex-shrink-0">
-                <div className="flex flex-col items-center space-y-3 sm:space-y-4">
+              <div className="w-full px-3 py-2 sm:px-4 sm:py-3 bg-white bg-opacity-80 rounded-t-3xl shadow-lg flex-shrink-0 max-h-40">
+                <div className="flex flex-col items-center space-y-2 sm:space-y-3">
                   <p className="text-primary font-medium text-base sm:text-lg text-center px-2">
                     {isProcessing 
                       ? "Appu is thinking..." 
@@ -657,7 +678,7 @@ export default function Home() {
                   
                   {/* Stop/Cancel Button */}
                   <Button 
-                    className="mt-2 sm:mt-4 bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 sm:px-6 rounded-full text-xs sm:text-sm shadow-md transition transform hover:scale-105 active:scale-95"
+                    className="mt-1 sm:mt-2 bg-red-500 hover:bg-red-600 text-white font-medium py-1.5 px-3 sm:py-2 sm:px-4 rounded-full text-xs sm:text-sm shadow-md transition transform hover:scale-105 active:scale-95"
                     onClick={handleStopSession}
                     variant="default"
                   >
