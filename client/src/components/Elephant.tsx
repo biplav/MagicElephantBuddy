@@ -30,7 +30,7 @@ const Elephant: FC<ElephantProps> = ({ state, speechText }) => {
       case "idle":
         return (
           <motion.div
-            className="w-72 h-72 mx-auto"
+            className="w-48 h-48 sm:w-60 sm:h-60 md:w-72 md:h-72 mx-auto"
             animate={{ scale: [1, 1.03, 1] }}
             transition={{ repeat: Infinity, duration: 3 }}
             dangerouslySetInnerHTML={{ __html: elephantSvg }}
@@ -41,7 +41,7 @@ const Elephant: FC<ElephantProps> = ({ state, speechText }) => {
         return (
           <div className="relative">
             <motion.div
-              className="w-72 h-72 mx-auto"
+              className="w-48 h-48 sm:w-60 sm:h-60 md:w-72 md:h-72 mx-auto"
               animate={{ rotate: [-2, 2, -2] }}
               transition={{ repeat: Infinity, duration: 1 }}
               dangerouslySetInnerHTML={{ __html: elephantSvg }}
@@ -56,7 +56,7 @@ const Elephant: FC<ElephantProps> = ({ state, speechText }) => {
         return (
           <div className="relative">
             <motion.div 
-              className="w-72 h-72 mx-auto"
+              className="w-48 h-48 sm:w-60 sm:h-60 md:w-72 md:h-72 mx-auto"
               animate={{ scale: [1, 1.03, 1] }}
               transition={{ repeat: Infinity, duration: 2 }}
               dangerouslySetInnerHTML={{ __html: elephantSvg }} 
@@ -65,24 +65,24 @@ const Elephant: FC<ElephantProps> = ({ state, speechText }) => {
             {/* Thinking animation - enhanced version */}
             <div className="absolute top-0 left-0 right-0 flex justify-center">
               <motion.div 
-                className="mt-8 px-5 py-3 bg-white rounded-full shadow-lg border-2 border-primary"
+                className="mt-4 sm:mt-6 md:mt-8 px-3 py-2 sm:px-4 sm:py-2 md:px-5 md:py-3 bg-white rounded-full shadow-lg border-2 border-primary"
                 initial={{ y: -10, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ duration: 0.3 }}
               >
-                <div className="flex space-x-2">
+                <div className="flex space-x-1 sm:space-x-2">
                   <motion.div
-                    className="w-4 h-4 bg-primary rounded-full"
+                    className="w-2 h-2 sm:w-3 sm:h-3 md:w-4 md:h-4 bg-primary rounded-full"
                     animate={{ scale: [1, 1.5, 1] }}
                     transition={{ repeat: Infinity, duration: 0.6, delay: 0 }}
                   />
                   <motion.div
-                    className="w-4 h-4 bg-primary rounded-full"
+                    className="w-2 h-2 sm:w-3 sm:h-3 md:w-4 md:h-4 bg-primary rounded-full"
                     animate={{ scale: [1, 1.5, 1] }}
                     transition={{ repeat: Infinity, duration: 0.6, delay: 0.2 }}
                   />
                   <motion.div
-                    className="w-4 h-4 bg-primary rounded-full"
+                    className="w-2 h-2 sm:w-3 sm:h-3 md:w-4 md:h-4 bg-primary rounded-full"
                     animate={{ scale: [1, 1.5, 1] }}
                     transition={{ repeat: Infinity, duration: 0.6, delay: 0.4 }}
                   />
@@ -95,7 +95,7 @@ const Elephant: FC<ElephantProps> = ({ state, speechText }) => {
       case "speaking":
         return (
           <motion.div
-            className="w-72 h-72 mx-auto"
+            className="w-48 h-48 sm:w-60 sm:h-60 md:w-72 md:h-72 mx-auto"
             animate={{ y: [0, -10, 0] }}
             transition={{ repeat: Infinity, duration: 2.5 }}
             dangerouslySetInnerHTML={{ __html: elephantSvg }}
@@ -111,19 +111,19 @@ const Elephant: FC<ElephantProps> = ({ state, speechText }) => {
         return (
           <div className="relative">
             <motion.div
-              className="w-72 h-72 mx-auto"
+              className="w-48 h-48 sm:w-60 sm:h-60 md:w-72 md:h-72 mx-auto"
               animate={{ rotate: [-1, 1, -1] }}
               transition={{ repeat: Infinity, duration: 4 }}
               dangerouslySetInnerHTML={{ __html: elephantSvg }}
             />
             <div className="absolute top-0 left-0 right-0 flex justify-center">
               <motion.div 
-                className="mt-8 px-5 py-3 bg-white rounded-full shadow-lg border-2 border-red-400"
+                className="mt-4 sm:mt-6 md:mt-8 px-3 py-2 sm:px-4 sm:py-2 md:px-5 md:py-3 bg-white rounded-full shadow-lg border-2 border-red-400"
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ duration: 0.3 }}
               >
-                <div className="text-red-500 font-bold">
+                <div className="text-red-500 font-bold text-sm sm:text-base md:text-lg">
                   !
                 </div>
               </motion.div>
@@ -133,7 +133,7 @@ const Elephant: FC<ElephantProps> = ({ state, speechText }) => {
       
       default:
         return (
-          <div className="w-72 h-72 mx-auto" dangerouslySetInnerHTML={{ __html: elephantSvg }} />
+          <div className="w-48 h-48 sm:w-60 sm:h-60 md:w-72 md:h-72 mx-auto" dangerouslySetInnerHTML={{ __html: elephantSvg }} />
         );
     }
   };

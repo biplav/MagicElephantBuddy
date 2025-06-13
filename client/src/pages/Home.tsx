@@ -557,13 +557,13 @@ export default function Home() {
                       {/* Audio level indicator rings - visible when recording */}
                       {isRecording && (
                         <>
-                          <div className="absolute inset-0 w-20 h-20 rounded-full bg-green-400 opacity-20 animate-ping-slow"></div>
-                          <div className="absolute inset-0 w-20 h-20 rounded-full bg-green-300 opacity-10 animate-ping"></div>
+                          <div className="absolute inset-0 w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-green-400 opacity-20 animate-ping-slow"></div>
+                          <div className="absolute inset-0 w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-green-300 opacity-10 animate-ping"></div>
                         </>
                       )}
                       
                       <Button 
-                        className={`w-20 h-20 rounded-full shadow-lg transition transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-pink-300 flex items-center justify-center relative z-10 ${
+                        className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full shadow-lg transition transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-pink-300 flex items-center justify-center relative z-10 ${
                           isRecording 
                             ? "bg-[hsl(var(--success))] hover:bg-green-600" 
                             : "bg-accent hover:bg-pink-400"
@@ -588,7 +588,7 @@ export default function Home() {
                     </div>
                   )}
                   
-                  <p className="text-neutral text-sm">
+                  <p className="text-neutral text-xs sm:text-sm text-center px-2">
                     {isProcessing 
                       ? "Please wait while Appu thinks..." 
                       : isRecording 
@@ -598,7 +598,7 @@ export default function Home() {
                   
                   {/* Stop/Cancel Button */}
                   <Button 
-                    className="mt-4 bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-6 rounded-full text-sm shadow-md transition transform hover:scale-105 active:scale-95"
+                    className="mt-2 sm:mt-4 bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 sm:px-6 rounded-full text-xs sm:text-sm shadow-md transition transform hover:scale-105 active:scale-95"
                     onClick={handleStopSession}
                     variant="default"
                   >
