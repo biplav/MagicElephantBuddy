@@ -27,25 +27,55 @@ const upload = multer({
 
 // Function to create enhanced system prompt with child profile
 function createEnhancedSystemPrompt(): string {
+  // Generate current date and time information
+  const now = new Date();
+  const options: Intl.DateTimeFormatOptions = {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZoneName: 'short'
+  };
+  const currentDateTime = now.toLocaleDateString('en-US', options);
+  const timeOfDay = now.getHours() < 12 ? 'morning' : now.getHours() < 17 ? 'afternoon' : now.getHours() < 20 ? 'evening' : 'night';
+  
+  // Dynamically generate profile information from DEFAULT_PROFILE keys
+  const generateProfileSection = (obj: any, prefix = ''): string => {
+    let result = '';
+    
+    for (const [key, value] of Object.entries(obj)) {
+      const displayKey = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
+      
+      if (Array.isArray(value)) {
+        result += `- ${displayKey}: ${value.join(', ')}\n`;
+      } else if (typeof value === 'object' && value !== null) {
+        result += `- ${displayKey}:\n`;
+        const subItems = generateProfileSection(value, '  ');
+        result += subItems.split('\n').map(line => line ? `  ${line}` : '').join('\n') + '\n';
+      } else {
+        result += `- ${displayKey}: ${value}\n`;
+      }
+    }
+    
+    return result;
+  };
+
+  const dateTimeInfo = `
+
+CURRENT DATE AND TIME INFORMATION:
+- Current Date & Time: ${currentDateTime}
+- Time of Day: ${timeOfDay}
+- Use this information to provide contextually appropriate responses based on the time of day and current date.`;
+
   const profileInfo = `
 
 CHILD PROFILE INFORMATION:
-- Name: ${DEFAULT_PROFILE.name}
-- Age: ${DEFAULT_PROFILE.age} years old
-- Likes: ${DEFAULT_PROFILE.likes.join(', ')}
-- Dislikes: ${DEFAULT_PROFILE.dislikes.join(', ')}
-- Favorite Colors: ${DEFAULT_PROFILE.favoriteThings.colors.join(', ')}
-- Favorite Animals: ${DEFAULT_PROFILE.favoriteThings.animals.join(', ')}
-- Favorite Activities: ${DEFAULT_PROFILE.favoriteThings.activities.join(', ')}
-- Favorite Foods: ${DEFAULT_PROFILE.favoriteThings.foods.join(', ')}
-- Favorite Characters: ${DEFAULT_PROFILE.favoriteThings.characters.join(', ')}
-- Learning Goals: ${DEFAULT_PROFILE.learningGoals.join(', ')}
-- Preferred Languages: ${DEFAULT_PROFILE.preferredLanguages.join(', ')}
-- Daily Routine: Wakes up at ${DEFAULT_PROFILE.dailyRoutine.wakeUpTime}, bedtime at ${DEFAULT_PROFILE.dailyRoutine.bedTime}, nap time at ${DEFAULT_PROFILE.dailyRoutine.napTime}
-
+${generateProfileSection(DEFAULT_PROFILE)}
 Use this information to personalize your responses and make them more engaging for ${DEFAULT_PROFILE.name}.`;
 
-  return APPU_SYSTEM_PROMPT + profileInfo;
+  return APPU_SYSTEM_PROMPT + dateTimeInfo + profileInfo;
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {

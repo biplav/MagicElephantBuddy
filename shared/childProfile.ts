@@ -30,6 +30,7 @@ export interface ChildProfile {
 // This would be replaced with real data in production
 export const DEFAULT_PROFILE: ChildProfile = {
   name: "Dityaa",
+  nick_name: "Ditto",
   age: 4,
   likes: ["dinosaurs", "drawing", "music", "stories"],
   dislikes: ["loud noises", "dark rooms"],
@@ -40,7 +41,7 @@ export const DEFAULT_PROFILE: ChildProfile = {
     foods: ["apples", "pasta", "ice cream"],
     characters: ["Appu", "Chhota Bheem", "Motu Patlu"]
   },
-  learningGoals: ["counting to 20", "alphabet", "colors", "shapes"],
+  learningGoals: ["counting to 20", "alphabet", "colors", "shapes", "eat food on time"],
   preferredLanguages: ["Hindi", "English"],
   dailyRoutine: {
     wakeUpTime: "7:00 AM",
