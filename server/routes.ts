@@ -11,6 +11,7 @@ import bodyParser from "body-parser";
 import { getErrorMessage } from "../shared/errorMessages";
 import { APPU_SYSTEM_PROMPT } from "../shared/appuPrompts";
 import { DEFAULT_PROFILE } from "../shared/childProfile";
+import { seedDatabase } from "./seed";
 
 // Define a custom interface for the request with file
 interface MulterRequest extends Request {
@@ -327,6 +328,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error fetching messages:', error);
       res.status(500).json({ error: 'Failed to fetch messages' });
+    }
+  });
+
+  // Seed database with sample data for demo
+  app.post('/api/seed-database', async (req: Request, res: Response) => {
+    try {
+      const result = await seedDatabase();
+      res.json({ 
+        message: 'Database seeded successfully', 
+        demoCredentials: {
+          email: 'demo@parent.com',
+          password: 'demo123'
+        },
+        data: result 
+      });
+    } catch (error) {
+      console.error('Error seeding database:', error);
+      res.status(500).json({ error: 'Failed to seed database' });
     }
   });
 
