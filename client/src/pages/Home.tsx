@@ -21,7 +21,7 @@ export default function Home() {
   const [directTextInput, setDirectTextInput] = useState<string>("");
   const [isProcessingText, setIsProcessingText] = useState<boolean>(false);
   const [enableLocalPlayback, setEnableLocalPlayback] = useState<boolean>(false); // Default to false for server testing
-  const [useRealtimeAPI, setUseRealtimeAPI] = useState<boolean>(false); // Toggle for OpenAI Realtime API
+  const [useRealtimeAPI, setUseRealtimeAPI] = useState<boolean>(true); // Toggle for OpenAI Realtime API
 
   // Initialize realtime audio hook
   const realtimeAudio = useRealtimeAudio({
@@ -630,8 +630,9 @@ export default function Home() {
                         checked={!useRealtimeAPI}
                         onChange={() => setUseRealtimeAPI(false)}
                         className="text-primary"
+                        disabled
                       />
-                      <span className="text-sm">Traditional (Upload)</span>
+                      <span className="text-sm text-gray-400">Traditional (Disabled)</span>
                     </label>
                     <label className="flex items-center gap-2">
                       <input
@@ -640,7 +641,7 @@ export default function Home() {
                         onChange={() => setUseRealtimeAPI(true)}
                         className="text-primary"
                       />
-                      <span className="text-sm">Realtime API (WebRTC)</span>
+                      <span className="text-sm">Realtime API (WebRTC) - Default</span>
                     </label>
                   </div>
                 </div>

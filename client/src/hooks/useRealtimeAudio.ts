@@ -25,10 +25,18 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
+  const isConnectingRef = useRef<boolean>(false);
   
   // Connect to OpenAI Realtime API using WebRTC
   const connect = useCallback(async () => {
+    // Prevent multiple simultaneous connection attempts
+    if (isConnectingRef.current || state.isConnected || pcRef.current) {
+      console.log('Connection already in progress or established');
+      return;
+    }
+    
     try {
+      isConnectingRef.current = true;
       setState(prev => ({ ...prev, error: null }));
       
       // Create ephemeral token from server
@@ -178,11 +186,15 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       console.error('Error connecting to realtime API:', error);
       setState(prev => ({ ...prev, error: error.message || 'Failed to connect to realtime API' }));
       options.onError?.(error.message || 'Failed to connect to realtime API');
+    } finally {
+      isConnectingRef.current = false;
     }
   }, [options]);
   
   // Disconnect from the WebRTC connection
   const disconnect = useCallback(() => {
+    isConnectingRef.current = false;
+    
     if (pcRef.current) {
       pcRef.current.close();
       pcRef.current = null;
