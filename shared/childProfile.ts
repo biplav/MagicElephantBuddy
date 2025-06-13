@@ -29,7 +29,7 @@ export interface ChildProfile {
 // A placeholder profile to use when developing
 // This would be replaced with real data in production
 export const DEFAULT_PROFILE: ChildProfile = {
-  name: "Buddy",
+  name: "Dityaa",
   age: 4,
   likes: ["dinosaurs", "drawing", "music", "stories"],
   dislikes: ["loud noises", "dark rooms"],

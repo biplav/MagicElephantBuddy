@@ -10,6 +10,7 @@ import { setupRealtimeWebSocket } from "./realtime-service";
 import bodyParser from "body-parser";
 import { getErrorMessage } from "../shared/errorMessages";
 import { APPU_SYSTEM_PROMPT } from "../shared/appuPrompts";
+import { DEFAULT_PROFILE } from "../shared/childProfile";
 
 // Define a custom interface for the request with file
 interface MulterRequest extends Request {
@@ -23,6 +24,29 @@ const upload = multer({
     fileSize: 10 * 1024 * 1024, // 10MB limit
   }
 });
+
+// Function to create enhanced system prompt with child profile
+function createEnhancedSystemPrompt(): string {
+  const profileInfo = `
+
+CHILD PROFILE INFORMATION:
+- Name: ${DEFAULT_PROFILE.name}
+- Age: ${DEFAULT_PROFILE.age} years old
+- Likes: ${DEFAULT_PROFILE.likes.join(', ')}
+- Dislikes: ${DEFAULT_PROFILE.dislikes.join(', ')}
+- Favorite Colors: ${DEFAULT_PROFILE.favoriteThings.colors.join(', ')}
+- Favorite Animals: ${DEFAULT_PROFILE.favoriteThings.animals.join(', ')}
+- Favorite Activities: ${DEFAULT_PROFILE.favoriteThings.activities.join(', ')}
+- Favorite Foods: ${DEFAULT_PROFILE.favoriteThings.foods.join(', ')}
+- Favorite Characters: ${DEFAULT_PROFILE.favoriteThings.characters.join(', ')}
+- Learning Goals: ${DEFAULT_PROFILE.learningGoals.join(', ')}
+- Preferred Languages: ${DEFAULT_PROFILE.preferredLanguages.join(', ')}
+- Daily Routine: Wakes up at ${DEFAULT_PROFILE.dailyRoutine.wakeUpTime}, bedtime at ${DEFAULT_PROFILE.dailyRoutine.bedTime}, nap time at ${DEFAULT_PROFILE.dailyRoutine.napTime}
+
+Use this information to personalize your responses and make them more engaging for ${DEFAULT_PROFILE.name}.`;
+
+  return APPU_SYSTEM_PROMPT + profileInfo;
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Configure body parser
@@ -204,7 +228,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         body: JSON.stringify({
           model: 'gpt-4o-realtime-preview-2024-12-17',
           voice: 'alloy',
-          instructions: APPU_SYSTEM_PROMPT,
+          instructions: createEnhancedSystemPrompt(),
           input_audio_format: 'pcm16',
           output_audio_format: 'pcm16',
           input_audio_transcription: {
