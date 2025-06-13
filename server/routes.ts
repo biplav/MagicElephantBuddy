@@ -187,12 +187,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Handle audio processing with OpenAI
-  // Endpoint to provide OpenAI API key for Realtime API
-  app.get('/api/get-openai-key', (req: Request, res: Response) => {
-    if (!process.env.OPENAI_API_KEY) {
-      return res.status(500).json({ error: 'OpenAI API key not configured' });
+  // Endpoint to create ephemeral token for OpenAI Realtime API
+  app.post('/api/session', async (req: Request, res: Response) => {
+    try {
+      if (!process.env.OPENAI_API_KEY) {
+        return res.status(500).json({ error: 'OpenAI API key not configured' });
+      }
+
+      const response = await fetch('https://api.openai.com/v1/realtime/sessions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-realtime-preview-2024-12-17',
+          voice: 'alloy',
+          instructions: 'You are Appu, a magical, friendly elephant helper who talks to young children aged 3 to 5. Speak in Hindi or Hinglish with very short, simple sentences.',
+          input_audio_format: 'pcm16',
+          output_audio_format: 'pcm16',
+          input_audio_transcription: {
+            model: 'whisper-1'
+          },
+          turn_detection: {
+            type: 'server_vad',
+            threshold: 0.5,
+            prefix_padding_ms: 300,
+            silence_duration_ms: 500
+          },
+          modalities: ['text', 'audio']
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error('Failed to create session:', response.status, errorData);
+        return res.status(response.status).json({ 
+          error: 'Failed to create realtime session',
+          details: errorData 
+        });
+      }
+
+      const sessionData = await response.json();
+      res.json({
+        client_secret: sessionData.client_secret
+      });
+    } catch (error) {
+      console.error('Error creating realtime session:', error);
+      res.status(500).json({ error: 'Internal server error' });
     }
-    res.json({ apiKey: process.env.OPENAI_API_KEY });
   });
 
   app.post('/api/process-audio', upload.single('audio'), async (req: MulterRequest, res: Response) => {

@@ -22,128 +22,38 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     error: null
   });
   
-  const wsRef = useRef<WebSocket | null>(null);
+  const pcRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
-  const audioChunksRef = useRef<Float32Array[]>([]);
+  const dataChannelRef = useRef<RTCDataChannel | null>(null);
   
-  // Connect to server proxy that handles OpenAI Realtime API
+  // Connect to OpenAI Realtime API using WebRTC
   const connect = useCallback(async () => {
     try {
       setState(prev => ({ ...prev, error: null }));
       
-      // Connect to our server WebSocket proxy
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const ws = new WebSocket(`${protocol}//${window.location.host}/ws/realtime`);
-      wsRef.current = ws;
+      // Create ephemeral token from server
+      const response = await fetch('/api/session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create session');
+      }
+
+      const { client_secret } = await response.json();
       
-      ws.onopen = () => {
-        console.log('Connected to realtime proxy');
-        setState(prev => ({ ...prev, isConnected: true }));
-        
-        // Start the realtime session
-        ws.send(JSON.stringify({ type: 'start_session' }));
-      };
+      // Create WebRTC peer connection
+      const pc = new RTCPeerConnection();
+      pcRef.current = pc;
       
-      ws.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          
-          switch (message.type) {
-            case 'session_started':
-              console.log('Realtime session started');
-              break;
-            case 'transcription':
-              console.log('Received transcription:', message.text);
-              options.onTranscriptionReceived?.(message.text);
-              break;
-            case 'text_response':
-              console.log('Received text response:', message.text);
-              options.onResponseReceived?.(message.text);
-              break;
-            case 'audio_response':
-              console.log('Received audio response');
-              options.onAudioResponseReceived?.(message.audio);
-              break;
-            case 'response_complete':
-              console.log('Response complete');
-              setState(prev => ({ ...prev, isProcessing: false }));
-              break;
-            case 'error':
-              console.error('Realtime API error:', message.message);
-              setState(prev => ({ ...prev, error: message.message }));
-              options.onError?.(message.message);
-              break;
-            case 'session_ended':
-              console.log('Realtime session ended');
-              setState(prev => ({ ...prev, isConnected: false }));
-              break;
-          }
-        } catch (error) {
-          console.error('Error parsing WebSocket message:', error);
-        }
-      };
-      
-      ws.onclose = () => {
-        console.log('Realtime WebSocket disconnected');
-        setState(prev => ({ ...prev, isConnected: false, isRecording: false }));
-      };
-      
-      ws.onerror = (error) => {
-        console.error('Realtime WebSocket error:', error);
-        setState(prev => ({ ...prev, error: 'WebSocket connection failed' }));
-        options.onError?.('WebSocket connection failed');
-      };
-      
-    } catch (error) {
-      console.error('Error connecting to realtime API:', error);
-      setState(prev => ({ ...prev, error: 'Failed to connect to realtime API' }));
-      options.onError?.('Failed to connect to realtime API');
-    }
-  }, [options]);
-  
-  // Disconnect from the realtime WebSocket
-  const disconnect = useCallback(() => {
-    if (wsRef.current) {
-      wsRef.current.send(JSON.stringify({ type: 'end_session' }));
-      wsRef.current.close();
-      wsRef.current = null;
-    }
-    
-    // Clean up audio processing
-    if (processorRef.current) {
-      processorRef.current.disconnect();
-      processorRef.current = null;
-    }
-    
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-    
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
-    
-    setState(prev => ({ 
-      ...prev, 
-      isConnected: false, 
-      isRecording: false, 
-      isProcessing: false 
-    }));
-  }, []);
-  
-  // Start recording audio and streaming to OpenAI
-  const startRecording = useCallback(async () => {
-    if (!state.isConnected || state.isRecording) return;
-    
-    try {
       // Get microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          sampleRate: 16000,
+          sampleRate: 24000,
           channelCount: 1,
           echoCancellation: true,
           noiseSuppression: true
@@ -152,59 +62,135 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       
       streamRef.current = stream;
       
-      // Create audio context for processing
-      const audioContext = new AudioContext({ sampleRate: 16000 });
-      audioContextRef.current = audioContext;
+      // Add the audio track to peer connection
+      const audioTrack = stream.getAudioTracks()[0];
+      pc.addTrack(audioTrack, stream);
       
-      const source = audioContext.createMediaStreamSource(stream);
-      const processor = audioContext.createScriptProcessor(4096, 1, 1);
-      processorRef.current = processor;
+      // Handle incoming audio from OpenAI
+      pc.ontrack = (event) => {
+        console.log('Received audio track from OpenAI');
+        const remoteStream = event.streams[0];
+        const audio = new Audio();
+        audio.srcObject = remoteStream;
+        audio.autoplay = true;
+        
+        audio.onloadedmetadata = () => {
+          console.log('Audio metadata loaded, starting playback');
+        };
+        
+        audio.onerror = (error) => {
+          console.error('Audio playback error:', error);
+        };
+      };
       
-      processor.onaudioprocess = (event) => {
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          const inputBuffer = event.inputBuffer.getChannelData(0);
-          
-          // Convert float32 to int16 PCM
-          const pcmData = new Int16Array(inputBuffer.length);
-          for (let i = 0; i < inputBuffer.length; i++) {
-            pcmData[i] = Math.max(-32768, Math.min(32767, inputBuffer[i] * 32768));
+      // Handle data channel for text responses
+      pc.ondatachannel = (event) => {
+        const channel = event.channel;
+        dataChannelRef.current = channel;
+        
+        channel.onopen = () => {
+          console.log('Data channel opened');
+        };
+        
+        channel.onmessage = (messageEvent) => {
+          try {
+            const message = JSON.parse(messageEvent.data);
+            console.log('Received message:', message);
+            
+            switch (message.type) {
+              case 'conversation.item.input_audio_transcription.completed':
+                options.onTranscriptionReceived?.(message.transcript);
+                break;
+              case 'response.text.delta':
+                options.onResponseReceived?.(message.delta);
+                break;
+              case 'response.done':
+                setState(prev => ({ ...prev, isProcessing: false }));
+                break;
+              case 'error':
+                console.error('Realtime API error:', message);
+                setState(prev => ({ ...prev, error: message.error?.message || 'Unknown error' }));
+                options.onError?.(message.error?.message || 'Unknown error');
+                break;
+            }
+          } catch (error) {
+            console.error('Error parsing data channel message:', error);
           }
-          
-          // Convert to base64 and send to server
-          const uint8Array = new Uint8Array(pcmData.buffer);
-          let binary = '';
-          for (let i = 0; i < uint8Array.length; i++) {
-            binary += String.fromCharCode(uint8Array[i]);
-          }
-          const base64Audio = btoa(binary);
-          
-          wsRef.current.send(JSON.stringify({
-            type: 'audio_chunk',
-            audio: base64Audio
-          }));
+        };
+        
+        channel.onerror = (error) => {
+          console.error('Data channel error:', error);
+        };
+      };
+      
+      // Handle connection state changes
+      pc.onconnectionstatechange = () => {
+        console.log('WebRTC connection state:', pc.connectionState);
+        
+        switch (pc.connectionState) {
+          case 'connected':
+            setState(prev => ({ ...prev, isConnected: true, isRecording: true }));
+            break;
+          case 'disconnected':
+          case 'failed':
+          case 'closed':
+            setState(prev => ({ ...prev, isConnected: false, isRecording: false }));
+            break;
         }
       };
       
-      source.connect(processor);
-      processor.connect(audioContext.destination);
+      pc.onicegatheringstatechange = () => {
+        console.log('ICE gathering state:', pc.iceGatheringState);
+      };
       
-      setState(prev => ({ ...prev, isRecording: true }));
-      console.log('Started realtime audio recording');
+      // Create offer and connect to OpenAI
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: false
+      });
+      await pc.setLocalDescription(offer);
       
-    } catch (error) {
-      console.error('Error starting audio recording:', error);
-      setState(prev => ({ ...prev, error: 'Failed to start audio recording' }));
-      options.onError?.('Failed to start audio recording');
+      // Send offer to OpenAI Realtime API
+      const realtimeResponse = await fetch('https://api.openai.com/v1/realtime', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${client_secret}`,
+          'Content-Type': 'application/sdp',
+        },
+        body: offer.sdp,
+      });
+      
+      if (!realtimeResponse.ok) {
+        const errorText = await realtimeResponse.text();
+        console.error('OpenAI Realtime API error:', errorText);
+        throw new Error(`Failed to connect to OpenAI Realtime API: ${realtimeResponse.status}`);
+      }
+      
+      const answerSdp = await realtimeResponse.text();
+      await pc.setRemoteDescription({
+        type: 'answer',
+        sdp: answerSdp,
+      });
+      
+      console.log('WebRTC connection established with OpenAI Realtime API');
+      
+    } catch (error: any) {
+      console.error('Error connecting to realtime API:', error);
+      setState(prev => ({ ...prev, error: error.message || 'Failed to connect to realtime API' }));
+      options.onError?.(error.message || 'Failed to connect to realtime API');
     }
-  }, [state.isConnected, state.isRecording, options]);
+  }, [options]);
   
-  // Stop recording and commit audio for transcription
-  const stopRecording = useCallback(() => {
-    if (!state.isRecording) return;
+  // Disconnect from the WebRTC connection
+  const disconnect = useCallback(() => {
+    if (pcRef.current) {
+      pcRef.current.close();
+      pcRef.current = null;
+    }
     
-    if (processorRef.current) {
-      processorRef.current.disconnect();
-      processorRef.current = null;
+    if (dataChannelRef.current) {
+      dataChannelRef.current.close();
+      dataChannelRef.current = null;
     }
     
     if (streamRef.current) {
@@ -212,20 +198,31 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       streamRef.current = null;
     }
     
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
+    setState(prev => ({ 
+      ...prev, 
+      isConnected: false, 
+      isRecording: false,
+      isProcessing: false 
+    }));
     
-    // Commit the audio buffer for processing
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'commit_audio' }));
-      setState(prev => ({ ...prev, isProcessing: true }));
+    console.log('Disconnected from realtime API');
+  }, []);
+  
+  // Start recording (WebRTC handles this automatically when connected)
+  const startRecording = useCallback(async () => {
+    if (!state.isConnected) {
+      await connect();
+    } else {
+      setState(prev => ({ ...prev, isRecording: true }));
+      console.log('Started realtime audio recording');
     }
-    
-    setState(prev => ({ ...prev, isRecording: false }));
+  }, [state.isConnected, connect]);
+  
+  // Stop recording
+  const stopRecording = useCallback(() => {
+    setState(prev => ({ ...prev, isRecording: false, isProcessing: true }));
     console.log('Stopped realtime audio recording');
-  }, [state.isRecording]);
+  }, []);
   
   // Request microphone permission
   const requestMicrophonePermission = useCallback(async () => {
@@ -253,6 +250,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     disconnect,
     startRecording,
     stopRecording,
-    requestMicrophonePermission
+    requestMicrophonePermission,
+    isReady: state.isConnected
   };
 }

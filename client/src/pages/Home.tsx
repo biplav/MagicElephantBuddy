@@ -639,9 +639,8 @@ export default function Home() {
                         checked={useRealtimeAPI}
                         onChange={() => setUseRealtimeAPI(true)}
                         className="text-primary"
-                        disabled
                       />
-                      <span className="text-sm text-gray-400">Realtime API (Requires Special Access)</span>
+                      <span className="text-sm">Realtime API (WebRTC)</span>
                     </label>
                   </div>
                 </div>
