@@ -144,14 +144,14 @@ const Elephant: FC<ElephantProps> = ({ state, speechText }) => {
       
       {speechText && (
         <motion.div 
-          className="w-4/5 bg-white rounded-2xl p-4 mt-4 shadow-lg relative"
+          className="w-11/12 sm:w-4/5 bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 mt-2 sm:mt-4 shadow-lg relative mx-2"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 20 }}
           transition={{ duration: 0.3 }}
         >
-          <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-8 border-r-8 border-b-8 border-white border-l-transparent border-r-transparent"></div>
-          <p className="text-neutral font-body text-center">{speechText}</p>
+          <div className="absolute -top-2 sm:-top-3 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 sm:border-l-6 sm:border-r-6 sm:border-b-6 border-white border-l-transparent border-r-transparent"></div>
+          <p className="text-primary font-medium text-sm sm:text-base md:text-lg text-center leading-relaxed">{speechText}</p>
         </motion.div>
       )}
     </div>
