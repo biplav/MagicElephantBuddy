@@ -9,6 +9,7 @@ import { transcribeAudio, generateResponse, generateSpeech } from "./openai-serv
 import { setupRealtimeWebSocket } from "./realtime-service";
 import bodyParser from "body-parser";
 import { getErrorMessage } from "../shared/errorMessages";
+import { APPU_SYSTEM_PROMPT } from "../shared/appuPrompts";
 
 // Define a custom interface for the request with file
 interface MulterRequest extends Request {
@@ -203,7 +204,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         body: JSON.stringify({
           model: 'gpt-4o-realtime-preview-2024-12-17',
           voice: 'alloy',
-          instructions: 'You are Appu, a magical, friendly elephant helper who talks to young children aged 3 to 5. Speak in Hindi or Hinglish with very short, simple sentences.',
+          instructions: APPU_SYSTEM_PROMPT,
           input_audio_format: 'pcm16',
           output_audio_format: 'pcm16',
           input_audio_transcription: {
