@@ -100,19 +100,58 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
           console.log('Data channel opened');
         };
         
-        channel.onmessage = (messageEvent) => {
+        channel.onmessage = async (messageEvent) => {
           try {
             const message = JSON.parse(messageEvent.data);
             console.log('Received message:', message);
             
             switch (message.type) {
               case 'conversation.item.input_audio_transcription.completed':
+                // Store child input message in database
+                if (message.transcript) {
+                  try {
+                    await fetch('/api/store-realtime-message', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        type: 'child_input',
+                        content: message.transcript,
+                        transcription: message.transcript
+                      })
+                    });
+                  } catch (error) {
+                    console.error('Error storing child input message:', error);
+                  }
+                }
                 options.onTranscriptionReceived?.(message.transcript);
                 break;
               case 'response.text.delta':
                 options.onResponseReceived?.(message.delta);
                 break;
               case 'response.done':
+                // Store Appu's response message in database
+                if (message.response && message.response.output) {
+                  try {
+                    const responseText = message.response.output.map((item: any) => 
+                      item.type === 'message' ? item.message.content.map((content: any) => 
+                        content.type === 'text' ? content.text : ''
+                      ).join('') : ''
+                    ).join('');
+                    
+                    if (responseText) {
+                      await fetch('/api/store-realtime-message', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          type: 'appu_response',
+                          content: responseText
+                        })
+                      });
+                    }
+                  } catch (error) {
+                    console.error('Error storing Appu response message:', error);
+                  }
+                }
                 setState(prev => ({ ...prev, isProcessing: false }));
                 break;
               case 'error':
