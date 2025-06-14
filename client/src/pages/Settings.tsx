@@ -6,7 +6,8 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { Settings as SettingsIcon, Brain, Mic, Volume2, Save } from 'lucide-react';
+import { Settings as SettingsIcon, Brain, Mic, Volume2, Save, ArrowLeft } from 'lucide-react';
+import { Link } from 'wouter';
 
 interface AIProviderSettings {
   defaultProvider: string;
@@ -141,6 +142,16 @@ export default function Settings() {
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-3 mb-8">
+          <Link href="/">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="mr-2 p-2 rounded-full hover:bg-white/80"
+              aria-label="Back to Home"
+            >
+              <ArrowLeft className="w-5 h-5 text-purple-600" />
+            </Button>
+          </Link>
           <div className="p-3 bg-white rounded-full shadow-lg">
             <SettingsIcon className="w-8 h-8 text-purple-600" />
           </div>

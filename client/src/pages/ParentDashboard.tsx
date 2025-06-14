@@ -6,8 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Calendar, Clock, MessageSquare, TrendingUp, User, Home, LogOut } from "lucide-react";
+import { Calendar, Clock, MessageSquare, TrendingUp, User, Home, LogOut, ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
+import { Link } from "wouter";
 
 interface Parent {
   id: number;
@@ -97,6 +98,16 @@ export default function ParentDashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
+              <Link href="/">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="p-2 rounded-full hover:bg-gray-100"
+                  aria-label="Back to Home"
+                >
+                  <ArrowLeft className="w-5 h-5 text-blue-600" />
+                </Button>
+              </Link>
               <Home className="h-8 w-8 text-blue-600" />
               <div>
                 <h1 className="text-xl font-semibold text-gray-900">Parent Dashboard</h1>
