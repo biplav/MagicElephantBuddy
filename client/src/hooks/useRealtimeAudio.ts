@@ -96,8 +96,19 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
         const channel = event.channel;
         dataChannelRef.current = channel;
         
-        channel.onopen = () => {
+        channel.onopen = async () => {
           console.log('Data channel opened');
+          
+          // Initialize conversation in database when realtime session starts
+          try {
+            await fetch('/api/start-realtime-conversation', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ childId: 1 }) // Default child ID
+            });
+          } catch (error) {
+            console.error('Error starting realtime conversation:', error);
+          }
         };
         
         channel.onmessage = async (messageEvent) => {

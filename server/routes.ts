@@ -462,6 +462,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Start realtime conversation endpoint
+  app.post('/api/start-realtime-conversation', async (req: Request, res: Response) => {
+    try {
+      const { childId } = req.body;
+      
+      // Create a new conversation for the realtime session
+      const conversation = await storage.createConversation({ childId });
+      
+      res.json({ success: true, conversationId: conversation.id });
+    } catch (error) {
+      console.error('Error starting realtime conversation:', error);
+      res.status(500).json({ error: 'Failed to start conversation' });
+    }
+  });
+
+  // Store realtime message endpoint
+  app.post('/api/store-realtime-message', async (req: Request, res: Response) => {
+    try {
+      const { type, content, transcription } = req.body;
+      
+      // Get the current active conversation for child ID 1 (default child)
+      const childId = 1;
+      let conversation = await storage.getCurrentConversation(childId);
+      
+      // If no active conversation, create one
+      if (!conversation) {
+        conversation = await storage.createConversation({ childId });
+      }
+      
+      // Store the message
+      await storage.createMessage({
+        conversationId: conversation.id,
+        type,
+        content,
+        transcription
+      });
+      
+      // Update conversation message count
+      const currentMessages = await storage.getMessagesByConversation(conversation.id);
+      await storage.updateConversation(conversation.id, {
+        totalMessages: currentMessages.length
+      });
+      
+      res.json({ success: true, conversationId: conversation.id });
+    } catch (error) {
+      console.error('Error storing realtime message:', error);
+      res.status(500).json({ error: 'Failed to store message' });
+    }
+  });
+
   app.post('/api/session', async (req: Request, res: Response) => {
     try {
       if (!process.env.OPENAI_API_KEY) {
