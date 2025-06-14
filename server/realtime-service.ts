@@ -1,6 +1,8 @@
 import WebSocket from 'ws';
 import { WebSocketServer } from 'ws';
 import OpenAI from 'openai';
+import { storage } from './storage';
+import { DEFAULT_PROFILE } from '../shared/childProfile';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -8,6 +10,10 @@ interface RealtimeSession {
   ws: WebSocket;
   openaiWs: WebSocket | null;
   isConnected: boolean;
+  conversationId: number | null;
+  childId: number;
+  sessionStartTime: Date;
+  messageCount: number;
 }
 
 const sessions = new Map<string, RealtimeSession>();
@@ -19,11 +25,15 @@ export function setupRealtimeWebSocket(server: any) {
     const sessionId = generateSessionId();
     console.log(`Realtime session connected: ${sessionId}`);
     
-    // Initialize session
+    // Initialize session with default child (for demo purposes, in production this would come from user authentication)
     const session: RealtimeSession = {
       ws,
       openaiWs: null,
-      isConnected: false
+      isConnected: false,
+      conversationId: null,
+      childId: 1, // Using the seeded child ID
+      sessionStartTime: new Date(),
+      messageCount: 0
     };
     sessions.set(sessionId, session);
     
@@ -34,6 +44,16 @@ export function setupRealtimeWebSocket(server: any) {
         
         switch (message.type) {
           case 'start_session':
+            // Create a new conversation in the database
+            try {
+              const conversation = await storage.createConversation({
+                childId: session.childId
+              });
+              session.conversationId = conversation.id;
+              console.log(`Created conversation ${conversation.id} for child ${session.childId}`);
+            } catch (error) {
+              console.error('Error creating conversation:', error);
+            }
             await startRealtimeSession(session);
             break;
           case 'audio_chunk':
@@ -108,6 +128,24 @@ async function startRealtimeSession(session: RealtimeSession) {
 async function endRealtimeSession(session: RealtimeSession) {
   // Clean up session state
   session.isConnected = false;
+  
+  // Close conversation and update database
+  if (session.conversationId) {
+    try {
+      const endTime = new Date();
+      const duration = Math.floor((endTime.getTime() - session.sessionStartTime.getTime()) / 1000);
+      
+      await storage.updateConversation(session.conversationId, {
+        endTime,
+        duration,
+        totalMessages: session.messageCount
+      });
+      
+      console.log(`Closed conversation ${session.conversationId} - Duration: ${duration}s, Messages: ${session.messageCount}`);
+    } catch (error) {
+      console.error('Error updating conversation:', error);
+    }
+  }
 }
 
 function generateSessionId(): string {
