@@ -433,13 +433,17 @@ export default function Home() {
       // Set the transcribed text immediately since we're bypassing Whisper
       setTranscribedText(directTextInput);
       
-      // Send the text to the backend for processing
-      const response = await fetch('/api/process-text', {
+      // Send the text to the backend for processing using user's AI settings
+      const response = await fetch('/api/process-with-config', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ text: directTextInput }),
+        body: JSON.stringify({ 
+          text: directTextInput,
+          aiConfig: aiSettings.defaultProvider,
+          useCreative: aiSettings.creativeMode
+        }),
       });
       
       if (!response.ok) {
