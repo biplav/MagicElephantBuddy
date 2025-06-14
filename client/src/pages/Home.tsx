@@ -29,6 +29,31 @@ export default function Home() {
     voicePreference: 'nova'
   });
 
+  // Check parent login status
+  const [isParentLoggedIn, setIsParentLoggedIn] = useState<boolean>(() => {
+    const currentParent = localStorage.getItem('currentParent');
+    return !!currentParent;
+  });
+
+  // Listen for localStorage changes to update parent login status
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const currentParent = localStorage.getItem('currentParent');
+      setIsParentLoggedIn(!!currentParent);
+    };
+
+    // Listen for storage changes
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Check on component mount and periodically
+    const interval = setInterval(handleStorageChange, 1000);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+    };
+  }, []);
+
   // Fullscreen utility functions
   const enterFullscreen = async () => {
     try {
@@ -654,12 +679,22 @@ export default function Home() {
                 </svg>
               </motion.div>
               
-              <Button 
-                className="bg-secondary hover:bg-yellow-400 text-black font-bold py-3 px-6 sm:py-4 sm:px-8 rounded-full text-lg sm:text-xl shadow-lg transition transform hover:scale-105 active:scale-95 mt-2 sm:mt-4"
-                onClick={handleStartButton}
-              >
-                Let's Talk to Appu!
-              </Button>
+              {isParentLoggedIn ? (
+                <Button 
+                  className="bg-secondary hover:bg-yellow-400 text-black font-bold py-3 px-6 sm:py-4 sm:px-8 rounded-full text-lg sm:text-xl shadow-lg transition transform hover:scale-105 active:scale-95 mt-2 sm:mt-4"
+                  onClick={handleStartButton}
+                >
+                  Let's Talk to Appu!
+                </Button>
+              ) : (
+                <Link href="/dashboard">
+                  <Button 
+                    className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 sm:py-4 sm:px-8 rounded-full text-lg sm:text-xl shadow-lg transition transform hover:scale-105 active:scale-95 mt-2 sm:mt-4"
+                  >
+                    Parent Login
+                  </Button>
+                </Link>
+              )}
             </motion.div>
           ) : (
             <motion.div 
