@@ -57,13 +57,42 @@ app.use((req, res, next) => {
   }
 
   // ALWAYS serve the app on port 5000
-  // this serves both the API and the client.
+  // this serves both the API and the client.  
   // It is the only port that is not firewalled.
   const port = 5000;
+  
+  // Handle port conflicts gracefully
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`Port ${port} is already in use. Attempting to find available port...`);
+      // Try to find an available port starting from 5001
+      let altPort = port + 1;
+      const tryPort = () => {
+        server.listen({
+          port: altPort,
+          host: "0.0.0.0",
+        }, () => {
+          log(`serving on port ${altPort} (port ${port} was in use)`);
+        }).on('error', (altErr: any) => {
+          if (altErr.code === 'EADDRINUSE' && altPort < port + 10) {
+            altPort++;
+            tryPort();
+          } else {
+            console.error('Failed to find available port:', altErr);
+            process.exit(1);
+          }
+        });
+      };
+      tryPort();
+    } else {
+      console.error('Server error:', err);
+      process.exit(1);
+    }
+  });
+  
   server.listen({
     port,
     host: "0.0.0.0",
-    reusePort: true,
   }, () => {
     log(`serving on port ${port}`);
   });
