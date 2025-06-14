@@ -21,19 +21,20 @@ This is a full-stack Node.js application called "Appu" - an AI-powered magical e
 - **Database**: PostgreSQL with Drizzle ORM
 - **Database Provider**: Neon Database (serverless PostgreSQL)
 - **AI Service Layer**: Abstracted AI service with factory pattern for configuration-based provider selection
+- **Multi-Provider AI**: OpenAI (GPT-4o, GPT-4o-mini) and Google Gemini (2.0-flash-exp, 1.5-flash)
 - **Audio Processing**: OpenAI Whisper API for speech-to-text with FFmpeg preprocessing
-- **AI Conversation**: OpenAI GPT models (gpt-4o, gpt-4o-mini) for natural language processing
 - **Text-to-Speech**: OpenAI TTS API with multiple voice options (nova, fable, etc.)
-- **Real-time Communication**: WebSockets for live audio streaming
+- **Real-time Communication**: WebSockets for OpenAI Realtime API and Gemini Live API
 
 ## Key Components
 
 ### AI Service Architecture
 - **Abstracted AI Service Layer**: Modular design with provider-agnostic interface
 - **Factory Pattern**: Configuration-based service creation for different use cases
-- **Multiple Configurations**: Standard, fast, and creative modes with different parameters
-- **Provider Support**: Currently OpenAI with extensible architecture for future providers
+- **Multiple Configurations**: Standard, fast, creative modes with OpenAI and Gemini variants
+- **Multi-Provider Support**: OpenAI (GPT-4o, GPT-4o-mini) and Google Gemini (2.0-flash-exp, 1.5-flash)
 - **Configuration Options**: Model selection, token limits, temperature, voice selection
+- **Live API Integration**: Gemini Live API for real-time conversations with WebSocket support
 
 ### Voice Interaction System
 - Audio recording using Web Audio API with FFmpeg preprocessing
@@ -111,7 +112,8 @@ This is a full-stack Node.js application called "Appu" - an AI-powered magical e
 4. Environment variables configured for OpenAI API and database connection
 
 ### Environment Requirements
-- `OPENAI_API_KEY`: Required for all AI services
+- `OPENAI_API_KEY`: Required for OpenAI services (Whisper, GPT, TTS)
+- `GOOGLE_API_KEY`: Required for Google Gemini API services
 - `DATABASE_URL`: PostgreSQL connection string (auto-provisioned in Replit)
 
 ## Changelog
@@ -119,6 +121,7 @@ This is a full-stack Node.js application called "Appu" - an AI-powered magical e
 - June 14, 2025: Initial setup
 - June 14, 2025: Implemented complete conversation storage system with PostgreSQL database
 - June 14, 2025: Abstracted ChatGPT API interactions into modular AI service with factory pattern for configuration-based selection
+- June 14, 2025: Integrated Google Gemini Live API with multi-provider AI service architecture
 
 ## User Preferences
 
