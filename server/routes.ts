@@ -171,11 +171,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       console.log(`Received text: ${text}`);
+
+      // Get or create conversation for the default child (demo child)
+      const childId = 1; // Using the seeded child ID for demo
+      let conversation = await storage.getCurrentConversation(childId);
+      
+      if (!conversation) {
+        // Create new conversation if none exists
+        conversation = await storage.createConversation({
+          childId: childId
+        });
+        console.log(`Created new conversation ${conversation.id} for child ${childId}`);
+      }
       
       // Generate a response using OpenAI's GPT model
       const responseText = await generateResponse(text);
       
       console.log(`Response text: ${responseText}`);
+
+      // Store messages in database
+      try {
+        // Store child's input message
+        await storage.createMessage({
+          conversationId: conversation.id,
+          type: 'child_input',
+          content: text,
+          transcription: text
+        });
+
+        // Store Appu's response message
+        await storage.createMessage({
+          conversationId: conversation.id,
+          type: 'appu_response',
+          content: responseText
+        });
+
+        // Update conversation message count
+        const currentMessages = await storage.getMessagesByConversation(conversation.id);
+        await storage.updateConversation(conversation.id, {
+          totalMessages: currentMessages.length
+        });
+
+        console.log(`Stored messages for conversation ${conversation.id}`);
+      } catch (error) {
+        console.error('Error storing messages:', error);
+      }
       
       // Generate speech audio using OpenAI's TTS API
       const speechAudio = await generateSpeech(responseText);
@@ -331,6 +371,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Close current conversation
+  app.post('/api/close-conversation', async (req: Request, res: Response) => {
+    try {
+      const childId = 1; // Using the seeded child ID for demo
+      const conversation = await storage.getCurrentConversation(childId);
+      
+      if (conversation) {
+        const endTime = new Date();
+        const duration = Math.floor((endTime.getTime() - new Date(conversation.startTime).getTime()) / 1000);
+        
+        await storage.updateConversation(conversation.id, {
+          endTime,
+          duration,
+          totalMessages: conversation.totalMessages
+        });
+        
+        console.log(`Closed conversation ${conversation.id} - Duration: ${duration}s`);
+        res.json({ 
+          message: 'Conversation closed successfully',
+          conversationId: conversation.id,
+          duration: duration
+        });
+      } else {
+        res.json({ message: 'No active conversation to close' });
+      }
+    } catch (error) {
+      console.error('Error closing conversation:', error);
+      res.status(500).json({ error: 'Failed to close conversation' });
+    }
+  });
+
   // Seed database with sample data for demo
   app.post('/api/seed-database', async (req: Request, res: Response) => {
     try {
@@ -421,6 +492,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log(`Received audio file of size: ${req.file.size} bytes with MIME type: ${req.file.mimetype}`);
 
     try {
+      // Get or create conversation for the default child (demo child)
+      const childId = 1; // Using the seeded child ID for demo
+      let conversation = await storage.getCurrentConversation(childId);
+      
+      if (!conversation) {
+        // Create new conversation if none exists
+        conversation = await storage.createConversation({
+          childId: childId
+        });
+        console.log(`Created new conversation ${conversation.id} for child ${childId}`);
+      }
+
       // Step 1: Transcribe audio using OpenAI's Whisper API
       const audioBuffer = req.file.buffer;
       
@@ -459,6 +542,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`Transcribed text: ${transcribedText}`);
       console.log(`Response text: ${responseText}`);
+
+      // Step 3: Store messages in database
+      try {
+        // Store child's input message
+        await storage.createMessage({
+          conversationId: conversation.id,
+          type: 'child_input',
+          content: transcribedText,
+          transcription: transcribedText
+        });
+
+        // Store Appu's response message
+        await storage.createMessage({
+          conversationId: conversation.id,
+          type: 'appu_response',
+          content: responseText
+        });
+
+        // Update conversation message count
+        const currentMessages = await storage.getMessagesByConversation(conversation.id);
+        await storage.updateConversation(conversation.id, {
+          totalMessages: currentMessages.length
+        });
+
+        console.log(`Stored messages for conversation ${conversation.id}`);
+      } catch (error) {
+        console.error('Error storing messages:', error);
+      }
       
       // Generate a simple tone to make the elephant appear to be speaking
       // In a real implementation, we would use a proper TTS service

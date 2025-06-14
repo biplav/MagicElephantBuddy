@@ -187,6 +187,26 @@ export default function Home() {
       realtimeAudio.disconnect();
     }
     
+    // Close conversation in database
+    try {
+      console.log("Closing conversation in database");
+      const response = await fetch('/api/close-conversation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log("Conversation closed:", result);
+      } else {
+        console.error("Failed to close conversation:", response.statusText);
+      }
+    } catch (error) {
+      console.error("Error closing conversation:", error);
+    }
+    
     // Exit fullscreen mode
     await exitFullscreen();
     
