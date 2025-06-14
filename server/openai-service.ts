@@ -1,4 +1,5 @@
-import OpenAI from "openai";
+// Legacy OpenAI service - refactored to use abstracted AI service
+import { createAIService, createCustomAIService, AI_CONFIGS } from './ai-service';
 import fs from "fs";
 import path from "path";
 import os from "os";
@@ -10,10 +11,10 @@ if (!fs.existsSync(tempDir)) {
   fs.mkdirSync(tempDir, { recursive: true });
 }
 
-// Initialize the OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+// Create AI service instances for different use cases
+const standardAI = createAIService('standard');
+const fastAI = createAIService('fast');
+const creativeAI = createAIService('creative');
 
 /**
  * Convert audio file to WAV format using ffmpeg
@@ -38,7 +39,7 @@ function convertToWav(inputPath: string, outputPath: string): Promise<void> {
 }
 
 /**
- * Transcribe audio to text using OpenAI's Whisper API
+ * Transcribe audio to text using the abstracted AI service with audio preprocessing
  */
 export async function transcribeAudio(audioBuffer: Buffer, fileName: string): Promise<string> {
   let tempFilePath: string | null = null;
@@ -86,38 +87,20 @@ export async function transcribeAudio(audioBuffer: Buffer, fileName: string): Pr
     
     console.log(`Converted audio file size: ${convertedStats.size} bytes`);
     
-    // Create a readable stream from the converted file
-    const audioReadStream = fs.createReadStream(convertedFilePath);
+    // Read the converted audio file as buffer for the AI service
+    const convertedBuffer = fs.readFileSync(convertedFilePath);
     
-    // Call OpenAI's transcription API with the converted WAV file
-    const transcription = await openai.audio.transcriptions.create({
-      file: audioReadStream,
-      model: "whisper-1",
-    });
+    // Use the abstracted AI service for transcription
+    const transcriptionText = await standardAI.transcribeAudio(convertedBuffer, `${baseName}.wav`);
     
-    console.log(`Transcription result: ${transcription.text}`);
+    console.log(`Transcription result: ${transcriptionText}`);
     
-    return transcription.text;
+    return transcriptionText;
   } catch (error: any) {
     console.error('Error transcribing audio:', error);
     
-    // Check for rate limit errors (code 429)
-    if (error.status === 429 || (error.error && error.error.type === 'insufficient_quota')) {
-      throw new Error('rateLimit');
-    }
-    
-    // Check for authentication errors (code 401)
-    if (error.status === 401) {
-      throw new Error('auth');
-    }
-    
-    // Check for service unavailable errors (codes 500, 502, 503)
-    if (error.status && [500, 502, 503].includes(error.status)) {
-      throw new Error('serviceUnavailable');
-    }
-    
-    // For transcription-specific errors
-    throw new Error('transcriptionFailed');
+    // Pass through the error handling from the AI service
+    throw error;
   } finally {
     // Clean up temporary files
     try {
@@ -136,110 +119,45 @@ export async function transcribeAudio(audioBuffer: Buffer, fileName: string): Pr
 }
 
 /**
- * Generate a response using GPT-4o
+ * Generate a response using the abstracted AI service
  */
-export async function generateResponse(transcribedText: string): Promise<string> {
+export async function generateResponse(transcribedText: string, useCreative: boolean = false): Promise<string> {
   try {
-    // Import the system prompt and child profile
-    const { APPU_SYSTEM_PROMPT } = await import('../shared/appuPrompts');
-    const { DEFAULT_PROFILE, getCurrentTimeContext } = await import('../shared/childProfile');
+    const aiService = useCreative ? creativeAI : standardAI;
+    const generatedText = await aiService.generateResponse(transcribedText);
     
-    // Get current time context
-    const timeContext = getCurrentTimeContext();
-    
-    // Prepare child profile and time context for the model
-    const childProfileJSON = JSON.stringify(DEFAULT_PROFILE, null, 2);
-    const timeContextJSON = JSON.stringify(timeContext, null, 2);
-    
-    // User prompt with the transcribed text and context
-    const userPrompt = `
-Child profile: ${childProfileJSON}
-
-Time context: ${timeContextJSON}
-
-The child says: "${transcribedText}"`;
-
-    // Call OpenAI's chat completions API
-    // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { 
-          role: "system", 
-          content: APPU_SYSTEM_PROMPT
-        },
-        { 
-          role: "user", 
-          content: userPrompt 
-        }
-      ],
-      max_tokens: 200,
-    });
-    
-    const generatedText = response.choices[0].message.content || "";
     console.log(`Generated response: ${generatedText}`);
-    
     return generatedText;
   } catch (error: any) {
     console.error('Error generating response:', error);
-    
-    // Check for rate limit errors (code 429)
-    if (error.status === 429 || (error.error && error.error.type === 'insufficient_quota')) {
-      throw new Error('rateLimit');
-    }
-    
-    // Check for authentication errors (code 401)
-    if (error.status === 401) {
-      throw new Error('auth');
-    }
-    
-    // Check for service unavailable errors (codes 500, 502, 503)
-    if (error.status && [500, 502, 503].includes(error.status)) {
-      throw new Error('serviceUnavailable');
-    }
-    
-    // For network errors or other unclassified errors
-    throw new Error('generic');
+    throw error;
   }
 }
 
 /**
- * Generate speech audio from text using OpenAI's TTS API
+ * Generate speech audio from text using the abstracted AI service
  */
-export async function generateSpeech(text: string): Promise<Buffer> {
+export async function generateSpeech(text: string, useCreativeVoice: boolean = false): Promise<Buffer> {
   try {
     console.log(`Generating speech for text: ${text.substring(0, 50)}...`);
     
-    const response = await openai.audio.speech.create({
-      model: "tts-1",
-      voice: "nova", // Child-friendly voice
-      input: text,
-      response_format: "wav"
-    });
+    const aiService = useCreativeVoice ? creativeAI : standardAI;
+    const audioBuffer = await aiService.generateSpeech(text);
     
-    const audioBuffer = Buffer.from(await response.arrayBuffer());
     console.log(`Generated speech audio: ${audioBuffer.length} bytes`);
-    
     return audioBuffer;
   } catch (error: any) {
     console.error('Error generating speech:', error);
-    
-    // Check for rate limit errors
-    if (error.status === 429 || (error.error && error.error.type === 'insufficient_quota')) {
-      throw new Error('rateLimit');
-    }
-    
-    // Check for authentication errors
-    if (error.status === 401) {
-      throw new Error('auth');
-    }
-    
-    // Check for service unavailable errors
-    if (error.status && [500, 502, 503].includes(error.status)) {
-      throw new Error('serviceUnavailable');
-    }
-    
-    // For other errors
-    throw new Error('speechGenerationError');
+    throw error;
   }
 }
+
+// Export AI service instances and factory functions for direct use
+export { 
+  standardAI, 
+  fastAI, 
+  creativeAI, 
+  createAIService, 
+  createCustomAIService, 
+  AI_CONFIGS 
+};

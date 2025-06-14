@@ -5,7 +5,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { WebSocketServer, WebSocket } from 'ws';
-import { transcribeAudio, generateResponse, generateSpeech } from "./openai-service";
+import { transcribeAudio, generateResponse, generateSpeech, createAIService, AI_CONFIGS } from "./openai-service";
 import { setupRealtimeWebSocket } from "./realtime-service";
 import bodyParser from "body-parser";
 import { getErrorMessage } from "../shared/errorMessages";
