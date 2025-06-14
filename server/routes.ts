@@ -7,6 +7,7 @@ import fs from "fs";
 import { WebSocketServer, WebSocket } from 'ws';
 import { transcribeAudio, generateResponse, generateSpeech, createAIService, AI_CONFIGS } from "./openai-service";
 import { setupRealtimeWebSocket } from "./realtime-service";
+import { setupGeminiLiveWebSocket } from "./gemini-live-service";
 import bodyParser from "body-parser";
 import { getErrorMessage } from "../shared/errorMessages";
 import { APPU_SYSTEM_PROMPT } from "../shared/appuPrompts";
@@ -701,6 +702,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Set up OpenAI Realtime API WebSocket service
   setupRealtimeWebSocket(httpServer);
+  
+  // Set up Gemini Live API WebSocket service
+  setupGeminiLiveWebSocket(httpServer);
   
   // Set up WebSocket server for real-time communication (future use)
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });

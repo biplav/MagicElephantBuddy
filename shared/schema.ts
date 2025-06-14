@@ -108,6 +108,7 @@ export const insertChildSchema = createInsertSchema(children).pick({
 
 export const insertConversationSchema = createInsertSchema(conversations).pick({
   childId: true,
+  startTime: true,
   endTime: true,
   duration: true,
   totalMessages: true,

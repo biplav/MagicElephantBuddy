@@ -15,7 +15,7 @@ interface GeminiLiveSession {
 }
 
 export function setupGeminiLiveWebSocket(server: any) {
-  const wss = new WebSocket.Server({ 
+  const wss = new WebSocketServer({ 
     server: server, 
     path: '/gemini-ws'
   });
@@ -92,7 +92,6 @@ async function startGeminiLiveSession(session: GeminiLiveSession) {
     // Create new conversation in database
     const conversation = await storage.createConversation({
       childId: session.childId,
-      startTime: session.sessionStartTime,
       totalMessages: 0
     });
     
