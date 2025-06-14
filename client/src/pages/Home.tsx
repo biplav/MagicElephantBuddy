@@ -613,9 +613,6 @@ export default function Home() {
           >
             <Bug className="h-4 w-4 sm:h-5 sm:w-5 text-neutral" />
           </Button>
-          <Button variant="ghost" size="sm" aria-label="Settings" className="p-1 sm:p-2">
-            <Settings className="h-4 w-4 sm:h-5 sm:w-5 text-neutral" />
-          </Button>
         </div>
       </header>
 

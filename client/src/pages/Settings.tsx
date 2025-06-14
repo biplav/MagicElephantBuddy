@@ -80,6 +80,20 @@ export default function Settings() {
     }
   }, []);
 
+  // Auto-update voice processing mode based on AI provider selection
+  const handleProviderChange = (value: string) => {
+    const newSettings = { ...settings, defaultProvider: value };
+    
+    // Auto-select voice processing based on provider
+    if (value.startsWith('gemini')) {
+      newSettings.voiceMode = 'gemini';
+    } else {
+      newSettings.voiceMode = 'openai';
+    }
+    
+    setSettings(newSettings);
+  };
+
   const handleSaveSettings = async () => {
     setIsLoading(true);
     
@@ -154,7 +168,7 @@ export default function Settings() {
                 <Label htmlFor="provider">Default AI Configuration</Label>
                 <Select
                   value={settings.defaultProvider}
-                  onValueChange={(value) => setSettings(prev => ({ ...prev, defaultProvider: value }))}
+                  onValueChange={handleProviderChange}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select AI configuration" />
@@ -253,31 +267,29 @@ export default function Settings() {
                 </Select>
               </div>
 
-              {/* Voice Mode */}
+              {/* Voice Mode - Auto-selected based on AI provider */}
               <div className="space-y-3">
                 <Label htmlFor="voice-mode">Voice Processing</Label>
-                <Select
-                  value={settings.voiceMode}
-                  onValueChange={(value: 'openai' | 'gemini') => setSettings(prev => ({ ...prev, voiceMode: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select voice processing mode" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="openai">
-                      <div className="flex flex-col">
-                        <span className="font-medium">OpenAI Voice Processing</span>
-                        <span className="text-sm text-gray-500">Traditional audio processing with Whisper + TTS</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="gemini">
-                      <div className="flex flex-col">
-                        <span className="font-medium">Gemini Live Voice</span>
-                        <span className="text-sm text-gray-500">Real-time voice processing with Gemini Live API</span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-gray-900">
+                        {settings.voiceMode === 'gemini' ? 'Gemini Live Voice' : 'OpenAI Voice Processing'}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        {settings.voiceMode === 'gemini' 
+                          ? 'Real-time voice processing with Gemini Live API' 
+                          : 'Traditional audio processing with Whisper + TTS'}
+                      </p>
+                    </div>
+                    <div className="px-2 py-1 bg-blue-100 rounded text-xs font-medium text-blue-800">
+                      Auto-selected
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Voice processing mode is automatically selected based on your AI provider choice.
+                </p>
               </div>
             </CardContent>
           </Card>
