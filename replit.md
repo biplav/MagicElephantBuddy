@@ -20,19 +20,27 @@ This is a full-stack Node.js application called "Appu" - an AI-powered magical e
 - **Framework**: Express.js for REST API and WebSocket handling
 - **Database**: PostgreSQL with Drizzle ORM
 - **Database Provider**: Neon Database (serverless PostgreSQL)
-- **Audio Processing**: OpenAI Whisper API for speech-to-text
-- **AI Conversation**: OpenAI GPT models for natural language processing
-- **Text-to-Speech**: OpenAI TTS API for audio responses
+- **AI Service Layer**: Abstracted AI service with factory pattern for configuration-based provider selection
+- **Audio Processing**: OpenAI Whisper API for speech-to-text with FFmpeg preprocessing
+- **AI Conversation**: OpenAI GPT models (gpt-4o, gpt-4o-mini) for natural language processing
+- **Text-to-Speech**: OpenAI TTS API with multiple voice options (nova, fable, etc.)
 - **Real-time Communication**: WebSockets for live audio streaming
 
 ## Key Components
 
+### AI Service Architecture
+- **Abstracted AI Service Layer**: Modular design with provider-agnostic interface
+- **Factory Pattern**: Configuration-based service creation for different use cases
+- **Multiple Configurations**: Standard, fast, and creative modes with different parameters
+- **Provider Support**: Currently OpenAI with extensible architecture for future providers
+- **Configuration Options**: Model selection, token limits, temperature, voice selection
+
 ### Voice Interaction System
-- Audio recording using Web Audio API
+- Audio recording using Web Audio API with FFmpeg preprocessing
 - Real-time audio streaming with WebSocket connections
-- Speech transcription via OpenAI Whisper
-- Natural language processing with GPT models
-- Text-to-speech synthesis for responses
+- Speech transcription via OpenAI Whisper with audio format conversion
+- Natural language processing with configurable GPT models (gpt-4o, gpt-4o-mini)
+- Text-to-speech synthesis with multiple voice options (nova, fable, etc.)
 - Support for both traditional API calls and OpenAI Realtime API
 
 ### Character System (Appu)
@@ -108,7 +116,9 @@ This is a full-stack Node.js application called "Appu" - an AI-powered magical e
 
 ## Changelog
 
-- June 14, 2025. Initial setup
+- June 14, 2025: Initial setup
+- June 14, 2025: Implemented complete conversation storage system with PostgreSQL database
+- June 14, 2025: Abstracted ChatGPT API interactions into modular AI service with factory pattern for configuration-based selection
 
 ## User Preferences
 

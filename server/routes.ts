@@ -282,6 +282,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // AI Configuration-based processing endpoint
+  app.post('/api/process-with-config', async (req: Request, res: Response) => {
+    try {
+      const { text, aiConfig = 'standard', useCreative = false } = req.body;
+      
+      if (!text || text.trim() === '') {
+        return res.status(400).json({ error: 'Text input is required' });
+      }
+      
+      console.log(`Processing text with AI config: ${aiConfig}, creative: ${useCreative}`);
+      
+      // Create AI service based on configuration
+      const aiService = createAIService(aiConfig as keyof typeof AI_CONFIGS);
+      
+      // Generate response using the configured AI service
+      const responseText = await aiService.generateResponse(text);
+      console.log(`Response text: ${responseText}`);
+      
+      // Generate speech with optional creative voice
+      const speechConfig = useCreative ? { audioVoice: 'fable' as const } : undefined;
+      const speechAudio = await aiService.generateSpeech(responseText, speechConfig);
+      
+      // Convert audio to base64 for response
+      const audioBase64 = speechAudio.toString('base64');
+      
+      res.json({
+        text: responseText,
+        audioData: audioBase64,
+        config: aiConfig,
+        creative: useCreative
+      });
+      
+    } catch (error: any) {
+      console.error('Error in config-based processing:', error);
+      res.status(500).json({ 
+        error: 'Processing failed',
+        details: error.message 
+      });
+    }
+  });
+
   // Handle audio processing with OpenAI
   // Endpoint to create ephemeral token for OpenAI Realtime API
   // Parent Dashboard API Routes
