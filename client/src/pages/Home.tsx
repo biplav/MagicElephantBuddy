@@ -22,6 +22,12 @@ export default function Home() {
   const [isProcessingText, setIsProcessingText] = useState<boolean>(false);
   const [enableLocalPlayback, setEnableLocalPlayback] = useState<boolean>(false); // Default to false for server testing
   const [useRealtimeAPI, setUseRealtimeAPI] = useState<boolean>(true); // Toggle for OpenAI Realtime API
+  const [aiSettings, setAiSettings] = useState({
+    defaultProvider: 'standard',
+    voiceMode: 'openai',
+    creativeMode: false,
+    voicePreference: 'nova'
+  });
 
   // Fullscreen utility functions
   const enterFullscreen = async () => {
@@ -215,6 +221,19 @@ export default function Home() {
     setSpeechText(undefined);
     setAppState("welcome");
   };
+
+  // Load AI settings from localStorage
+  useEffect(() => {
+    const savedSettings = localStorage.getItem('appuAISettings');
+    if (savedSettings) {
+      try {
+        const parsed = JSON.parse(savedSettings);
+        setAiSettings(parsed);
+      } catch (error) {
+        console.error('Error loading AI settings:', error);
+      }
+    }
+  }, []);
 
   // Handle fullscreen exit via ESC key
   useEffect(() => {
@@ -569,6 +588,16 @@ export default function Home() {
               className="p-1 sm:p-2"
             >
               <User className="h-4 w-4 sm:h-5 sm:w-5 text-neutral" />
+            </Button>
+          </Link>
+          <Link href="/settings">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              aria-label="Settings" 
+              className="p-1 sm:p-2"
+            >
+              <Settings className="h-4 w-4 sm:h-5 sm:w-5 text-neutral" />
             </Button>
           </Link>
           <Button 

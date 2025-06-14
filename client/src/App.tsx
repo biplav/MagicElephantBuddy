@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import AudioTest from "@/pages/AudioTest";
 import ParentDashboard from "@/pages/ParentDashboard";
+import Settings from "@/pages/Settings";
 
 function Router() {
   return (
@@ -14,6 +15,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/audio-test" component={AudioTest} />
       <Route path="/dashboard" component={ParentDashboard} />
+      <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
   );
