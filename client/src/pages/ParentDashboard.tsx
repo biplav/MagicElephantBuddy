@@ -45,6 +45,7 @@ interface Conversation {
   totalMessages: number;
   child: Child;
   messages: Message[];
+  summary?: string;
 }
 
 interface DashboardData {
