@@ -31,6 +31,7 @@ export interface IStorage {
   // Conversation management
   createConversation(conversation: InsertConversation): Promise<Conversation>;
   updateConversation(id: number, updates: Partial<InsertConversation>): Promise<Conversation>;
+  getConversation(conversationId: number): Promise<Conversation | undefined>;
   getConversationsByChild(childId: number, limit?: number): Promise<Conversation[]>;
   getCurrentConversation(childId: number): Promise<Conversation | undefined>;
   
@@ -154,6 +155,14 @@ export class DatabaseStorage implements IStorage {
       .where(eq(conversations.childId, childId))
       .orderBy(desc(conversations.startTime))
       .limit(limit);
+  }
+
+  async getConversation(conversationId: number): Promise<Conversation | undefined> {
+    const [conversation] = await db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.id, conversationId));
+    return conversation || undefined;
   }
 
   async getCurrentConversation(childId: number): Promise<Conversation | undefined> {

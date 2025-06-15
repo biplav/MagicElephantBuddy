@@ -156,11 +156,9 @@ Ignore information already present in the current profile.
       const messages = await storage.getMessagesByConversation(conversationId);
       if (messages.length === 0) return;
 
-      // Get conversation details
-      const conversation = await storage.getConversationsByChild(messages[0].conversationId, 1);
-      if (conversation.length === 0) return;
-
-      const conv = conversation[0];
+      // Get conversation details directly
+      const conv = await storage.getConversation(conversationId);
+      if (!conv) return;
       const child = await storage.getChild(conv.childId);
       if (!child) return;
 
@@ -203,6 +201,7 @@ Ignore information already present in the current profile.
       console.log(`Processed conversation ${conversationId}: ${summary.keyTopics.length} topics, ${profileSuggestions.length} profile suggestions`);
     } catch (error) {
       console.error(`Error processing conversation ${conversationId}:`, error);
+      console.error('Full error details:', JSON.stringify(error, null, 2));
     }
   }
 
