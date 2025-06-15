@@ -189,9 +189,10 @@ export default function ParentDashboard() {
 
         {/* Main Content */}
         <Tabs defaultValue="conversations" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="conversations">Recent Conversations</TabsTrigger>
             <TabsTrigger value="children">Children Profiles</TabsTrigger>
+            <TabsTrigger value="suggestions">Profile Suggestions</TabsTrigger>
             <TabsTrigger value="insights">Insights & Analytics</TabsTrigger>
           </TabsList>
 
@@ -355,6 +356,10 @@ export default function ParentDashboard() {
                 </Card>
               ))}
             </div>
+          </TabsContent>
+
+          <TabsContent value="suggestions" className="space-y-6">
+            <ProfileSuggestions parentId={currentParent?.id || 1} />
           </TabsContent>
 
           <TabsContent value="insights">

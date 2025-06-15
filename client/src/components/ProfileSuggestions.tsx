@@ -34,7 +34,6 @@ export function ProfileSuggestions({ parentId }: ProfileSuggestionsProps) {
 
   const { data: suggestions = [], isLoading } = useQuery({
     queryKey: ['/api/parents', parentId, 'profile-suggestions'],
-    queryFn: () => apiRequest(`/api/parents/${parentId}/profile-suggestions`),
   });
 
   const updateSuggestionMutation = useMutation({
@@ -43,10 +42,9 @@ export function ProfileSuggestions({ parentId }: ProfileSuggestionsProps) {
       status: string;
       parentResponse?: string;
     }) => {
-      await apiRequest(`/api/profile-suggestions/${suggestionId}`, {
+      return apiRequest(`/api/profile-suggestions/${suggestionId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ status, parentResponse }),
-        headers: { 'Content-Type': 'application/json' }
+        body: { status, parentResponse }
       });
     },
     onSuccess: () => {
