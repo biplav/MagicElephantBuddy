@@ -369,6 +369,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const parentId = parseInt(req.params.parentId);
       const dashboardData = await storage.getParentDashboardData(parentId);
+      console.log('Dashboard data being returned:', JSON.stringify(dashboardData, null, 2));
       res.json(dashboardData);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
