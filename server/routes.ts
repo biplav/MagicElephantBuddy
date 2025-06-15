@@ -1061,10 +1061,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
             storage.getConversationsByChild(childId, 10) // Last 10 conversations
           ]);
 
+          // Fetch messages for each conversation to analyze content
+          const conversationsWithMessages = await Promise.all(
+            conversations.map(async (conv: any) => {
+              const messages = await storage.getMessagesByConversation(conv.id);
+              return {
+                ...conv,
+                messages: messages
+              };
+            })
+          );
+
           return {
             child,
             milestones,
-            recentConversations: conversations
+            recentConversations: conversationsWithMessages
           };
         })
       );
@@ -1104,11 +1115,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             totalMessages: totalMessages,
             averageConversationDuration: Math.round(avgConversationDuration),
             lastConversation: recentConversations?.[0]?.startTime || null,
-            conversationSummaries: recentConversations?.slice(0, 3).map((conv: any) => ({
+            conversationSummaries: recentConversations?.slice(0, 5).map((conv: any) => ({
               date: conv.startTime,
               duration: conv.duration,
               messageCount: conv.totalMessages,
-              summary: 'Conversation summary not available'
+              topics: conv.messages?.map((msg: any) => msg.content).join(' ') || '',
+              childMessages: conv.messages?.filter((msg: any) => msg.type === 'child_input').map((msg: any) => msg.content) || [],
+              appuResponses: conv.messages?.filter((msg: any) => msg.type === 'appu_response').map((msg: any) => msg.content) || []
             })) || []
           }
         };
@@ -1119,16 +1132,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 IMPORTANT GUIDELINES:
 1. Only use the specific data provided about the children - never make up or assume information
-2. If asked about topics outside of Appu/children's learning data, politely redirect: "I can only help with questions about your child's learning progress with Appu. For other topics, I'd recommend consulting appropriate resources."
-3. Be encouraging and supportive while being factual
-4. Use the child's name when relevant
-5. Provide specific numbers and details from the data when available
-6. If data is missing or unavailable, clearly state this
+2. Questions about conversation topics, what children discuss with Appu, learning interests, and educational interactions ARE within your scope
+3. If asked about topics completely unrelated to children's learning/education (like weather, news, etc.), politely redirect
+4. Be encouraging and supportive while being factual
+5. Use the child's name when relevant
+6. Provide specific numbers and details from the data when available
+7. When asked about conversation topics, analyze the actual message content in conversationSummaries
+8. Look at both childMessages and appuResponses to understand conversation themes
+9. Identify patterns in what the child asks about and discusses
+10. If data is missing or unavailable, clearly state this
+
+CONVERSATION ANALYSIS GUIDANCE:
+- Review the childMessages arrays to see what topics the child brings up
+- Look at appuResponses to understand how conversations develop
+- Identify recurring themes, interests, or learning areas from actual conversations
+- Extract specific examples from the conversation content when relevant
+- Note any educational progress or interests shown in conversations
 
 DATA CONTEXT:
 ${JSON.stringify(dataContext, null, 2)}
 
-Answer the parent's question using this data. Be specific, helpful, and encouraging.`;
+Answer the parent's question using this data. Be specific, helpful, and encouraging. When discussing conversation topics, reference actual content from the conversations.`;
+
+      // Debug: Log the data being sent to AI
+      console.log('=== PARENT CHAT DEBUG ===');
+      console.log('Question:', question);
+      console.log('Data being analyzed:', JSON.stringify(dataContext, null, 2));
+      console.log('========================');
 
       const response = await generateResponse(
         `Parent Question: ${question}`,
