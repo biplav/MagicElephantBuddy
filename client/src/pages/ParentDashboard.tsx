@@ -190,9 +190,10 @@ export default function ParentDashboard() {
 
         {/* Main Content */}
         <Tabs defaultValue="conversations" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="conversations">Recent Conversations</TabsTrigger>
             <TabsTrigger value="children">Children Profiles</TabsTrigger>
+            <TabsTrigger value="milestones">Learning Milestones</TabsTrigger>
             <TabsTrigger value="suggestions">Profile Suggestions</TabsTrigger>
             <TabsTrigger value="insights">Insights & Analytics</TabsTrigger>
           </TabsList>
@@ -492,6 +493,34 @@ export default function ParentDashboard() {
                         </div>
                       </div>
                     </ScrollArea>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="milestones" className="space-y-6">
+            <div className="grid grid-cols-1 gap-6">
+              {dashboardData?.children.map((child) => (
+                <Card key={child.id}>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <Avatar className="h-10 w-10">
+                          <AvatarFallback className="text-lg">{child.name[0]}</AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <CardTitle>{child.name}'s Learning Milestones</CardTitle>
+                          <CardDescription>Track progress and achievements in key learning areas</CardDescription>
+                        </div>
+                      </div>
+                      <Badge variant={child.isActive ? "default" : "secondary"}>
+                        Age {child.age}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <MilestoneTracker childId={child.id} childName={child.name} />
                   </CardContent>
                 </Card>
               ))}
