@@ -112,9 +112,11 @@ export default function ParentChatbot({ parentId, children }: ParentChatbotProps
     "How is my child's learning progress?",
     "What milestones has my child completed recently?",
     "Can you summarize recent conversations?",
-    "What learning areas need more focus?",
-    "How often does my child interact with Appu?",
-    "What topics does my child talk about most?"
+    "What topics does my child talk about most?",
+    "My child loves dinosaurs now, add this to their interests",
+    "Update bedtime to 8:30 PM in daily routine",
+    "Add Spanish to preferred languages",
+    "My child dislikes loud music, please update profile"
   ];
 
   return (
