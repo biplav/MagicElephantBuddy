@@ -370,7 +370,7 @@ export default function ParentDashboard() {
                             <p className="text-sm font-medium text-purple-700 mb-2">Favorite Colors:</p>
                             <div className="flex flex-wrap gap-1">
                               {child.profile.favoriteThings.colors.map((color: string, idx: number) => (
-                                <Badge key={idx} variant="outline" className="text-xs">{color}</Badge>
+                                <Badge key={`${child.id}-color-${idx}`} variant="outline" className="text-xs">{color}</Badge>
                               ))}
                             </div>
                           </div>
@@ -382,7 +382,7 @@ export default function ParentDashboard() {
                             <p className="text-sm font-medium text-orange-700 mb-2">Favorite Animals:</p>
                             <div className="flex flex-wrap gap-1">
                               {child.profile.favoriteThings.animals.map((animal: string, idx: number) => (
-                                <Badge key={idx} variant="outline" className="text-xs">{animal}</Badge>
+                                <Badge key={`${child.id}-animal-${idx}`} variant="outline" className="text-xs">{animal}</Badge>
                               ))}
                             </div>
                           </div>
@@ -394,7 +394,7 @@ export default function ParentDashboard() {
                             <p className="text-sm font-medium text-blue-700 mb-2">Favorite Activities:</p>
                             <div className="flex flex-wrap gap-1">
                               {child.profile.favoriteThings.activities.map((activity: string, idx: number) => (
-                                <Badge key={idx} variant="outline" className="text-xs">{activity}</Badge>
+                                <Badge key={`${child.id}-activity-${idx}`} variant="outline" className="text-xs">{activity}</Badge>
                               ))}
                             </div>
                           </div>
@@ -406,7 +406,7 @@ export default function ParentDashboard() {
                             <p className="text-sm font-medium text-yellow-700 mb-2">Favorite Foods:</p>
                             <div className="flex flex-wrap gap-1">
                               {child.profile.favoriteThings.foods.map((food: string, idx: number) => (
-                                <Badge key={idx} variant="outline" className="text-xs">{food}</Badge>
+                                <Badge key={`${child.id}-food-${idx}`} variant="outline" className="text-xs">{food}</Badge>
                               ))}
                             </div>
                           </div>
@@ -418,7 +418,7 @@ export default function ParentDashboard() {
                             <p className="text-sm font-medium text-pink-700 mb-2">Favorite Characters:</p>
                             <div className="flex flex-wrap gap-1">
                               {child.profile.favoriteThings.characters.map((character: string, idx: number) => (
-                                <Badge key={idx} variant="outline" className="text-xs">{character}</Badge>
+                                <Badge key={`${child.id}-character-${idx}`} variant="outline" className="text-xs">{character}</Badge>
                               ))}
                             </div>
                           </div>
@@ -430,7 +430,7 @@ export default function ParentDashboard() {
                             <p className="text-sm font-medium text-indigo-700 mb-2">Learning Goals:</p>
                             <div className="flex flex-wrap gap-1">
                               {child.profile.learningGoals.map((goal: string, idx: number) => (
-                                <Badge key={idx} variant="default" className="text-xs">{goal}</Badge>
+                                <Badge key={`${child.id}-goal-${idx}`} variant="default" className="text-xs">{goal}</Badge>
                               ))}
                             </div>
                           </div>
@@ -442,7 +442,7 @@ export default function ParentDashboard() {
                             <p className="text-sm font-medium text-teal-700 mb-2">Preferred Languages:</p>
                             <div className="flex flex-wrap gap-1">
                               {child.profile.preferredLanguages.map((language: string, idx: number) => (
-                                <Badge key={idx} variant="secondary" className="text-xs">{language}</Badge>
+                                <Badge key={`${child.id}-language-${idx}`} variant="secondary" className="text-xs">{language}</Badge>
                               ))}
                             </div>
                           </div>
