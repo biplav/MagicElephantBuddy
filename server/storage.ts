@@ -1,8 +1,11 @@
 import { 
   users, parents, children, conversations, messages, conversationInsights,
+  learningMilestones, notifications, notificationPreferences,
   type User, type InsertUser, type Parent, type InsertParent, 
   type Child, type InsertChild, type Conversation, type InsertConversation,
-  type Message, type InsertMessage, type ConversationInsight, type InsertConversationInsight
+  type Message, type InsertMessage, type ConversationInsight, type InsertConversationInsight,
+  type LearningMilestone, type InsertLearningMilestone, type Notification, type InsertNotification,
+  type NotificationPreferences, type InsertNotificationPreferences
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, inArray, isNull } from "drizzle-orm";
@@ -43,6 +46,23 @@ export interface IStorage {
     totalConversations: number;
     totalMessages: number;
   }>;
+  
+  // Learning milestones
+  createLearningMilestone(milestone: InsertLearningMilestone): Promise<LearningMilestone>;
+  updateMilestoneProgress(milestoneId: number, progress: number): Promise<LearningMilestone>;
+  completeMilestone(milestoneId: number): Promise<LearningMilestone>;
+  getMilestonesByChild(childId: number): Promise<LearningMilestone[]>;
+  
+  // Notifications
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  getNotificationsByParent(parentId: number, unreadOnly?: boolean): Promise<Notification[]>;
+  markNotificationAsRead(notificationId: number): Promise<Notification>;
+  markAllNotificationsAsRead(parentId: number): Promise<void>;
+  
+  // Notification preferences
+  createNotificationPreferences(preferences: InsertNotificationPreferences): Promise<NotificationPreferences>;
+  updateNotificationPreferences(parentId: number, preferences: Partial<InsertNotificationPreferences>): Promise<NotificationPreferences>;
+  getNotificationPreferences(parentId: number): Promise<NotificationPreferences | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -222,6 +242,117 @@ export class DatabaseStorage implements IStorage {
       totalConversations,
       totalMessages,
     };
+  }
+
+  // Learning milestones
+  async createLearningMilestone(insertMilestone: InsertLearningMilestone): Promise<LearningMilestone> {
+    const [milestone] = await db
+      .insert(learningMilestones)
+      .values(insertMilestone)
+      .returning();
+    return milestone;
+  }
+
+  async updateMilestoneProgress(milestoneId: number, progress: number): Promise<LearningMilestone> {
+    const [milestone] = await db
+      .update(learningMilestones)
+      .set({ 
+        currentProgress: progress,
+        isCompleted: false // Reset completion status if progress is updated
+      })
+      .where(eq(learningMilestones.id, milestoneId))
+      .returning();
+    return milestone;
+  }
+
+  async completeMilestone(milestoneId: number): Promise<LearningMilestone> {
+    const [milestone] = await db
+      .update(learningMilestones)
+      .set({ 
+        isCompleted: true,
+        completedAt: new Date()
+      })
+      .where(eq(learningMilestones.id, milestoneId))
+      .returning();
+    return milestone;
+  }
+
+  async getMilestonesByChild(childId: number): Promise<LearningMilestone[]> {
+    return await db
+      .select()
+      .from(learningMilestones)
+      .where(eq(learningMilestones.childId, childId))
+      .orderBy(desc(learningMilestones.createdAt));
+  }
+
+  // Notifications
+  async createNotification(insertNotification: InsertNotification): Promise<Notification> {
+    const [notification] = await db
+      .insert(notifications)
+      .values(insertNotification)
+      .returning();
+    return notification;
+  }
+
+  async getNotificationsByParent(parentId: number, unreadOnly = false): Promise<Notification[]> {
+    if (unreadOnly) {
+      return await db
+        .select()
+        .from(notifications)
+        .where(and(
+          eq(notifications.parentId, parentId),
+          eq(notifications.isRead, false)
+        ))
+        .orderBy(desc(notifications.createdAt));
+    }
+    
+    return await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.parentId, parentId))
+      .orderBy(desc(notifications.createdAt));
+  }
+
+  async markNotificationAsRead(notificationId: number): Promise<Notification> {
+    const [notification] = await db
+      .update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.id, notificationId))
+      .returning();
+    return notification;
+  }
+
+  async markAllNotificationsAsRead(parentId: number): Promise<void> {
+    await db
+      .update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.parentId, parentId));
+  }
+
+  // Notification preferences
+  async createNotificationPreferences(insertPreferences: InsertNotificationPreferences): Promise<NotificationPreferences> {
+    const [preferences] = await db
+      .insert(notificationPreferences)
+      .values(insertPreferences)
+      .returning();
+    return preferences;
+  }
+
+  async updateNotificationPreferences(parentId: number, updates: Partial<InsertNotificationPreferences>): Promise<NotificationPreferences> {
+    const [preferences] = await db
+      .update(notificationPreferences)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(notificationPreferences.parentId, parentId))
+      .returning();
+    return preferences;
+  }
+
+  async getNotificationPreferences(parentId: number): Promise<NotificationPreferences | undefined> {
+    const [preferences] = await db
+      .select()
+      .from(notificationPreferences)
+      .where(eq(notificationPreferences.parentId, parentId));
+    return preferences;
   }
 }
 

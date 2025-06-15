@@ -564,6 +564,144 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Learning milestones endpoints
+  app.post('/api/milestones', async (req: Request, res: Response) => {
+    try {
+      const milestone = await storage.createLearningMilestone(req.body);
+      res.json(milestone);
+    } catch (error) {
+      console.error('Error creating milestone:', error);
+      res.status(500).json({ message: 'Failed to create milestone' });
+    }
+  });
+
+  app.get('/api/children/:childId/milestones', async (req: Request, res: Response) => {
+    try {
+      const childId = parseInt(req.params.childId);
+      const milestones = await storage.getMilestonesByChild(childId);
+      res.json(milestones);
+    } catch (error) {
+      console.error('Error fetching milestones:', error);
+      res.status(500).json({ message: 'Failed to fetch milestones' });
+    }
+  });
+
+  app.patch('/api/milestones/:milestoneId/progress', async (req: Request, res: Response) => {
+    try {
+      const milestoneId = parseInt(req.params.milestoneId);
+      const { progress } = req.body;
+      const milestone = await storage.updateMilestoneProgress(milestoneId, progress);
+      res.json(milestone);
+    } catch (error) {
+      console.error('Error updating milestone progress:', error);
+      res.status(500).json({ message: 'Failed to update milestone progress' });
+    }
+  });
+
+  app.patch('/api/milestones/:milestoneId/complete', async (req: Request, res: Response) => {
+    try {
+      const milestoneId = parseInt(req.params.milestoneId);
+      const milestone = await storage.completeMilestone(milestoneId);
+      
+      // Create milestone achievement notification
+      const child = await storage.getChild(milestone.childId);
+      if (child) {
+        await storage.createNotification({
+          parentId: child.parentId,
+          childId: milestone.childId,
+          milestoneId: milestone.id,
+          type: 'milestone_achieved',
+          title: 'Milestone Achieved!',
+          message: `${child.name} has completed: ${milestone.milestoneDescription}`,
+          priority: 'high'
+        });
+      }
+      
+      res.json(milestone);
+    } catch (error) {
+      console.error('Error completing milestone:', error);
+      res.status(500).json({ message: 'Failed to complete milestone' });
+    }
+  });
+
+  // Notifications endpoints
+  app.get('/api/parents/:parentId/notifications', async (req: Request, res: Response) => {
+    try {
+      const parentId = parseInt(req.params.parentId);
+      const unreadOnly = req.query.unreadOnly === 'true';
+      const notifications = await storage.getNotificationsByParent(parentId, unreadOnly);
+      res.json(notifications);
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+      res.status(500).json({ message: 'Failed to fetch notifications' });
+    }
+  });
+
+  app.post('/api/notifications', async (req: Request, res: Response) => {
+    try {
+      const notification = await storage.createNotification(req.body);
+      res.json(notification);
+    } catch (error) {
+      console.error('Error creating notification:', error);
+      res.status(500).json({ message: 'Failed to create notification' });
+    }
+  });
+
+  app.patch('/api/notifications/:notificationId/read', async (req: Request, res: Response) => {
+    try {
+      const notificationId = parseInt(req.params.notificationId);
+      const notification = await storage.markNotificationAsRead(notificationId);
+      res.json(notification);
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+      res.status(500).json({ message: 'Failed to mark notification as read' });
+    }
+  });
+
+  app.patch('/api/parents/:parentId/notifications/read-all', async (req: Request, res: Response) => {
+    try {
+      const parentId = parseInt(req.params.parentId);
+      await storage.markAllNotificationsAsRead(parentId);
+      res.json({ message: 'All notifications marked as read' });
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+      res.status(500).json({ message: 'Failed to mark all notifications as read' });
+    }
+  });
+
+  // Notification preferences endpoints
+  app.get('/api/parents/:parentId/notification-preferences', async (req: Request, res: Response) => {
+    try {
+      const parentId = parseInt(req.params.parentId);
+      const preferences = await storage.getNotificationPreferences(parentId);
+      res.json(preferences);
+    } catch (error) {
+      console.error('Error fetching notification preferences:', error);
+      res.status(500).json({ message: 'Failed to fetch notification preferences' });
+    }
+  });
+
+  app.post('/api/notification-preferences', async (req: Request, res: Response) => {
+    try {
+      const preferences = await storage.createNotificationPreferences(req.body);
+      res.json(preferences);
+    } catch (error) {
+      console.error('Error creating notification preferences:', error);
+      res.status(500).json({ message: 'Failed to create notification preferences' });
+    }
+  });
+
+  app.patch('/api/parents/:parentId/notification-preferences', async (req: Request, res: Response) => {
+    try {
+      const parentId = parseInt(req.params.parentId);
+      const preferences = await storage.updateNotificationPreferences(parentId, req.body);
+      res.json(preferences);
+    } catch (error) {
+      console.error('Error updating notification preferences:', error);
+      res.status(500).json({ message: 'Failed to update notification preferences' });
+    }
+  });
+
   app.post('/api/process-audio', upload.single('audio'), async (req: MulterRequest, res: Response) => {
     if (!req.file) {
       return res.status(400).json({ 
