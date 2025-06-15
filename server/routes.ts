@@ -1057,8 +1057,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         childrenIds.map(async (childId: number) => {
           const [child, milestones, conversations] = await Promise.all([
             storage.getChild(childId),
-            storage.getChildMilestones(childId),
-            storage.getChildConversations(childId, 10) // Last 10 conversations
+            storage.getMilestonesByChild(childId),
+            storage.getConversationsByChild(childId, 10) // Last 10 conversations
           ]);
 
           return {
@@ -1073,13 +1073,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const dataContext = childrenData.map(({ child, milestones, recentConversations }) => {
         if (!child) return null;
 
-        const completedMilestones = milestones?.filter(m => m.isCompleted) || [];
-        const inProgressMilestones = milestones?.filter(m => !m.isCompleted && m.currentProgress > 0) || [];
-        const upcomingMilestones = milestones?.filter(m => !m.isCompleted && m.currentProgress === 0) || [];
+        const completedMilestones = milestones?.filter((m: any) => m.isCompleted) || [];
+        const inProgressMilestones = milestones?.filter((m: any) => !m.isCompleted && m.currentProgress > 0) || [];
+        const upcomingMilestones = milestones?.filter((m: any) => !m.isCompleted && m.currentProgress === 0) || [];
 
-        const totalMessages = recentConversations?.reduce((sum, conv) => sum + (conv.totalMessages || 0), 0) || 0;
+        const totalMessages = recentConversations?.reduce((sum: number, conv: any) => sum + (conv.totalMessages || 0), 0) || 0;
         const avgConversationDuration = recentConversations?.length > 0 
-          ? (recentConversations.reduce((sum, conv) => sum + (conv.duration || 0), 0) / recentConversations.length) 
+          ? (recentConversations.reduce((sum: number, conv: any) => sum + (conv.duration || 0), 0) / recentConversations.length) 
           : 0;
 
         return {
@@ -1091,12 +1091,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             completed: completedMilestones.length,
             inProgress: inProgressMilestones.length,
             upcoming: upcomingMilestones.length,
-            milestoneDetails: milestones?.map(m => ({
+            milestoneDetails: milestones?.map((m: any) => ({
               type: m.milestoneType,
               description: m.milestoneDescription,
-              progress: `${m.currentProgress}/${m.targetValue}`,
+              progress: `${m.currentProgress}/${m.targetValue || 1}`,
               completed: m.isCompleted,
-              progressPercentage: Math.round((m.currentProgress / m.targetValue) * 100)
+              progressPercentage: Math.round((m.currentProgress / (m.targetValue || 1)) * 100)
             })) || []
           },
           recentActivity: {
@@ -1104,11 +1104,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             totalMessages: totalMessages,
             averageConversationDuration: Math.round(avgConversationDuration),
             lastConversation: recentConversations?.[0]?.startTime || null,
-            conversationSummaries: recentConversations?.slice(0, 3).map(conv => ({
+            conversationSummaries: recentConversations?.slice(0, 3).map((conv: any) => ({
               date: conv.startTime,
               duration: conv.duration,
               messageCount: conv.totalMessages,
-              summary: conv.summary || 'No summary available'
+              summary: 'Conversation summary not available'
             })) || []
           }
         };

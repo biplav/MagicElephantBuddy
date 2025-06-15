@@ -191,11 +191,12 @@ export default function ParentDashboard() {
 
         {/* Main Content */}
         <Tabs defaultValue="conversations" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="conversations">Recent Conversations</TabsTrigger>
             <TabsTrigger value="children">Children Profiles</TabsTrigger>
             <TabsTrigger value="milestones">Learning Milestones</TabsTrigger>
             <TabsTrigger value="suggestions">Profile Suggestions</TabsTrigger>
+            <TabsTrigger value="chatbot">Parent Assistant</TabsTrigger>
             <TabsTrigger value="insights">Insights & Analytics</TabsTrigger>
           </TabsList>
 
@@ -530,6 +531,13 @@ export default function ParentDashboard() {
 
           <TabsContent value="suggestions" className="space-y-6">
             <ProfileSuggestions parentId={currentParent?.id || 1} />
+          </TabsContent>
+
+          <TabsContent value="chatbot" className="space-y-6">
+            <ParentChatbot 
+              parentId={currentParent?.id || 1} 
+              children={dashboardData?.children || []}
+            />
           </TabsContent>
 
           <TabsContent value="insights">

@@ -309,6 +309,14 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(learningMilestones.createdAt));
   }
 
+  async getChildMilestones(childId: number): Promise<LearningMilestone[]> {
+    return await this.getMilestonesByChild(childId);
+  }
+
+  async getChildConversations(childId: number, limit?: number): Promise<Conversation[]> {
+    return await this.getConversationsByChild(childId, limit);
+  }
+
   // Notifications
   async createNotification(insertNotification: InsertNotification): Promise<Notification> {
     const [notification] = await db
