@@ -23,10 +23,15 @@ interface MilestoneTrackerProps {
 }
 
 export default function MilestoneTracker({ childId, childName }: MilestoneTrackerProps) {
-  const { data: milestones = [], isLoading } = useQuery<LearningMilestone[]>({
-    queryKey: ['/api/children', childId, 'milestones'],
-    queryFn: () => apiRequest(`/api/children/${childId}/milestones`),
+  const { data: milestones = [], isLoading, error } = useQuery<LearningMilestone[]>({
+    queryKey: [`/api/children/${childId}/milestones`],
   });
+
+  // Debug logging
+  console.log('MilestoneTracker - childId:', childId);
+  console.log('MilestoneTracker - milestones:', milestones);
+  console.log('MilestoneTracker - isLoading:', isLoading);
+  console.log('MilestoneTracker - error:', error);
 
   const getMilestoneTypeColor = (type: string) => {
     switch (type) {
@@ -97,6 +102,14 @@ export default function MilestoneTracker({ childId, childName }: MilestoneTracke
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {milestones.length === 0 && !isLoading && (
+          <div className="text-center py-8 text-muted-foreground">
+            <Target className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+            <p>No learning milestones found for {childName}</p>
+            <p className="text-sm text-gray-500 mt-1">Milestones will appear here once they are created</p>
+          </div>
+        )}
+        
         {completedMilestones.length > 0 && (
           <div>
             <h4 className="text-sm font-medium text-green-700 mb-3 flex items-center gap-2">
