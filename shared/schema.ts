@@ -225,6 +225,7 @@ export const insertMessageSchema = createInsertSchema(messages).pick({
 
 export const insertConversationInsightSchema = createInsertSchema(conversationInsights).pick({
   conversationId: true,
+  summary: true,
   emotionalTone: true,
   topics: true,
   learningGoalsAddressed: true,
