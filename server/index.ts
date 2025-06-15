@@ -3,6 +3,9 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { jobScheduler } from "./job-scheduler";
 
+// Set timezone to IST (Indian Standard Time)
+process.env.TZ = 'Asia/Kolkata';
+
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));

@@ -138,6 +138,7 @@ This is a full-stack Node.js application called "Appu" - an AI-powered magical e
 - June 15, 2025: Restructured parent dashboard layout - moved parent assistant to right sidebar below header, removed Insights and Analytics tabs, maintaining 4-tab layout (conversations, children, milestones, suggestions) for streamlined user experience
 - June 15, 2025: Implemented profile update functionality in parent assistant - AI can now accept parent input to update children's profiles (likes, dislikes, favorite things, learning goals, languages, daily routines) with real-time database updates and confirmation messages
 - June 15, 2025: Fixed critical JSON parsing bug in profile update system - resolved AI response formatting issues and implemented robust JSON extraction to successfully process natural language profile update requests with real-time database modifications
+- June 15, 2025: Configured system timezone to IST (Asia/Kolkata) - all timestamps, logs, and database operations now use Indian Standard Time for consistent user experience
 
 ## User Preferences
 
