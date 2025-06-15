@@ -35,6 +35,7 @@ interface Message {
 
 interface Conversation {
   id: number;
+  childId: number;
   startTime: string;
   endTime?: string;
   duration?: number;
@@ -58,10 +59,15 @@ export default function ParentDashboard() {
 
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
 
-  const { data: dashboardData, isLoading } = useQuery<DashboardData>({
+  const { data: dashboardData, isLoading, error } = useQuery<DashboardData>({
     queryKey: ['/api/parents', currentParent?.id, 'dashboard'],
     enabled: !!currentParent?.id,
   });
+
+  // Debug logging
+  console.log('Dashboard Data:', dashboardData);
+  console.log('Is Loading:', isLoading);
+  console.log('Error:', error);
 
   const handleLogout = () => {
     localStorage.removeItem('currentParent');

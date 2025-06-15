@@ -122,6 +122,9 @@ This is a full-stack Node.js application called "Appu" - an AI-powered magical e
 - June 14, 2025: Implemented complete conversation storage system with PostgreSQL database
 - June 14, 2025: Abstracted ChatGPT API interactions into modular AI service with factory pattern for configuration-based selection
 - June 14, 2025: Integrated Google Gemini Live API with multi-provider AI service architecture
+- June 15, 2025: Fixed conversation storage for WebRTC realtime sessions - messages now properly stored in database during live conversations
+- June 15, 2025: Added parent login gate for main interaction - users must log in before accessing Appu conversations
+- June 15, 2025: Enhanced parent dashboard with proper conversation and message display functionality
 
 ## User Preferences
 
