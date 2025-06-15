@@ -318,46 +318,180 @@ export default function ParentDashboard() {
           </TabsContent>
 
           <TabsContent value="children">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {dashboardData?.children.map((child) => (
-                <Card key={child.id}>
+                <Card key={child.id} className="h-fit">
                   <CardHeader>
-                    <div className="flex items-center space-x-3">
-                      <Avatar className="h-12 w-12">
-                        <AvatarFallback className="text-lg">{child.name[0]}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <CardTitle>{child.name}</CardTitle>
-                        <CardDescription>Age {child.age}</CardDescription>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <Avatar className="h-12 w-12">
+                          <AvatarFallback className="text-lg">{child.name[0]}</AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <CardTitle>{child.name}</CardTitle>
+                          <CardDescription>Age {child.age} • {child.isActive ? 'Active' : 'Inactive'}</CardDescription>
+                        </div>
                       </div>
+                      <Badge variant={child.isActive ? "default" : "secondary"}>
+                        {child.isActive ? "Active" : "Inactive"}
+                      </Badge>
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">Favorite Things:</p>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {child.profile?.favoriteThings?.animals?.slice(0, 3).map((animal: string, idx: number) => (
-                            <Badge key={idx} variant="secondary" className="text-xs">{animal}</Badge>
-                          ))}
-                        </div>
-                      </div>
-                      
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">Learning Goals:</p>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {child.profile?.learningGoals?.slice(0, 2).map((goal: string, idx: number) => (
-                            <Badge key={idx} variant="outline" className="text-xs">{goal}</Badge>
-                          ))}
-                        </div>
-                      </div>
+                    <ScrollArea className="h-[500px] pr-4">
+                      <div className="space-y-4">
+                        {/* Likes */}
+                        {child.profile?.likes && child.profile.likes.length > 0 && (
+                          <div>
+                            <p className="text-sm font-medium text-green-700 mb-2">Likes:</p>
+                            <div className="flex flex-wrap gap-1">
+                              {child.profile.likes.map((like: string, idx: number) => (
+                                <Badge key={idx} variant="secondary" className="text-xs bg-green-100 text-green-800">{like}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
-                      <div className="pt-2 border-t">
-                        <p className="text-xs text-gray-500">
-                          Profile created: {format(new Date(child.createdAt), 'MMM dd, yyyy')}
-                        </p>
+                        {/* Dislikes */}
+                        {child.profile?.dislikes && child.profile.dislikes.length > 0 && (
+                          <div>
+                            <p className="text-sm font-medium text-red-700 mb-2">Dislikes:</p>
+                            <div className="flex flex-wrap gap-1">
+                              {child.profile.dislikes.map((dislike: string, idx: number) => (
+                                <Badge key={idx} variant="secondary" className="text-xs bg-red-100 text-red-800">{dislike}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Favorite Colors */}
+                        {child.profile?.favoriteThings?.colors && child.profile.favoriteThings.colors.length > 0 && (
+                          <div>
+                            <p className="text-sm font-medium text-purple-700 mb-2">Favorite Colors:</p>
+                            <div className="flex flex-wrap gap-1">
+                              {child.profile.favoriteThings.colors.map((color: string, idx: number) => (
+                                <Badge key={idx} variant="outline" className="text-xs">{color}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Favorite Animals */}
+                        {child.profile?.favoriteThings?.animals && child.profile.favoriteThings.animals.length > 0 && (
+                          <div>
+                            <p className="text-sm font-medium text-orange-700 mb-2">Favorite Animals:</p>
+                            <div className="flex flex-wrap gap-1">
+                              {child.profile.favoriteThings.animals.map((animal: string, idx: number) => (
+                                <Badge key={idx} variant="outline" className="text-xs">{animal}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Favorite Activities */}
+                        {child.profile?.favoriteThings?.activities && child.profile.favoriteThings.activities.length > 0 && (
+                          <div>
+                            <p className="text-sm font-medium text-blue-700 mb-2">Favorite Activities:</p>
+                            <div className="flex flex-wrap gap-1">
+                              {child.profile.favoriteThings.activities.map((activity: string, idx: number) => (
+                                <Badge key={idx} variant="outline" className="text-xs">{activity}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Favorite Foods */}
+                        {child.profile?.favoriteThings?.foods && child.profile.favoriteThings.foods.length > 0 && (
+                          <div>
+                            <p className="text-sm font-medium text-yellow-700 mb-2">Favorite Foods:</p>
+                            <div className="flex flex-wrap gap-1">
+                              {child.profile.favoriteThings.foods.map((food: string, idx: number) => (
+                                <Badge key={idx} variant="outline" className="text-xs">{food}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Favorite Characters */}
+                        {child.profile?.favoriteThings?.characters && child.profile.favoriteThings.characters.length > 0 && (
+                          <div>
+                            <p className="text-sm font-medium text-pink-700 mb-2">Favorite Characters:</p>
+                            <div className="flex flex-wrap gap-1">
+                              {child.profile.favoriteThings.characters.map((character: string, idx: number) => (
+                                <Badge key={idx} variant="outline" className="text-xs">{character}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Learning Goals */}
+                        {child.profile?.learningGoals && child.profile.learningGoals.length > 0 && (
+                          <div>
+                            <p className="text-sm font-medium text-indigo-700 mb-2">Learning Goals:</p>
+                            <div className="flex flex-wrap gap-1">
+                              {child.profile.learningGoals.map((goal: string, idx: number) => (
+                                <Badge key={idx} variant="default" className="text-xs">{goal}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Preferred Languages */}
+                        {child.profile?.preferredLanguages && child.profile.preferredLanguages.length > 0 && (
+                          <div>
+                            <p className="text-sm font-medium text-teal-700 mb-2">Preferred Languages:</p>
+                            <div className="flex flex-wrap gap-1">
+                              {child.profile.preferredLanguages.map((language: string, idx: number) => (
+                                <Badge key={idx} variant="secondary" className="text-xs">{language}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Daily Routine */}
+                        {child.profile?.dailyRoutine && (
+                          <div className="pt-3 border-t">
+                            <p className="text-sm font-medium text-gray-700 mb-3">Daily Routine:</p>
+                            <div className="space-y-2 text-xs">
+                              {child.profile.dailyRoutine.wakeUpTime && (
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600">Wake up:</span>
+                                  <span className="font-medium">{child.profile.dailyRoutine.wakeUpTime}</span>
+                                </div>
+                              )}
+                              {child.profile.dailyRoutine.bedTime && (
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600">Bed time:</span>
+                                  <span className="font-medium">{child.profile.dailyRoutine.bedTime}</span>
+                                </div>
+                              )}
+                              {child.profile.dailyRoutine.napTime && (
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600">Nap time:</span>
+                                  <span className="font-medium">{child.profile.dailyRoutine.napTime}</span>
+                                </div>
+                              )}
+                              {child.profile.dailyRoutine.mealtimes && child.profile.dailyRoutine.mealtimes.length > 0 && (
+                                <div>
+                                  <span className="text-gray-600">Meal times:</span>
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {child.profile.dailyRoutine.mealtimes.map((time: string, idx: number) => (
+                                      <Badge key={idx} variant="outline" className="text-xs">{time}</Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="pt-3 border-t">
+                          <p className="text-xs text-gray-500">
+                            Profile created: {format(new Date(child.createdAt), 'MMM dd, yyyy')}
+                          </p>
+                        </div>
                       </div>
-                    </div>
+                    </ScrollArea>
                   </CardContent>
                 </Card>
               ))}
