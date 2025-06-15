@@ -1348,48 +1348,35 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
       );
 
       // Check if response contains profile update request
-      const profileUpdateIndex = response.indexOf('PROFILE_UPDATE_REQUEST:');
+      const profileUpdateMarker = 'PROFILE_UPDATE_REQUEST:';
+      const markerIndex = response.indexOf(profileUpdateMarker);
       let profileUpdateData = null;
       let cleanResponse = response;
 
-      if (profileUpdateIndex !== -1) {
+      if (markerIndex !== -1) {
         try {
-          // Extract everything after PROFILE_UPDATE_REQUEST:
-          const afterMarker = response.substring(profileUpdateIndex + 'PROFILE_UPDATE_REQUEST:'.length).trim();
+          // Extract the JSON part after the marker
+          const afterMarker = response.substring(markerIndex + profileUpdateMarker.length);
           
-          // Find the first complete JSON object
-          const firstBrace = afterMarker.indexOf('{');
-          if (firstBrace !== -1) {
-            let braceCount = 0;
-            let jsonEnd = -1;
-            
-            for (let i = firstBrace; i < afterMarker.length; i++) {
-              if (afterMarker[i] === '{') braceCount++;
-              else if (afterMarker[i] === '}') {
-                braceCount--;
-                if (braceCount === 0) {
-                  jsonEnd = i;
-                  break;
-                }
-              }
-            }
-            
-            if (jsonEnd !== -1) {
-              let jsonString = afterMarker.substring(firstBrace, jsonEnd + 1)
-                .replace(/```json/g, '')
-                .replace(/```/g, '')
-                .replace(/\n/g, ' ')
-                .replace(/\s+/g, ' ')
-                .trim();
-              
-              console.log('Extracted JSON string:', jsonString);
-              profileUpdateData = JSON.parse(jsonString);
-              cleanResponse = response.substring(0, profileUpdateIndex).trim();
+          // Simple approach: extract the first line that looks like JSON after the marker
+          const lines = afterMarker.split('\n');
+          let jsonLine = '';
+          
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+              jsonLine = trimmed;
+              break;
             }
           }
+          
+          if (jsonLine) {
+            console.log('Found JSON line:', jsonLine);
+            profileUpdateData = JSON.parse(jsonLine);
+            cleanResponse = response.substring(0, markerIndex).trim();
+          }
         } catch (e) {
-          console.error('Failed to parse profile update data:', e);
-          console.error('Raw response section:', response.substring(profileUpdateIndex));
+          console.error('Failed to parse profile update JSON:', e);
         }
       }
 
