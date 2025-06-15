@@ -888,6 +888,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Profile update suggestions endpoints
+  app.get('/api/parents/:parentId/profile-suggestions', async (req: Request, res: Response) => {
+    try {
+      const parentId = parseInt(req.params.parentId);
+      const status = req.query.status as string;
+      
+      const suggestions = await storage.getProfileUpdateSuggestionsByParent(parentId, status);
+      res.json(suggestions);
+    } catch (error) {
+      console.error('Error fetching profile suggestions:', error);
+      res.status(500).json({ message: 'Failed to fetch profile suggestions' });
+    }
+  });
+
+  app.patch('/api/profile-suggestions/:suggestionId', async (req: Request, res: Response) => {
+    try {
+      const suggestionId = parseInt(req.params.suggestionId);
+      const { status, parentResponse } = req.body;
+      
+      const updatedSuggestion = await storage.updateProfileUpdateSuggestionStatus(
+        suggestionId, 
+        status, 
+        parentResponse
+      );
+      
+      res.json(updatedSuggestion);
+    } catch (error) {
+      console.error('Error updating profile suggestion:', error);
+      res.status(500).json({ message: 'Failed to update profile suggestion' });
+    }
+  });
+
+  // Job scheduler endpoints for testing/management
+  app.post('/api/admin/run-analysis', async (req: Request, res: Response) => {
+    try {
+      const { jobScheduler } = await import('./job-scheduler');
+      await jobScheduler.runJobsManually();
+      res.json({ message: 'Conversation analysis jobs triggered successfully' });
+    } catch (error) {
+      console.error('Error running analysis jobs:', error);
+      res.status(500).json({ message: 'Failed to run analysis jobs' });
+    }
+  });
+
+  app.get('/api/admin/job-status', async (req: Request, res: Response) => {
+    try {
+      const { jobScheduler } = await import('./job-scheduler');
+      const status = jobScheduler.getStatus();
+      res.json(status);
+    } catch (error) {
+      console.error('Error getting job status:', error);
+      res.status(500).json({ message: 'Failed to get job status' });
+    }
+  });
+
   const httpServer = createServer(app);
   
   // Set up OpenAI Realtime API WebSocket service
