@@ -1316,31 +1316,12 @@ IMPORTANT CAPABILITIES:
 PROFILE UPDATE GUIDELINES:
 - When parents mention new information about their child (likes, dislikes, favorite things, learning goals, etc.), offer to update the profile
 - Extract structured profile updates from parent input
-- If the parent wants to update a profile, respond with JSON in this format at the end of your response:
+- If the parent wants to update a profile, end your response with this EXACT format (no markdown, no code blocks):
 
 PROFILE_UPDATE_REQUEST:
-{
-  "childId": [child_id_number],
-  "updates": {
-    "likes": ["new_item"] or ["complete_array_replacement"],
-    "dislikes": ["new_item"] or ["complete_array_replacement"],
-    "favoriteThings": {
-      "colors": ["items"],
-      "animals": ["items"],
-      "activities": ["items"],
-      "foods": ["items"],
-      "characters": ["items"]
-    },
-    "learningGoals": ["new_goals"],
-    "preferredLanguages": ["languages"],
-    "dailyRoutine": {
-      "wakeUpTime": "time",
-      "bedTime": "time",
-      "napTime": "time",
-      "mealtimes": ["times"]
-    }
-  }
-}
+{"childId": 1, "updates": {"favoriteThings": {"characters": ["Peppa Pig"]}}}
+
+CRITICAL: Do NOT use markdown formatting around the JSON. Write the JSON directly after the colon.
 
 CONVERSATION ANALYSIS GUIDANCE:
 - Review childMessages arrays to see what topics the child brings up
@@ -1351,14 +1332,14 @@ CONVERSATION ANALYSIS GUIDANCE:
 GENERAL GUIDELINES:
 1. Only use the specific data provided about the children
 2. Be encouraging and supportive while being factual
-3. Use the child's name when relevant
+3. Use the child name when relevant
 4. Provide specific numbers and details from the data when available
-5. If asked about topics completely unrelated to children's learning/education, politely redirect
+5. If asked about topics completely unrelated to children learning education, politely redirect
 
 DATA CONTEXT:
 ${JSON.stringify(dataContext, null, 2)}
 
-Answer the parent's question using this data. Be specific, helpful, and encouraging. When discussing conversation topics, reference actual content from the conversations. If the parent provides new information about their child, offer to update the profile and include the PROFILE_UPDATE_REQUEST JSON at the end.`;
+Answer the parent question using this data. Be specific, helpful, and encouraging. When discussing conversation topics, reference actual content from the conversations. If the parent provides new information about their child, offer to update the profile and include the PROFILE_UPDATE_REQUEST JSON at the end.`;
 
       const response = await generateResponse(
         `Parent Question: ${question}`,
@@ -1367,16 +1348,54 @@ Answer the parent's question using this data. Be specific, helpful, and encourag
       );
 
       // Check if response contains profile update request
-      const profileUpdateMatch = response.match(/PROFILE_UPDATE_REQUEST:\s*(\{[\s\S]*?\})/);
+      const profileUpdateIndex = response.indexOf('PROFILE_UPDATE_REQUEST:');
       let profileUpdateData = null;
       let cleanResponse = response;
 
-      if (profileUpdateMatch) {
+      if (profileUpdateIndex !== -1) {
         try {
-          profileUpdateData = JSON.parse(profileUpdateMatch[1]);
-          cleanResponse = response.replace(/PROFILE_UPDATE_REQUEST:[\s\S]*$/, '').trim();
+          // Extract everything after PROFILE_UPDATE_REQUEST:
+          const afterMarker = response.substring(profileUpdateIndex + 'PROFILE_UPDATE_REQUEST:'.length).trim();
+          
+          // Find the JSON object by counting braces
+          let braceCount = 0;
+          let jsonStart = -1;
+          let jsonEnd = -1;
+          
+          for (let i = 0; i < afterMarker.length; i++) {
+            if (afterMarker[i] === '{') {
+              if (jsonStart === -1) jsonStart = i;
+              braceCount++;
+            } else if (afterMarker[i] === '}') {
+              braceCount--;
+              if (braceCount === 0 && jsonStart !== -1) {
+                jsonEnd = i;
+                break;
+              }
+            }
+          }
+          
+          if (jsonStart !== -1 && jsonEnd !== -1) {
+            let jsonString = afterMarker.substring(jsonStart, jsonEnd + 1)
+              .replace(/```json/g, '')
+              .replace(/```/g, '')
+              .replace(/\n/g, ' ')
+              .replace(/\s+/g, ' ')
+              .trim();
+            
+            // Additional cleaning for common AI formatting issues
+            jsonString = jsonString
+              .replace(/PROFILE_UPDATE_REQUEST:\s*/g, '')
+              .replace(/^[^{]*/, '') // Remove any text before the first {
+              .replace(/[^}]*$/, '}'); // Ensure it ends with }
+            
+            console.log('Cleaned JSON string:', jsonString);
+            profileUpdateData = JSON.parse(jsonString);
+            cleanResponse = response.substring(0, profileUpdateIndex).trim();
+          }
         } catch (e) {
           console.error('Failed to parse profile update data:', e);
+          console.error('Raw response section:', response.substring(profileUpdateIndex));
         }
       }
 
