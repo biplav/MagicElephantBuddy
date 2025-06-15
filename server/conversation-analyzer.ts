@@ -205,15 +205,26 @@ Ignore information already present in the current profile.
     }
   }
 
-  // Process all unanalyzed conversations
+  // Process conversations from the past hour only
   async processUnanalyzedConversations(): Promise<void> {
     try {
-      // Get conversations that don't have insights yet
-      const unanalyzedConversations = await storage.getUnanalyzedConversations();
+      // Get all conversations without insights
+      const allUnanalyzed = await storage.getConversationsWithoutSummary();
       
-      console.log(`Processing ${unanalyzedConversations.length} unanalyzed conversations`);
+      // Filter to only conversations from the past hour
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      const recentConversations = allUnanalyzed.filter(conv => 
+        conv.endTime && new Date(conv.endTime) >= oneHourAgo
+      );
       
-      for (const conversation of unanalyzedConversations) {
+      if (recentConversations.length === 0) {
+        console.log('No new conversations from the past hour to analyze');
+        return;
+      }
+      
+      console.log(`Processing ${recentConversations.length} conversations from the past hour`);
+      
+      for (const conversation of recentConversations) {
         await this.processConversation(conversation.id);
         // Add small delay to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 1000));

@@ -9,7 +9,7 @@ import {
   type ProfileUpdateSuggestion, type InsertProfileUpdateSuggestion
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, inArray, isNull, isNotNull } from "drizzle-orm";
+import { eq, desc, and, inArray, isNull, isNotNull, gte } from "drizzle-orm";
 
 export interface IStorage {
   // Legacy user methods
@@ -411,27 +411,11 @@ export class DatabaseStorage implements IStorage {
     return suggestion;
   }
 
-  // Conversation analysis
+  // Conversation analysis - get conversations from past hour only
   async getUnanalyzedConversations(): Promise<Conversation[]> {
-    const results = await db
-      .select({
-        id: conversations.id,
-        childId: conversations.childId,
-        startTime: conversations.startTime,
-        endTime: conversations.endTime,
-        duration: conversations.duration,
-        totalMessages: conversations.totalMessages,
-      })
-      .from(conversations)
-      .leftJoin(conversationInsights, eq(conversations.id, conversationInsights.conversationId))
-      .where(
-        and(
-          isNull(conversationInsights.id),
-          isNotNull(conversations.endTime) // Only analyze completed conversations
-        )
-      )
-      .orderBy(desc(conversations.endTime));
-    return results;
+    // This method now filters in the analyzer instead of here
+    // to avoid complex Drizzle date comparisons
+    return this.getConversationsWithoutSummary();
   }
 
   async getConversationsWithoutSummary(): Promise<Conversation[]> {
