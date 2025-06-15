@@ -1154,12 +1154,6 @@ ${JSON.stringify(dataContext, null, 2)}
 
 Answer the parent's question using this data. Be specific, helpful, and encouraging. When discussing conversation topics, reference actual content from the conversations.`;
 
-      // Debug: Log the data being sent to AI
-      console.log('=== PARENT CHAT DEBUG ===');
-      console.log('Question:', question);
-      console.log('Data being analyzed:', JSON.stringify(dataContext, null, 2));
-      console.log('========================');
-
       const response = await generateResponse(
         `Parent Question: ${question}`,
         false, // Use standard mode, not creative
