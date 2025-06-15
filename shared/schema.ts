@@ -98,6 +98,18 @@ export const notificationPreferences = pgTable("notification_preferences", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Profile update suggestions from conversation analysis
+export const profileUpdateSuggestions = pgTable("profile_update_suggestions", {
+  id: serial("id").primaryKey(),
+  childId: integer("child_id").notNull().references(() => children.id),
+  conversationId: integer("conversation_id").notNull().references(() => conversations.id),
+  suggestions: json("suggestions").notNull(), // Array of ProfileSuggestion objects
+  status: text("status").default('pending').notNull(), // 'pending', 'approved', 'rejected'
+  parentResponse: json("parent_response"), // Which suggestions were approved/rejected
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  processedAt: timestamp("processed_at"),
+});
+
 // Relations
 export const parentsRelations = relations(parents, ({ many }) => ({
   children: many(children),
@@ -112,6 +124,7 @@ export const childrenRelations = relations(children, ({ one, many }) => ({
   }),
   conversations: many(conversations),
   learningMilestones: many(learningMilestones),
+  profileUpdateSuggestions: many(profileUpdateSuggestions),
 }));
 
 export const conversationsRelations = relations(conversations, ({ one, many }) => ({
@@ -164,6 +177,17 @@ export const notificationPreferencesRelations = relations(notificationPreference
   parent: one(parents, {
     fields: [notificationPreferences.parentId],
     references: [parents.id],
+  }),
+}));
+
+export const profileUpdateSuggestionsRelations = relations(profileUpdateSuggestions, ({ one }) => ({
+  child: one(children, {
+    fields: [profileUpdateSuggestions.childId],
+    references: [children.id],
+  }),
+  conversation: one(conversations, {
+    fields: [profileUpdateSuggestions.conversationId],
+    references: [conversations.id],
   }),
 }));
 
@@ -235,6 +259,14 @@ export const insertNotificationPreferencesSchema = createInsertSchema(notificati
   quietHoursEnd: true,
 });
 
+export const insertProfileUpdateSuggestionSchema = createInsertSchema(profileUpdateSuggestions).pick({
+  childId: true,
+  conversationId: true,
+  suggestions: true,
+  status: true,
+  parentResponse: true,
+});
+
 // Types
 export type InsertParent = z.infer<typeof insertParentSchema>;
 export type Parent = typeof parents.$inferSelect;
@@ -259,6 +291,9 @@ export type Notification = typeof notifications.$inferSelect;
 
 export type InsertNotificationPreferences = z.infer<typeof insertNotificationPreferencesSchema>;
 export type NotificationPreferences = typeof notificationPreferences.$inferSelect;
+
+export type InsertProfileUpdateSuggestion = z.infer<typeof insertProfileUpdateSuggestionSchema>;
+export type ProfileUpdateSuggestion = typeof profileUpdateSuggestions.$inferSelect;
 
 // Legacy schemas for backward compatibility
 export const users = pgTable("users", {

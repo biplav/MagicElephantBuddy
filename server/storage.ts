@@ -1,11 +1,12 @@
 import { 
   users, parents, children, conversations, messages, conversationInsights,
-  learningMilestones, notifications, notificationPreferences,
+  learningMilestones, notifications, notificationPreferences, profileUpdateSuggestions,
   type User, type InsertUser, type Parent, type InsertParent, 
   type Child, type InsertChild, type Conversation, type InsertConversation,
   type Message, type InsertMessage, type ConversationInsight, type InsertConversationInsight,
   type LearningMilestone, type InsertLearningMilestone, type Notification, type InsertNotification,
-  type NotificationPreferences, type InsertNotificationPreferences
+  type NotificationPreferences, type InsertNotificationPreferences,
+  type ProfileUpdateSuggestion, type InsertProfileUpdateSuggestion
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, inArray, isNull } from "drizzle-orm";
@@ -63,6 +64,15 @@ export interface IStorage {
   createNotificationPreferences(preferences: InsertNotificationPreferences): Promise<NotificationPreferences>;
   updateNotificationPreferences(parentId: number, preferences: Partial<InsertNotificationPreferences>): Promise<NotificationPreferences>;
   getNotificationPreferences(parentId: number): Promise<NotificationPreferences | undefined>;
+  
+  // Profile update suggestions
+  createProfileUpdateSuggestion(suggestion: InsertProfileUpdateSuggestion): Promise<ProfileUpdateSuggestion>;
+  getProfileUpdateSuggestionsByParent(parentId: number, status?: string): Promise<ProfileUpdateSuggestion[]>;
+  updateProfileUpdateSuggestionStatus(suggestionId: number, status: string, parentResponse?: any): Promise<ProfileUpdateSuggestion>;
+  
+  // Conversation analysis
+  getUnanalyzedConversations(): Promise<Conversation[]>;
+  getConversationsWithoutSummary(): Promise<Conversation[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -353,6 +363,70 @@ export class DatabaseStorage implements IStorage {
       .from(notificationPreferences)
       .where(eq(notificationPreferences.parentId, parentId));
     return preferences;
+  }
+
+  // Profile update suggestions
+  async createProfileUpdateSuggestion(insertSuggestion: InsertProfileUpdateSuggestion): Promise<ProfileUpdateSuggestion> {
+    const [suggestion] = await db
+      .insert(profileUpdateSuggestions)
+      .values(insertSuggestion)
+      .returning();
+    return suggestion;
+  }
+
+  async getProfileUpdateSuggestionsByParent(parentId: number, status?: string): Promise<ProfileUpdateSuggestion[]> {
+    const children = await this.getChildrenByParent(parentId);
+    const childIds = children.map(child => child.id);
+
+    if (childIds.length === 0) return [];
+
+    let query = db
+      .select()
+      .from(profileUpdateSuggestions)
+      .where(inArray(profileUpdateSuggestions.childId, childIds));
+
+    if (status) {
+      query = query.where(eq(profileUpdateSuggestions.status, status));
+    }
+
+    return await query.orderBy(desc(profileUpdateSuggestions.createdAt));
+  }
+
+  async updateProfileUpdateSuggestionStatus(suggestionId: number, status: string, parentResponse?: any): Promise<ProfileUpdateSuggestion> {
+    const [suggestion] = await db
+      .update(profileUpdateSuggestions)
+      .set({ 
+        status,
+        parentResponse,
+        processedAt: new Date()
+      })
+      .where(eq(profileUpdateSuggestions.id, suggestionId))
+      .returning();
+    return suggestion;
+  }
+
+  // Conversation analysis
+  async getUnanalyzedConversations(): Promise<Conversation[]> {
+    return await db
+      .select()
+      .from(conversations)
+      .leftJoin(conversationInsights, eq(conversations.id, conversationInsights.conversationId))
+      .where(
+        and(
+          isNull(conversationInsights.id),
+          isNull(conversations.endTime) === false // Only analyze completed conversations
+        )
+      )
+      .orderBy(desc(conversations.endTime));
+  }
+
+  async getConversationsWithoutSummary(): Promise<Conversation[]> {
+    return await db
+      .select()
+      .from(conversations)
+      .leftJoin(conversationInsights, eq(conversations.id, conversationInsights.conversationId))
+      .where(isNull(conversationInsights.id))
+      .orderBy(desc(conversations.startTime));
   }
 }
 
