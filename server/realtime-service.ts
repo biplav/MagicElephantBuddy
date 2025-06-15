@@ -27,7 +27,7 @@ async function createEnhancedRealtimePrompt(childId: number): Promise<string> {
     const childProfile = child?.profile || DEFAULT_PROFILE;
     
     // Get learning milestones for the child
-    const milestones = await storage.getLearningMilestonesByChild(childId);
+    const milestones = await storage.getMilestonesByChild(childId);
     
     // Generate current date and time information
     const now = new Date();
@@ -70,12 +70,12 @@ async function createEnhancedRealtimePrompt(childId: number): Promise<string> {
 
       let result = '\nLEARNING MILESTONES AND PROGRESS:\n';
       
-      const activeMilestones = milestones.filter(m => !m.isCompleted);
-      const completedMilestones = milestones.filter(m => m.isCompleted);
+      const activeMilestones = milestones.filter((m: any) => !m.isCompleted);
+      const completedMilestones = milestones.filter((m: any) => m.isCompleted);
       
       if (activeMilestones.length > 0) {
         result += '\nCurrent Learning Goals:\n';
-        activeMilestones.forEach(milestone => {
+        activeMilestones.forEach((milestone: any) => {
           const progressPercent = milestone.targetValue ? Math.round((milestone.currentProgress / milestone.targetValue) * 100) : 0;
           result += `- ${milestone.milestoneDescription} (${progressPercent}% complete - ${milestone.currentProgress}/${milestone.targetValue})\n`;
         });
@@ -83,7 +83,7 @@ async function createEnhancedRealtimePrompt(childId: number): Promise<string> {
       
       if (completedMilestones.length > 0) {
         result += '\nCompleted Achievements:\n';
-        completedMilestones.forEach(milestone => {
+        completedMilestones.forEach((milestone: any) => {
           const completedDate = milestone.completedAt ? new Date(milestone.completedAt).toLocaleDateString() : 'Recently';
           result += `- ✅ ${milestone.milestoneDescription} (Completed: ${completedDate})\n`;
         });
@@ -107,7 +107,7 @@ CURRENT DATE AND TIME INFORMATION:
     const profileInfo = `
 CHILD PROFILE INFORMATION:
 ${generateProfileSection(childProfile)}
-Use this information to personalize your responses and make them more engaging for ${childProfile.name}.`;
+Use this information to personalize your responses and make them more engaging for ${(childProfile as any).name || 'the child'}.`;
 
     const milestonesInfo = generateMilestonesSection();
 
@@ -210,13 +210,108 @@ async function startRealtimeSession(session: RealtimeSession) {
       throw new Error('OpenAI API key not found');
     }
     
-    // For now, send an error message indicating that the Realtime API requires special access
-    session.ws.send(JSON.stringify({ 
-      type: 'error', 
-      message: 'OpenAI Realtime API requires special access permissions. Using traditional recording method instead.' 
-    }));
+    // Create enhanced system prompt with milestone details
+    const enhancedPrompt = await createEnhancedRealtimePrompt(session.childId);
+    console.log('Enhanced Realtime Prompt with Milestones prepared for child:', session.childId);
     
-    return;
+    // Connect to OpenAI Realtime API with WebSocket
+    const realtimeUrl = 'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01';
+    
+    session.openaiWs = new WebSocket(realtimeUrl, {
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        'OpenAI-Beta': 'realtime=v1'
+      }
+    });
+
+    session.openaiWs.on('open', () => {
+      console.log('Connected to OpenAI Realtime API');
+      session.isConnected = true;
+      
+      // Send session configuration with enhanced prompt
+      session.openaiWs!.send(JSON.stringify({
+        type: 'session.update',
+        session: {
+          modalities: ['text', 'audio'],
+          instructions: enhancedPrompt,
+          voice: 'nova',
+          input_audio_format: 'pcm16',
+          output_audio_format: 'pcm16',
+          input_audio_transcription: {
+            model: 'whisper-1'
+          },
+          turn_detection: {
+            type: 'server_vad',
+            threshold: 0.5,
+            prefix_padding_ms: 300,
+            silence_duration_ms: 200
+          },
+          tools: [],
+          tool_choice: 'none',
+          temperature: 0.8
+        }
+      }));
+
+      // Notify client that session is ready
+      session.ws.send(JSON.stringify({ 
+        type: 'session_started',
+        message: 'Connected to Realtime API with learning milestone context'
+      }));
+    });
+
+    session.openaiWs.on('message', async (data: Buffer) => {
+      try {
+        const message = JSON.parse(data.toString());
+        
+        // Handle different message types from OpenAI
+        switch (message.type) {
+          case 'conversation.item.input_audio_transcription.completed':
+            // Store transcribed input in database
+            if (session.conversationId) {
+              await storage.createMessage({
+                conversationId: session.conversationId,
+                type: 'child_input',
+                content: message.transcript,
+                transcription: message.transcript
+              });
+              session.messageCount++;
+            }
+            break;
+            
+          case 'response.audio_transcript.done':
+            // Store AI response in database
+            if (session.conversationId) {
+              await storage.createMessage({
+                conversationId: session.conversationId,
+                type: 'appu_response',
+                content: message.transcript,
+                transcription: null
+              });
+              session.messageCount++;
+            }
+            break;
+        }
+        
+        // Forward all messages from OpenAI to client
+        session.ws.send(data.toString());
+        
+      } catch (error) {
+        console.error('Error processing OpenAI message:', error);
+      }
+    });
+
+    session.openaiWs.on('error', (error) => {
+      console.error('OpenAI Realtime API error:', error);
+      session.ws.send(JSON.stringify({ 
+        type: 'error', 
+        message: 'Realtime API connection error' 
+      }));
+    });
+
+    session.openaiWs.on('close', () => {
+      console.log('OpenAI Realtime API connection closed');
+      session.isConnected = false;
+    });
     
   } catch (error) {
     console.error('Error starting realtime session:', error);
