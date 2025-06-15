@@ -246,6 +246,11 @@ export default function ParentDashboard() {
                               <MessageSquare className="h-3 w-3" />
                               <span>{conversation.totalMessages} messages</span>
                             </div>
+                            {conversation.summary && (
+                              <div className="mt-2 p-2 bg-white rounded border-l-2 border-blue-300">
+                                <p className="text-xs text-gray-700 italic">{conversation.summary}</p>
+                              </div>
+                            )}
                           </div>
                         </div>
                       ))}

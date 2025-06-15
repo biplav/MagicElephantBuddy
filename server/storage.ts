@@ -213,26 +213,29 @@ export class DatabaseStorage implements IStorage {
 
     const childIds = childrenData.map(child => child.id);
     
-    // Get recent conversations with child info
+    // Get recent conversations with child info and summaries
     const recentConversationsQuery = await db
       .select({
         conversation: conversations,
         child: children,
+        summary: conversationInsights.summary,
       })
       .from(conversations)
       .innerJoin(children, eq(conversations.childId, children.id))
+      .leftJoin(conversationInsights, eq(conversations.id, conversationInsights.conversationId))
       .where(inArray(conversations.childId, childIds))
       .orderBy(desc(conversations.startTime))
       .limit(10);
 
     // Get messages for each conversation
     const conversationsWithMessages = await Promise.all(
-      recentConversationsQuery.map(async ({ conversation, child }) => {
+      recentConversationsQuery.map(async ({ conversation, child, summary }) => {
         const conversationMessages = await this.getMessagesByConversation(conversation.id);
         return {
           ...conversation,
           child,
           messages: conversationMessages,
+          summary: summary || undefined,
         };
       })
     );
