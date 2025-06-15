@@ -188,6 +188,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log(`Audio downloaded: ${audioId}`);
   });
 
+  // Debug endpoint to show the enhanced system prompt structure
+  app.get('/api/debug/enhanced-prompt/:childId?', async (req: Request, res: Response) => {
+    try {
+      const childId = parseInt(req.params.childId) || 1;
+      const enhancedPrompt = await createEnhancedSystemPrompt(childId);
+      
+      res.json({
+        childId,
+        promptLength: enhancedPrompt.length,
+        sections: {
+          basePrompt: "APPU_SYSTEM_PROMPT (character definition)",
+          dateTimeInfo: "Current date, time, and time of day context",
+          childProfile: "Child's personal preferences, likes, dislikes, learning goals",
+          learningMilestones: "Current progress, completed achievements, guidance"
+        },
+        fullPrompt: enhancedPrompt
+      });
+    } catch (error) {
+      console.error('Error generating enhanced prompt debug info:', error);
+      res.status(500).json({ error: 'Failed to generate prompt debug info' });
+    }
+  });
+
   // Simple test endpoint to generate and return download URL
   app.get('/api/test-audio', async (req: Request, res: Response) => {
     try {
@@ -240,6 +263,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Generate a response using enhanced system prompt with milestone details
       const enhancedPrompt = await createEnhancedSystemPrompt(childId);
+      
+      // Log the enhanced prompt structure for debugging
+      console.log('=== ENHANCED PROMPT STRUCTURE FOR REALTIME API ===');
+      console.log('Child ID:', childId);
+      console.log('Prompt Length:', enhancedPrompt.length);
+      console.log('Prompt Preview (first 500 chars):', enhancedPrompt.substring(0, 500) + '...');
+      console.log('=== END PROMPT STRUCTURE ===');
+      
       const responseText = await generateResponse(`${enhancedPrompt}\n\nChild's message: ${text}`);
       
       console.log(`Response text: ${responseText}`);
