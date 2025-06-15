@@ -62,7 +62,7 @@ export default function ParentDashboard() {
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
 
   const { data: dashboardData, isLoading, error } = useQuery<DashboardData>({
-    queryKey: ['/api/parents', currentParent?.id, 'dashboard'],
+    queryKey: [`/api/parents/${currentParent?.id}/dashboard`],
     enabled: !!currentParent?.id,
   });
 
