@@ -604,6 +604,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: 'OpenAI API key not configured' });
       }
 
+      // Generate enhanced prompt and ensure it's a string
+      console.log('Starting enhanced prompt generation...');
+      let enhancedInstructions;
+      
+      try {
+        enhancedInstructions = await createEnhancedSystemPrompt(1);
+        console.log('Enhanced instructions generated successfully');
+        console.log('Type:', typeof enhancedInstructions);
+        console.log('Length:', enhancedInstructions?.length || 0);
+        console.log('Is string:', typeof enhancedInstructions === 'string');
+        
+        if (typeof enhancedInstructions !== 'string') {
+          console.error('Instructions is not a string:', enhancedInstructions);
+          return res.status(500).json({ error: 'Failed to generate instructions - not a string' });
+        }
+        
+        if (!enhancedInstructions || enhancedInstructions.length === 0) {
+          console.error('Instructions is empty');
+          return res.status(500).json({ error: 'Failed to generate instructions - empty' });
+        }
+        
+      } catch (promptError) {
+        console.error('Error generating enhanced prompt:', promptError);
+        return res.status(500).json({ error: 'Failed to generate enhanced prompt', details: promptError.message });
+      }
+
       const response = await fetch('https://api.openai.com/v1/realtime/sessions', {
         method: 'POST',
         headers: {
@@ -613,7 +639,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         body: JSON.stringify({
           model: 'gpt-4o-realtime-preview-2024-12-17',
           voice: 'alloy',
-          instructions: createEnhancedSystemPrompt(),
+          instructions: enhancedInstructions,
           input_audio_format: 'pcm16',
           output_audio_format: 'pcm16',
           input_audio_transcription: {
