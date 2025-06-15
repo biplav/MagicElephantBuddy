@@ -33,6 +33,7 @@ export interface IStorage {
   updateConversation(id: number, updates: Partial<InsertConversation>): Promise<Conversation>;
   getConversation(conversationId: number): Promise<Conversation | undefined>;
   getConversationsByChild(childId: number, limit?: number): Promise<Conversation[]>;
+  getChildConversations(childId: number, limit?: number): Promise<Conversation[]>;
   getCurrentConversation(childId: number): Promise<Conversation | undefined>;
   
   // Message management
@@ -54,6 +55,7 @@ export interface IStorage {
   updateMilestoneProgress(milestoneId: number, progress: number): Promise<LearningMilestone>;
   completeMilestone(milestoneId: number): Promise<LearningMilestone>;
   getMilestonesByChild(childId: number): Promise<LearningMilestone[]>;
+  getChildMilestones(childId: number): Promise<LearningMilestone[]>;
   
   // Notifications
   createNotification(notification: InsertNotification): Promise<Notification>;

@@ -1044,6 +1044,106 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/parent-chat', async (req: Request, res: Response) => {
+    try {
+      const { parentId, question, childrenIds } = req.body;
+
+      if (!parentId || !question || !childrenIds || !Array.isArray(childrenIds)) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+
+      // Fetch comprehensive data for all children
+      const childrenData = await Promise.all(
+        childrenIds.map(async (childId: number) => {
+          const [child, milestones, conversations] = await Promise.all([
+            storage.getChild(childId),
+            storage.getChildMilestones(childId),
+            storage.getChildConversations(childId, 10) // Last 10 conversations
+          ]);
+
+          return {
+            child,
+            milestones,
+            recentConversations: conversations
+          };
+        })
+      );
+
+      // Generate comprehensive data summary for AI analysis
+      const dataContext = childrenData.map(({ child, milestones, recentConversations }) => {
+        if (!child) return null;
+
+        const completedMilestones = milestones?.filter(m => m.isCompleted) || [];
+        const inProgressMilestones = milestones?.filter(m => !m.isCompleted && m.currentProgress > 0) || [];
+        const upcomingMilestones = milestones?.filter(m => !m.isCompleted && m.currentProgress === 0) || [];
+
+        const totalMessages = recentConversations?.reduce((sum, conv) => sum + (conv.totalMessages || 0), 0) || 0;
+        const avgConversationDuration = recentConversations?.length > 0 
+          ? (recentConversations.reduce((sum, conv) => sum + (conv.duration || 0), 0) / recentConversations.length) 
+          : 0;
+
+        return {
+          name: child.name,
+          age: child.age,
+          profile: child.profile,
+          isActive: child.isActive,
+          learningProgress: {
+            completed: completedMilestones.length,
+            inProgress: inProgressMilestones.length,
+            upcoming: upcomingMilestones.length,
+            milestoneDetails: milestones?.map(m => ({
+              type: m.milestoneType,
+              description: m.milestoneDescription,
+              progress: `${m.currentProgress}/${m.targetValue}`,
+              completed: m.isCompleted,
+              progressPercentage: Math.round((m.currentProgress / m.targetValue) * 100)
+            })) || []
+          },
+          recentActivity: {
+            totalConversations: recentConversations?.length || 0,
+            totalMessages: totalMessages,
+            averageConversationDuration: Math.round(avgConversationDuration),
+            lastConversation: recentConversations?.[0]?.startTime || null,
+            conversationSummaries: recentConversations?.slice(0, 3).map(conv => ({
+              date: conv.startTime,
+              duration: conv.duration,
+              messageCount: conv.totalMessages,
+              summary: conv.summary || 'No summary available'
+            })) || []
+          }
+        };
+      }).filter(Boolean);
+
+      // Create AI prompt for parent assistant
+      const systemPrompt = `You are a helpful AI assistant for parents using the Appu educational platform. Your role is to answer questions about their children's learning progress, conversation insights, and milestone achievements using ONLY the authentic data provided.
+
+IMPORTANT GUIDELINES:
+1. Only use the specific data provided about the children - never make up or assume information
+2. If asked about topics outside of Appu/children's learning data, politely redirect: "I can only help with questions about your child's learning progress with Appu. For other topics, I'd recommend consulting appropriate resources."
+3. Be encouraging and supportive while being factual
+4. Use the child's name when relevant
+5. Provide specific numbers and details from the data when available
+6. If data is missing or unavailable, clearly state this
+
+DATA CONTEXT:
+${JSON.stringify(dataContext, null, 2)}
+
+Answer the parent's question using this data. Be specific, helpful, and encouraging.`;
+
+      const response = await generateResponse(
+        `Parent Question: ${question}`,
+        false, // Use standard mode, not creative
+        systemPrompt
+      );
+
+      res.json({ response });
+
+    } catch (error) {
+      console.error('Error in parent chat:', error);
+      res.status(500).json({ error: 'Failed to process chat request' });
+    }
+  });
+
   app.get('/api/admin/job-status', async (req: Request, res: Response) => {
     try {
       const { jobScheduler } = await import('./job-scheduler');

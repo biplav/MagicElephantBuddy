@@ -12,6 +12,7 @@ import { Link } from "wouter";
 import NotificationCenter from "@/components/NotificationCenter";
 import MilestoneTracker from "@/components/MilestoneTrackerFixed";
 import { ProfileSuggestions } from "@/components/ProfileSuggestions";
+import ParentChatbot from "@/components/ParentChatbot";
 
 interface Parent {
   id: number;
