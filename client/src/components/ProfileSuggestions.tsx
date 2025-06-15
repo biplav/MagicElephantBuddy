@@ -8,19 +8,36 @@ import { Textarea } from "@/components/ui/textarea";
 import { CheckCircle, XCircle, Clock, Lightbulb, Quote } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-interface ProfileSuggestion {
+interface ProfileSuggestionRecord {
   id: number;
   childId: number;
+  conversationId: number;
+  suggestions: {
+    type: string;
+    category?: string;
+    value: string | string[];
+    confidence: number;
+    evidence: string;
+    action: string;
+  }[];
+  status: string;
+  parentResponse?: any;
+  createdAt: string;
+}
+
+interface FlattenedSuggestion {
+  id: number;
+  childId: number;
+  conversationId: number;
+  status: string;
+  parentResponse?: any;
+  createdAt: string;
   type: string;
   category?: string;
   value: string | string[];
   confidence: number;
   evidence: string;
   action: string;
-  status: string;
-  parentResponse?: any;
-  conversationId: number;
-  createdAt: string;
 }
 
 interface ProfileSuggestionsProps {
@@ -32,9 +49,22 @@ export function ProfileSuggestions({ parentId }: ProfileSuggestionsProps) {
   const queryClient = useQueryClient();
   const [responseText, setResponseText] = useState<{ [key: number]: string }>({});
 
-  const { data: suggestions = [], isLoading } = useQuery({
-    queryKey: ['/api/parents', parentId, 'profile-suggestions'],
+  const { data: rawSuggestions = [], isLoading } = useQuery({
+    queryKey: [`/api/parents/${parentId}/profile-suggestions`],
   });
+
+  // Flatten the nested suggestions structure
+  const suggestions = rawSuggestions.flatMap((record: ProfileSuggestion) =>
+    record.suggestions.map((item: ProfileSuggestionItem) => ({
+      id: record.id,
+      childId: record.childId,
+      conversationId: record.conversationId,
+      status: record.status,
+      parentResponse: record.parentResponse,
+      createdAt: record.createdAt,
+      ...item
+    }))
+  );
 
   const updateSuggestionMutation = useMutation({
     mutationFn: async ({ suggestionId, status, parentResponse }: {
@@ -48,7 +78,7 @@ export function ProfileSuggestions({ parentId }: ProfileSuggestionsProps) {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/parents', parentId, 'profile-suggestions'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/parents/${parentId}/profile-suggestions`] });
       toast({
         title: "Profile suggestion updated",
         description: "The suggestion has been processed successfully.",
