@@ -121,10 +121,19 @@ export async function transcribeAudio(audioBuffer: Buffer, fileName: string): Pr
 /**
  * Generate a response using the abstracted AI service
  */
-export async function generateResponse(transcribedText: string, useCreative: boolean = false): Promise<string> {
+export async function generateResponse(transcribedText: string, useCreative: boolean = false, customPrompt?: string): Promise<string> {
   try {
     const aiService = useCreative ? creativeAI : standardAI;
-    const generatedText = await aiService.generateResponse(transcribedText);
+    
+    // If a custom prompt is provided, use it; otherwise use the default AI service prompt
+    let generatedText: string;
+    if (customPrompt) {
+      // Use the custom prompt for this specific request
+      const customAIService = createAIService(useCreative ? 'creative' : 'standard');
+      generatedText = await customAIService.generateResponse(`${customPrompt}\n\nChild's message: ${transcribedText}`);
+    } else {
+      generatedText = await aiService.generateResponse(transcribedText);
+    }
     
     console.log(`Generated response: ${generatedText}`);
     return generatedText;

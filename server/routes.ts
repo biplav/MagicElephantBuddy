@@ -28,57 +28,109 @@ const upload = multer({
   }
 });
 
-// Function to create enhanced system prompt with child profile
-function createEnhancedSystemPrompt(): string {
-  // Generate current date and time information
-  const now = new Date();
-  const options: Intl.DateTimeFormatOptions = {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZoneName: 'short'
-  };
-  const currentDateTime = now.toLocaleDateString('en-US', options);
-  const timeOfDay = now.getHours() < 12 ? 'morning' : now.getHours() < 17 ? 'afternoon' : now.getHours() < 20 ? 'evening' : 'night';
-  
-  // Dynamically generate profile information from DEFAULT_PROFILE keys
-  const generateProfileSection = (obj: any, prefix = ''): string => {
-    let result = '';
+// Function to create enhanced system prompt with child profile and learning milestones
+async function createEnhancedSystemPrompt(childId: number = 1): Promise<string> {
+  try {
+    // Get child profile
+    const child = await storage.getChild(childId);
+    const childProfile = child?.profile || DEFAULT_PROFILE;
     
-    for (const [key, value] of Object.entries(obj)) {
-      const displayKey = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
+    // Get learning milestones for the child
+    const milestones = await storage.getMilestonesByChild(childId);
+    
+    // Generate current date and time information
+    const now = new Date();
+    const options: Intl.DateTimeFormatOptions = {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZoneName: 'short'
+    };
+    const currentDateTime = now.toLocaleDateString('en-US', options);
+    const timeOfDay = now.getHours() < 12 ? 'morning' : now.getHours() < 17 ? 'afternoon' : now.getHours() < 20 ? 'evening' : 'night';
+    
+    // Dynamically generate profile information from childProfile keys
+    const generateProfileSection = (obj: any): string => {
+      let result = '';
       
-      if (Array.isArray(value)) {
-        result += `- ${displayKey}: ${value.join(', ')}\n`;
-      } else if (typeof value === 'object' && value !== null) {
-        result += `- ${displayKey}:\n`;
-        const subItems = generateProfileSection(value, '  ');
-        result += subItems.split('\n').map(line => line ? `  ${line}` : '').join('\n') + '\n';
-      } else {
-        result += `- ${displayKey}: ${value}\n`;
+      for (const [key, value] of Object.entries(obj)) {
+        const displayKey = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
+        
+        if (Array.isArray(value)) {
+          result += `- ${displayKey}: ${value.join(', ')}\n`;
+        } else if (typeof value === 'object' && value !== null) {
+          result += `- ${displayKey}:\n`;
+          const subItems = generateProfileSection(value);
+          result += subItems.split('\n').map(line => line ? `  ${line}` : '').join('\n') + '\n';
+        } else {
+          result += `- ${displayKey}: ${value}\n`;
+        }
       }
-    }
-    
-    return result;
-  };
+      
+      return result;
+    };
 
-  const dateTimeInfo = `
+    // Generate learning milestones section
+    const generateMilestonesSection = (): string => {
+      if (!milestones || milestones.length === 0) {
+        return '\nLEARNING MILESTONES:\n- No specific milestones tracked yet. Focus on general age-appropriate learning activities.\n';
+      }
+
+      let result = '\nLEARNING MILESTONES AND PROGRESS:\n';
+      
+      const activeMilestones = milestones.filter((m: any) => !m.isCompleted);
+      const completedMilestones = milestones.filter((m: any) => m.isCompleted);
+      
+      if (activeMilestones.length > 0) {
+        result += '\nCurrent Learning Goals:\n';
+        activeMilestones.forEach((milestone: any) => {
+          const progressPercent = milestone.targetValue ? Math.round((milestone.currentProgress / milestone.targetValue) * 100) : 0;
+          result += `- ${milestone.milestoneDescription} (${progressPercent}% complete - ${milestone.currentProgress}/${milestone.targetValue})\n`;
+        });
+      }
+      
+      if (completedMilestones.length > 0) {
+        result += '\nCompleted Achievements:\n';
+        completedMilestones.forEach((milestone: any) => {
+          const completedDate = milestone.completedAt ? new Date(milestone.completedAt).toLocaleDateString() : 'Recently';
+          result += `- ✅ ${milestone.milestoneDescription} (Completed: ${completedDate})\n`;
+        });
+      }
+      
+      result += '\nMILESTONE GUIDANCE:\n';
+      result += '- Reference these milestones during conversations to encourage progress\n';
+      result += '- Celebrate achievements and progress made\n';
+      result += '- Incorporate learning activities that support current goals\n';
+      result += '- Use age-appropriate language to discuss progress\n';
+      
+      return result;
+    };
+
+    const dateTimeInfo = `
 
 CURRENT DATE AND TIME INFORMATION:
 - Current Date & Time: ${currentDateTime}
 - Time of Day: ${timeOfDay}
 - Use this information to provide contextually appropriate responses based on the time of day and current date.`;
 
-  const profileInfo = `
+    const profileInfo = `
 
 CHILD PROFILE INFORMATION:
-${generateProfileSection(DEFAULT_PROFILE)}
-Use this information to personalize your responses and make them more engaging for ${DEFAULT_PROFILE.name}.`;
-  console.log(APPU_SYSTEM_PROMPT + dateTimeInfo + profileInfo);
-  return APPU_SYSTEM_PROMPT + dateTimeInfo + profileInfo;
+${generateProfileSection(childProfile)}
+Use this information to personalize your responses and make them more engaging for ${(childProfile as any).name || 'the child'}.`;
+
+    const milestonesInfo = generateMilestonesSection();
+
+    return APPU_SYSTEM_PROMPT + dateTimeInfo + profileInfo + milestonesInfo;
+    
+  } catch (error) {
+    console.error('Error creating enhanced system prompt:', error);
+    // Fallback to basic prompt if there's an error
+    return APPU_SYSTEM_PROMPT;
+  }
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -186,8 +238,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`Created new conversation ${conversation.id} for child ${childId}`);
       }
       
-      // Generate a response using OpenAI's GPT model
-      const responseText = await generateResponse(text);
+      // Generate a response using enhanced system prompt with milestone details
+      const enhancedPrompt = await createEnhancedSystemPrompt(childId);
+      const responseText = await generateResponse(`${enhancedPrompt}\n\nChild's message: ${text}`);
       
       console.log(`Response text: ${responseText}`);
 

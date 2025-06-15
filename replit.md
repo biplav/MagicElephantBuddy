@@ -130,6 +130,7 @@ This is a full-stack Node.js application called "Appu" - an AI-powered magical e
 - June 15, 2025: Implemented customizable notification system for learning milestones with automatic progress tracking from conversations
 - June 15, 2025: Completed hourly job system for automated conversation analysis, profile suggestions, and daily summaries using OpenAI GPT-4o
 - June 15, 2025: Implemented conversation summaries - hourly jobs now generate AI-powered summaries for new conversations and display them on parent dashboard
+- June 15, 2025: Integrated learning milestone details into AI system prompts for both OpenAI Realtime API and Gemini Live API - all AI interactions now include child's current learning progress and goals
 
 ## User Preferences
 

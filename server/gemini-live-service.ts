@@ -204,19 +204,18 @@ async function startGeminiLiveSession(session: GeminiLiveSession) {
     // Initialize Gemini client
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
     
-    // Get current time context for personalization
-    const timeContext = getCurrentTimeContext();
+    // Create enhanced system prompt with milestone details
+    const enhancedSystemPrompt = await createEnhancedGeminiPrompt(session.childId);
     
-    // Create enhanced system prompt
-    const enhancedSystemPrompt = `${APPU_SYSTEM_PROMPT}
+    const liveConversationGuidance = `
 
-Current Context:
-- Time: ${timeContext.currentTime}
-- Time of day: ${timeContext.timeOfDay}
-${timeContext.upcomingActivity ? `- Upcoming activity: ${timeContext.upcomingActivity}` : ''}
-${timeContext.childMood ? `- Child's mood: ${timeContext.childMood}` : ''}
-
-You are now in a live audio conversation. Keep responses very short (1-2 sentences) and speak naturally in simple Hinglish.`;
+LIVE CONVERSATION GUIDANCE:
+- Keep responses very short (1-2 sentences) for live audio
+- Speak naturally in simple Hinglish
+- Reference learning milestones naturally during conversation
+- Encourage progress on current learning goals when appropriate`;
+    
+    const finalPrompt = enhancedSystemPrompt + liveConversationGuidance;
 
     // For now, we'll use text-based chat since Gemini Live API requires specific setup
     // In production, this would connect to the actual Live API WebSocket
