@@ -135,6 +135,7 @@ This is a full-stack Node.js application called "Appu" - an AI-powered magical e
 - June 15, 2025: Enhanced milestone system with additional learning categories (vocabulary, social skills, emotional intelligence) and verified AI integration across all endpoints (Realtime, Gemini Live, text processing, audio processing)
 - June 15, 2025: Implemented parent chatbot assistant in dashboard that answers questions about children's learning progress using only authentic database data - includes milestones, conversations, and activity insights with OpenAI-powered natural language responses
 - June 15, 2025: Enhanced parent chatbot to analyze actual conversation content and message data - now answers detailed questions about what children discuss with Appu, their interests (dinosaurs, colors, Hindi words), and specific learning topics from real conversations
+- June 15, 2025: Restructured parent dashboard layout - moved parent assistant to right sidebar below header, removed Insights and Analytics tabs, maintaining 4-tab layout (conversations, children, milestones, suggestions) for streamlined user experience
 
 ## User Preferences
 

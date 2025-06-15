@@ -98,52 +98,39 @@ export default function ParentDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 flex">
-      {/* Sidebar for Parent Assistant */}
-      <div className="w-80 bg-white shadow-lg border-r flex flex-col">
-        <div className="p-4 border-b">
-          <h2 className="text-lg font-semibold text-gray-900">Parent Assistant</h2>
-          <p className="text-sm text-gray-500">Ask about your child's progress</p>
-        </div>
-        <div className="flex-1 overflow-hidden">
-          <ParentChatbot 
-            parentId={currentParent.id} 
-            children={dashboardData?.children || []}
-          />
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="bg-white shadow-sm border-b">
-          <div className="px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center h-16">
-              <div className="flex items-center space-x-4">
-                <Link href="/">
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="p-2 rounded-full hover:bg-gray-100"
-                    aria-label="Back to Home"
-                  >
-                    <ArrowLeft className="w-5 h-5 text-blue-600" />
-                  </Button>
-                </Link>
-                <Home className="h-8 w-8 text-blue-600" />
-                <div>
-                  <h1 className="text-xl font-semibold text-gray-900">Parent Dashboard</h1>
-                  <p className="text-sm text-gray-500">Welcome back, {currentParent.name}</p>
-                </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 flex flex-col">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center space-x-4">
+              <Link href="/">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="p-2 rounded-full hover:bg-gray-100"
+                  aria-label="Back to Home"
+                >
+                  <ArrowLeft className="w-5 h-5 text-blue-600" />
+                </Button>
+              </Link>
+              <Home className="h-8 w-8 text-blue-600" />
+              <div>
+                <h1 className="text-xl font-semibold text-gray-900">Parent Dashboard</h1>
+                <p className="text-sm text-gray-500">Welcome back, {currentParent.name}</p>
               </div>
-              <Button variant="outline" onClick={handleLogout} className="flex items-center space-x-2">
-                <LogOut className="h-4 w-4" />
-                <span>Logout</span>
-              </Button>
             </div>
+            <Button variant="outline" onClick={handleLogout} className="flex items-center space-x-2">
+              <LogOut className="h-4 w-4" />
+              <span>Logout</span>
+            </Button>
           </div>
-        </header>
+        </div>
+      </header>
 
+      {/* Main Content Area with Sidebar */}
+      <div className="flex-1 flex">
+        {/* Main Content */}
         <div className="flex-1 px-4 sm:px-6 lg:px-8 py-8 overflow-auto">
           {/* Stats Overview */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -542,6 +529,20 @@ export default function ParentDashboard() {
               <ProfileSuggestions parentId={currentParent?.id || 1} />
             </TabsContent>
           </Tabs>
+        </div>
+
+        {/* Right Sidebar for Parent Assistant */}
+        <div className="w-80 bg-white shadow-lg border-l flex flex-col">
+          <div className="p-4 border-b">
+            <h2 className="text-lg font-semibold text-gray-900">Parent Assistant</h2>
+            <p className="text-sm text-gray-500">Ask about your child's progress</p>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <ParentChatbot 
+              parentId={currentParent.id} 
+              children={dashboardData?.children || []}
+            />
+          </div>
         </div>
       </div>
     </div>
