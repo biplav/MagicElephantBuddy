@@ -1305,10 +1305,10 @@ Answer the parent's question using this data. Be specific, helpful, and encourag
       }).filter(Boolean));
 
       // Enhanced system prompt with profile update capabilities
-      const systemPrompt = `You are a helpful AI assistant for parents using the Appu educational platform. Your role is to answer questions about their children's learning progress, conversation insights, milestone achievements, AND help parents update their children's profiles based on new information.
+      const systemPrompt = `You are a helpful AI assistant for parents using the Appu educational platform. Your role is to answer questions about their children learning progress, conversation insights, milestone achievements, AND help parents update their children profiles based on new information.
 
 IMPORTANT CAPABILITIES:
-1. Answer questions about children's learning progress using authentic data
+1. Answer questions about children learning progress using authentic data
 2. Analyze conversation topics and learning patterns
 3. Help parents update child profiles when they provide new information
 4. Process profile update requests and return structured data for implementation
@@ -1357,41 +1357,35 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
           // Extract everything after PROFILE_UPDATE_REQUEST:
           const afterMarker = response.substring(profileUpdateIndex + 'PROFILE_UPDATE_REQUEST:'.length).trim();
           
-          // Find the JSON object by counting braces
-          let braceCount = 0;
-          let jsonStart = -1;
-          let jsonEnd = -1;
-          
-          for (let i = 0; i < afterMarker.length; i++) {
-            if (afterMarker[i] === '{') {
-              if (jsonStart === -1) jsonStart = i;
-              braceCount++;
-            } else if (afterMarker[i] === '}') {
-              braceCount--;
-              if (braceCount === 0 && jsonStart !== -1) {
-                jsonEnd = i;
-                break;
+          // Find the first complete JSON object
+          const firstBrace = afterMarker.indexOf('{');
+          if (firstBrace !== -1) {
+            let braceCount = 0;
+            let jsonEnd = -1;
+            
+            for (let i = firstBrace; i < afterMarker.length; i++) {
+              if (afterMarker[i] === '{') braceCount++;
+              else if (afterMarker[i] === '}') {
+                braceCount--;
+                if (braceCount === 0) {
+                  jsonEnd = i;
+                  break;
+                }
               }
             }
-          }
-          
-          if (jsonStart !== -1 && jsonEnd !== -1) {
-            let jsonString = afterMarker.substring(jsonStart, jsonEnd + 1)
-              .replace(/```json/g, '')
-              .replace(/```/g, '')
-              .replace(/\n/g, ' ')
-              .replace(/\s+/g, ' ')
-              .trim();
             
-            // Additional cleaning for common AI formatting issues
-            jsonString = jsonString
-              .replace(/PROFILE_UPDATE_REQUEST:\s*/g, '')
-              .replace(/^[^{]*/, '') // Remove any text before the first {
-              .replace(/[^}]*$/, '}'); // Ensure it ends with }
-            
-            console.log('Cleaned JSON string:', jsonString);
-            profileUpdateData = JSON.parse(jsonString);
-            cleanResponse = response.substring(0, profileUpdateIndex).trim();
+            if (jsonEnd !== -1) {
+              let jsonString = afterMarker.substring(firstBrace, jsonEnd + 1)
+                .replace(/```json/g, '')
+                .replace(/```/g, '')
+                .replace(/\n/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+              
+              console.log('Extracted JSON string:', jsonString);
+              profileUpdateData = JSON.parse(jsonString);
+              cleanResponse = response.substring(0, profileUpdateIndex).trim();
+            }
           }
         } catch (e) {
           console.error('Failed to parse profile update data:', e);
