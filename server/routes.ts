@@ -627,7 +627,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
       } catch (promptError) {
         console.error('Error generating enhanced prompt:', promptError);
-        return res.status(500).json({ error: 'Failed to generate enhanced prompt', details: promptError.message });
+        const errorMessage = promptError instanceof Error ? promptError.message : 'Unknown error';
+        return res.status(500).json({ error: 'Failed to generate enhanced prompt', details: errorMessage });
       }
 
       const response = await fetch('https://api.openai.com/v1/realtime/sessions', {
