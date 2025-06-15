@@ -1168,6 +1168,272 @@ Answer the parent's question using this data. Be specific, helpful, and encourag
     }
   });
 
+  // Update child profile endpoint
+  app.patch('/api/children/:childId/profile', async (req: Request, res: Response) => {
+    try {
+      const { childId } = req.params;
+      const { updates } = req.body;
+
+      if (!updates || typeof updates !== 'object') {
+        return res.status(400).json({ error: 'Updates object is required' });
+      }
+
+      const child = await storage.getChild(parseInt(childId));
+      if (!child) {
+        return res.status(404).json({ error: 'Child not found' });
+      }
+
+      // Merge updates with existing profile
+      const currentProfile: any = child.profile || {};
+      const updatedProfile: any = { ...currentProfile };
+
+      // Handle different types of updates
+      if (updates.likes) {
+        updatedProfile.likes = Array.isArray(updates.likes) ? updates.likes : 
+          [...(currentProfile.likes || []), updates.likes];
+      }
+      
+      if (updates.dislikes) {
+        updatedProfile.dislikes = Array.isArray(updates.dislikes) ? updates.dislikes :
+          [...(currentProfile.dislikes || []), updates.dislikes];
+      }
+
+      if (updates.favoriteThings) {
+        updatedProfile.favoriteThings = {
+          ...(currentProfile.favoriteThings || {}),
+          ...updates.favoriteThings
+        };
+      }
+
+      if (updates.learningGoals) {
+        updatedProfile.learningGoals = Array.isArray(updates.learningGoals) ? updates.learningGoals :
+          [...(currentProfile.learningGoals || []), updates.learningGoals];
+      }
+
+      if (updates.preferredLanguages) {
+        updatedProfile.preferredLanguages = Array.isArray(updates.preferredLanguages) ? updates.preferredLanguages :
+          [...(currentProfile.preferredLanguages || []), updates.preferredLanguages];
+      }
+
+      if (updates.dailyRoutine) {
+        updatedProfile.dailyRoutine = {
+          ...(currentProfile.dailyRoutine || {}),
+          ...updates.dailyRoutine
+        };
+      }
+
+      // Update the child profile
+      await storage.updateChildProfile(parseInt(childId), updatedProfile);
+
+      res.json({ 
+        message: 'Profile updated successfully',
+        updatedProfile 
+      });
+
+    } catch (error) {
+      console.error('Error updating child profile:', error);
+      res.status(500).json({ error: 'Failed to update profile' });
+    }
+  });
+
+  // Enhanced parent chat with profile update capabilities
+  app.post('/api/parent-chat-with-updates', async (req: Request, res: Response) => {
+    try {
+      const { parentId, question, childrenIds } = req.body;
+
+      if (!parentId || !question) {
+        return res.status(400).json({ error: 'parentId and question are required' });
+      }
+
+      // Get children data for context
+      const children = childrenIds ? 
+        await Promise.all(childrenIds.map((id: number) => storage.getChild(id))) :
+        await storage.getChildrenByParent(parentId);
+
+      // Build comprehensive data context for AI
+      const dataContext = await Promise.all(children.map(async (child: any) => {
+        if (!child) return null;
+
+        // Get conversations for this child
+        const recentConversations = await storage.getConversationsByChild(child.id, 10);
+        
+        const totalMessages = recentConversations?.reduce((sum: number, conv: any) => 
+          sum + (conv.totalMessages || 0), 0) || 0;
+        
+        const avgConversationDuration = recentConversations?.length > 0 ? 
+          recentConversations.reduce((sum: number, conv: any) => sum + (conv.duration || 0), 0) / recentConversations.length : 0;
+
+        // Get milestones for this child
+        const milestones = await storage.getMilestonesByChild(child.id);
+        const completedMilestones = milestones?.filter((m: any) => m.isCompleted) || [];
+        const inProgressMilestones = milestones?.filter((m: any) => !m.isCompleted && m.currentProgress > 0) || [];
+        const upcomingMilestones = milestones?.filter((m: any) => !m.isCompleted && m.currentProgress === 0) || [];
+
+        return {
+          id: child.id,
+          name: child.name,
+          age: child.age,
+          profile: child.profile,
+          isActive: child.isActive,
+          learningProgress: {
+            completed: completedMilestones.length,
+            inProgress: inProgressMilestones.length,
+            upcoming: upcomingMilestones.length,
+            milestoneDetails: milestones?.map((m: any) => ({
+              type: m.milestoneType,
+              description: m.milestoneDescription,
+              progress: `${m.currentProgress}/${m.targetValue || 1}`,
+              completed: m.isCompleted,
+              progressPercentage: Math.round((m.currentProgress / (m.targetValue || 1)) * 100)
+            })) || []
+          },
+          recentActivity: {
+            totalConversations: recentConversations?.length || 0,
+            totalMessages: totalMessages,
+            averageConversationDuration: Math.round(avgConversationDuration),
+            lastConversation: recentConversations?.[0]?.startTime || null,
+            conversationSummaries: recentConversations?.slice(0, 5).map((conv: any) => ({
+              date: conv.startTime,
+              duration: conv.duration,
+              messageCount: conv.totalMessages,
+              topics: conv.messages?.map((msg: any) => msg.content).join(' ') || '',
+              childMessages: conv.messages?.filter((msg: any) => msg.type === 'child_input').map((msg: any) => msg.content) || [],
+              appuResponses: conv.messages?.filter((msg: any) => msg.type === 'appu_response').map((msg: any) => msg.content) || []
+            })) || []
+          }
+        };
+      }).filter(Boolean));
+
+      // Enhanced system prompt with profile update capabilities
+      const systemPrompt = `You are a helpful AI assistant for parents using the Appu educational platform. Your role is to answer questions about their children's learning progress, conversation insights, milestone achievements, AND help parents update their children's profiles based on new information.
+
+IMPORTANT CAPABILITIES:
+1. Answer questions about children's learning progress using authentic data
+2. Analyze conversation topics and learning patterns
+3. Help parents update child profiles when they provide new information
+4. Process profile update requests and return structured data for implementation
+
+PROFILE UPDATE GUIDELINES:
+- When parents mention new information about their child (likes, dislikes, favorite things, learning goals, etc.), offer to update the profile
+- Extract structured profile updates from parent input
+- If the parent wants to update a profile, respond with JSON in this format at the end of your response:
+
+PROFILE_UPDATE_REQUEST:
+{
+  "childId": [child_id_number],
+  "updates": {
+    "likes": ["new_item"] or ["complete_array_replacement"],
+    "dislikes": ["new_item"] or ["complete_array_replacement"],
+    "favoriteThings": {
+      "colors": ["items"],
+      "animals": ["items"],
+      "activities": ["items"],
+      "foods": ["items"],
+      "characters": ["items"]
+    },
+    "learningGoals": ["new_goals"],
+    "preferredLanguages": ["languages"],
+    "dailyRoutine": {
+      "wakeUpTime": "time",
+      "bedTime": "time",
+      "napTime": "time",
+      "mealtimes": ["times"]
+    }
+  }
+}
+
+CONVERSATION ANALYSIS GUIDANCE:
+- Review childMessages arrays to see what topics the child brings up
+- Look at appuResponses to understand how conversations develop
+- Identify recurring themes, interests, or learning areas from actual conversations
+- Extract specific examples from conversation content when relevant
+
+GENERAL GUIDELINES:
+1. Only use the specific data provided about the children
+2. Be encouraging and supportive while being factual
+3. Use the child's name when relevant
+4. Provide specific numbers and details from the data when available
+5. If asked about topics completely unrelated to children's learning/education, politely redirect
+
+DATA CONTEXT:
+${JSON.stringify(dataContext, null, 2)}
+
+Answer the parent's question using this data. Be specific, helpful, and encouraging. When discussing conversation topics, reference actual content from the conversations. If the parent provides new information about their child, offer to update the profile and include the PROFILE_UPDATE_REQUEST JSON at the end.`;
+
+      const response = await generateResponse(
+        `Parent Question: ${question}`,
+        false, // Use standard mode, not creative
+        systemPrompt
+      );
+
+      // Check if response contains profile update request
+      const profileUpdateMatch = response.match(/PROFILE_UPDATE_REQUEST:\s*(\{[\s\S]*?\})/);
+      let profileUpdateData = null;
+      let cleanResponse = response;
+
+      if (profileUpdateMatch) {
+        try {
+          profileUpdateData = JSON.parse(profileUpdateMatch[1]);
+          cleanResponse = response.replace(/PROFILE_UPDATE_REQUEST:[\s\S]*$/, '').trim();
+        } catch (e) {
+          console.error('Failed to parse profile update data:', e);
+        }
+      }
+
+      // If profile update was requested, process it
+      if (profileUpdateData && profileUpdateData.childId && profileUpdateData.updates) {
+        try {
+          const child = await storage.getChild(profileUpdateData.childId);
+          if (child) {
+            const currentProfile: any = child.profile || {};
+            const updatedProfile: any = { ...currentProfile };
+
+            // Process updates
+            Object.keys(profileUpdateData.updates).forEach(key => {
+              if (key === 'favoriteThings') {
+                updatedProfile.favoriteThings = {
+                  ...(currentProfile.favoriteThings || {}),
+                  ...profileUpdateData.updates.favoriteThings
+                };
+              } else if (key === 'dailyRoutine') {
+                updatedProfile.dailyRoutine = {
+                  ...(currentProfile.dailyRoutine || {}),
+                  ...profileUpdateData.updates.dailyRoutine
+                };
+              } else if (Array.isArray(profileUpdateData.updates[key])) {
+                // For arrays, add new items or replace entirely based on context
+                const existingItems = currentProfile[key] || [];
+                const newItems = profileUpdateData.updates[key];
+                updatedProfile[key] = [...existingItems, ...newItems].filter((item, index, arr) => 
+                  arr.indexOf(item) === index
+                );
+              } else {
+                updatedProfile[key] = profileUpdateData.updates[key];
+              }
+            });
+
+            await storage.updateChildProfile(profileUpdateData.childId, updatedProfile);
+            
+            res.json({ 
+              response: cleanResponse + "\n\n✅ Profile updated successfully!",
+              profileUpdated: true,
+              updatedFields: Object.keys(profileUpdateData.updates)
+            });
+            return;
+          }
+        } catch (error) {
+          console.error('Error updating profile:', error);
+        }
+      }
+
+      res.json({ response: cleanResponse, profileUpdated: false });
+
+    } catch (error) {
+      console.error('Error in enhanced parent chat:', error);
+      res.status(500).json({ error: 'Failed to process chat request' });
+    }
+  });
+
   app.get('/api/admin/job-status', async (req: Request, res: Response) => {
     try {
       const { jobScheduler } = await import('./job-scheduler');

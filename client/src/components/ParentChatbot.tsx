@@ -38,7 +38,7 @@ export default function ParentChatbot({ parentId, children }: ParentChatbotProps
 
   const chatMutation = useMutation({
     mutationFn: async (question: string) => {
-      const response = await apiRequest('POST', '/api/parent-chat', {
+      const response = await apiRequest('POST', '/api/parent-chat-with-updates', {
         parentId,
         question,
         childrenIds: children.map(c => c.id)
@@ -46,19 +46,34 @@ export default function ParentChatbot({ parentId, children }: ParentChatbotProps
       return await response.json();
     },
     onSuccess: (data) => {
+      let assistantContent = data.response;
+      
+      // Add visual indicator for profile updates
+      if (data.profileUpdated) {
+        assistantContent += "\n\n🔄 Profile Updated Successfully!";
+        if (data.updatedFields && data.updatedFields.length > 0) {
+          assistantContent += `\nUpdated: ${data.updatedFields.join(', ')}`;
+        }
+      }
+
       const assistantMessage: ChatMessage = {
         id: Date.now().toString(),
         role: 'assistant',
-        content: data.response,
+        content: assistantContent,
         timestamp: new Date()
       };
       setMessages(prev => [...prev, assistantMessage]);
+
+      // Trigger dashboard refresh if profile was updated
+      if (data.profileUpdated) {
+        window.dispatchEvent(new CustomEvent('profileUpdated'));
+      }
     },
     onError: (error) => {
       const errorMessage: ChatMessage = {
         id: Date.now().toString(),
         role: 'assistant',
-        content: 'I apologize, but I encountered an error while processing your question. Please try again.',
+        content: 'I encountered an error while processing your question. Please try again.',
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessage]);
