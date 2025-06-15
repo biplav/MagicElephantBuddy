@@ -57,7 +57,16 @@ Focus on educational content, emotional development, and behavioral observations
 `;
 
       const response = await this.aiService.generateResponse(prompt);
-      const parsed = JSON.parse(response);
+      
+      // Clean up markdown formatting if present
+      let cleanedResponse = response.trim();
+      if (cleanedResponse.startsWith('```json')) {
+        cleanedResponse = cleanedResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      } else if (cleanedResponse.startsWith('```')) {
+        cleanedResponse = cleanedResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+      
+      const parsed = JSON.parse(cleanedResponse);
 
       return {
         conversationId: conversation.id,
@@ -118,7 +127,16 @@ Ignore information already present in the current profile.
 `;
 
       const response = await this.aiService.generateResponse(prompt);
-      const suggestions = JSON.parse(response);
+      
+      // Clean up markdown formatting if present
+      let cleanedResponse = response.trim();
+      if (cleanedResponse.startsWith('```json')) {
+        cleanedResponse = cleanedResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      } else if (cleanedResponse.startsWith('```')) {
+        cleanedResponse = cleanedResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+      
+      const suggestions = JSON.parse(cleanedResponse);
 
       // Validate and filter suggestions
       return suggestions.filter((suggestion: ProfileSuggestion) => 

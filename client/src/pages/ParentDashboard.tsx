@@ -11,6 +11,7 @@ import { format } from "date-fns";
 import { Link } from "wouter";
 import NotificationCenter from "@/components/NotificationCenter";
 import MilestoneTracker from "@/components/MilestoneTracker";
+import { ProfileSuggestions } from "@/components/ProfileSuggestions";
 
 interface Parent {
   id: number;
