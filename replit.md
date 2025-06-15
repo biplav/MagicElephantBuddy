@@ -63,6 +63,8 @@ This is a full-stack Node.js application called "Appu" - an AI-powered magical e
 - Conversation history and analytics
 - Progress tracking and insights
 - Safety monitoring and content review
+- Customizable notification system for learning milestones
+- Real-time learning progress tracking with automatic milestone detection
 
 ## Data Flow
 
@@ -125,6 +127,7 @@ This is a full-stack Node.js application called "Appu" - an AI-powered magical e
 - June 15, 2025: Fixed conversation storage for WebRTC realtime sessions - messages now properly stored in database during live conversations
 - June 15, 2025: Added parent login gate for main interaction - users must log in before accessing Appu conversations
 - June 15, 2025: Enhanced parent dashboard with proper conversation and message display functionality
+- June 15, 2025: Implemented customizable notification system for learning milestones with automatic progress tracking from conversations
 
 ## User Preferences
 

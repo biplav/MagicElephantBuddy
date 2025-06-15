@@ -50,37 +50,41 @@ export default function NotificationCenter({ parentId }: NotificationCenterProps
 
   const { data: notifications = [], isLoading } = useQuery<Notification[]>({
     queryKey: ['/api/parents', parentId, 'notifications'],
-    queryFn: () => apiRequest(`/api/parents/${parentId}/notifications${showUnreadOnly ? '?unreadOnly=true' : ''}`),
   });
 
   const { data: preferences } = useQuery<NotificationPreferences>({
     queryKey: ['/api/parents', parentId, 'notification-preferences'],
-    queryFn: () => apiRequest(`/api/parents/${parentId}/notification-preferences`),
   });
 
   const markAsReadMutation = useMutation({
-    mutationFn: (notificationId: number) => 
-      apiRequest(`/api/notifications/${notificationId}/read`, { method: 'PATCH' }),
+    mutationFn: async (notificationId: number) => {
+      const response = await fetch(`/api/notifications/${notificationId}/read`, { method: 'PATCH' });
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/parents', parentId, 'notifications'] });
     },
   });
 
   const markAllAsReadMutation = useMutation({
-    mutationFn: () => 
-      apiRequest(`/api/parents/${parentId}/notifications/read-all`, { method: 'PATCH' }),
+    mutationFn: async () => {
+      const response = await fetch(`/api/parents/${parentId}/notifications/read-all`, { method: 'PATCH' });
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/parents', parentId, 'notifications'] });
     },
   });
 
   const updatePreferencesMutation = useMutation({
-    mutationFn: (updates: Partial<NotificationPreferences>) =>
-      apiRequest(`/api/parents/${parentId}/notification-preferences`, {
+    mutationFn: async (updates: Partial<NotificationPreferences>) => {
+      const response = await fetch(`/api/parents/${parentId}/notification-preferences`, {
         method: 'PATCH',
         body: JSON.stringify(updates),
         headers: { 'Content-Type': 'application/json' },
-      }),
+      });
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/parents', parentId, 'notification-preferences'] });
     },

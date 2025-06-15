@@ -9,6 +9,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Calendar, Clock, MessageSquare, TrendingUp, User, Home, LogOut, ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
 import { Link } from "wouter";
+import NotificationCenter from "@/components/NotificationCenter";
+import MilestoneTracker from "@/components/MilestoneTracker";
 
 interface Parent {
   id: number;
