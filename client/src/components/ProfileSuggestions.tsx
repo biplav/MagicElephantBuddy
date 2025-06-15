@@ -54,8 +54,8 @@ export function ProfileSuggestions({ parentId }: ProfileSuggestionsProps) {
   });
 
   // Flatten the nested suggestions structure
-  const suggestions = rawSuggestions.flatMap((record: ProfileSuggestion) =>
-    record.suggestions.map((item: ProfileSuggestionItem) => ({
+  const suggestions: FlattenedSuggestion[] = (rawSuggestions as ProfileSuggestionRecord[]).flatMap((record: ProfileSuggestionRecord) =>
+    record.suggestions.map((item) => ({
       id: record.id,
       childId: record.childId,
       conversationId: record.conversationId,
@@ -72,10 +72,7 @@ export function ProfileSuggestions({ parentId }: ProfileSuggestionsProps) {
       status: string;
       parentResponse?: string;
     }) => {
-      return apiRequest(`/api/profile-suggestions/${suggestionId}`, {
-        method: 'PATCH',
-        body: { status, parentResponse }
-      });
+      return await apiRequest('PATCH', `/api/profile-suggestions/${suggestionId}`, { status, parentResponse });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/parents/${parentId}/profile-suggestions`] });
@@ -181,8 +178,8 @@ export function ProfileSuggestions({ parentId }: ProfileSuggestionsProps) {
     );
   }
 
-  const pendingSuggestions = suggestions.filter((s: ProfileSuggestion) => s.status === 'pending');
-  const processedSuggestions = suggestions.filter((s: ProfileSuggestion) => s.status !== 'pending');
+  const pendingSuggestions = suggestions.filter((s: FlattenedSuggestion) => s.status === 'pending');
+  const processedSuggestions = suggestions.filter((s: FlattenedSuggestion) => s.status !== 'pending');
 
   return (
     <div className="space-y-6">
@@ -199,7 +196,7 @@ export function ProfileSuggestions({ parentId }: ProfileSuggestionsProps) {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {pendingSuggestions.map((suggestion: ProfileSuggestion) => (
+            {pendingSuggestions.map((suggestion: FlattenedSuggestion) => (
               <div key={suggestion.id} className="border rounded-lg p-4 space-y-3">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -280,7 +277,7 @@ export function ProfileSuggestions({ parentId }: ProfileSuggestionsProps) {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {processedSuggestions.map((suggestion: ProfileSuggestion) => (
+            {processedSuggestions.map((suggestion: FlattenedSuggestion) => (
               <div key={suggestion.id} className="border rounded-lg p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
