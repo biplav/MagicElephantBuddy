@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -63,11 +63,36 @@ export default function ParentDashboard() {
   });
 
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const [activeTab, setActiveTab] = useState("conversations");
+  const queryClient = useQueryClient();
 
-  const { data: dashboardData, isLoading, error } = useQuery<DashboardData>({
+  const { data: dashboardData, isLoading, error, refetch } = useQuery<DashboardData>({
     queryKey: [`/api/parents/${currentParent?.id}/dashboard`],
     enabled: !!currentParent?.id,
   });
+
+  // Listen for profile updates from parent assistant
+  useEffect(() => {
+    const handleProfileUpdate = () => {
+      // Invalidate all relevant queries to refresh data
+      queryClient.invalidateQueries({ queryKey: [`/api/parents/${currentParent?.id}/dashboard`] });
+      
+      // Refresh specific tab data based on current active tab
+      if (activeTab === "children") {
+        queryClient.invalidateQueries({ queryKey: [`/api/children`] });
+      } else if (activeTab === "milestones") {
+        queryClient.invalidateQueries({ queryKey: [`/api/children/${dashboardData?.children[0]?.id}/milestones`] });
+      } else if (activeTab === "suggestions") {
+        queryClient.invalidateQueries({ queryKey: [`/api/parents/${currentParent?.id}/profile-suggestions`] });
+      }
+      
+      // Force refetch dashboard data
+      refetch();
+    };
+
+    window.addEventListener('profileUpdated', handleProfileUpdate);
+    return () => window.removeEventListener('profileUpdated', handleProfileUpdate);
+  }, [currentParent?.id, activeTab, queryClient, refetch, dashboardData?.children]);
 
   const handleLogout = () => {
     localStorage.removeItem('currentParent');
@@ -188,7 +213,7 @@ export default function ParentDashboard() {
           </div>
 
           {/* Main Content Tabs */}
-          <Tabs defaultValue="conversations" className="space-y-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="conversations">Recent Conversations</TabsTrigger>
               <TabsTrigger value="children">Children Profiles</TabsTrigger>

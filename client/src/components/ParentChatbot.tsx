@@ -35,6 +35,7 @@ export default function ParentChatbot({ parentId, children }: ParentChatbotProps
   ]);
   const [inputMessage, setInputMessage] = useState('');
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const chatMutation = useMutation({
     mutationFn: async (question: string) => {
@@ -102,9 +103,10 @@ export default function ParentChatbot({ parentId, children }: ParentChatbotProps
     }
   };
 
+  // Auto-scroll to bottom when new messages are added
   useEffect(() => {
-    if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
 
@@ -133,7 +135,7 @@ export default function ParentChatbot({ parentId, children }: ParentChatbotProps
       
       <CardContent className="flex flex-col flex-1 p-0">
         {/* Messages Area */}
-        <ScrollArea className="flex-1 px-4" ref={scrollAreaRef}>
+        <ScrollArea className="flex-1 px-4 max-h-[400px]">
           <div className="space-y-4 pb-4">
             {messages.map((message) => (
               <div
@@ -181,6 +183,9 @@ export default function ParentChatbot({ parentId, children }: ParentChatbotProps
                 </div>
               </div>
             )}
+            
+            {/* Invisible element for auto-scroll */}
+            <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
 
