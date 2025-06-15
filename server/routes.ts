@@ -822,8 +822,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Processing audio file with MIME type: ${mimeType}, extension: ${fileExtension}`);
       const transcribedText = await transcribeAudio(audioBuffer, `recording-${Date.now()}.${fileExtension}`);
       
-      // Step 2: Generate a response using OpenAI's GPT model
-      const responseText = await generateResponse(transcribedText);
+      // Step 2: Generate a response using enhanced system prompt with milestone details
+      const enhancedPrompt = await createEnhancedSystemPrompt(childId);
+      const responseText = await generateResponse(`${enhancedPrompt}\n\nChild's message: ${transcribedText}`);
       
       console.log(`Transcribed text: ${transcribedText}`);
       console.log(`Response text: ${responseText}`);
