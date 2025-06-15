@@ -9,7 +9,7 @@ import {
   type ProfileUpdateSuggestion, type InsertProfileUpdateSuggestion
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, inArray, isNull } from "drizzle-orm";
+import { eq, desc, and, inArray, isNull, isNotNull } from "drizzle-orm";
 
 export interface IStorage {
   // Legacy user methods
@@ -380,16 +380,22 @@ export class DatabaseStorage implements IStorage {
 
     if (childIds.length === 0) return [];
 
-    let query = db
-      .select()
-      .from(profileUpdateSuggestions)
-      .where(inArray(profileUpdateSuggestions.childId, childIds));
-
     if (status) {
-      query = query.where(eq(profileUpdateSuggestions.status, status));
+      return await db
+        .select()
+        .from(profileUpdateSuggestions)
+        .where(and(
+          inArray(profileUpdateSuggestions.childId, childIds),
+          eq(profileUpdateSuggestions.status, status)
+        ))
+        .orderBy(desc(profileUpdateSuggestions.createdAt));
     }
 
-    return await query.orderBy(desc(profileUpdateSuggestions.createdAt));
+    return await db
+      .select()
+      .from(profileUpdateSuggestions)
+      .where(inArray(profileUpdateSuggestions.childId, childIds))
+      .orderBy(desc(profileUpdateSuggestions.createdAt));
   }
 
   async updateProfileUpdateSuggestionStatus(suggestionId: number, status: string, parentResponse?: any): Promise<ProfileUpdateSuggestion> {
@@ -407,26 +413,42 @@ export class DatabaseStorage implements IStorage {
 
   // Conversation analysis
   async getUnanalyzedConversations(): Promise<Conversation[]> {
-    return await db
-      .select()
+    const results = await db
+      .select({
+        id: conversations.id,
+        childId: conversations.childId,
+        startTime: conversations.startTime,
+        endTime: conversations.endTime,
+        duration: conversations.duration,
+        totalMessages: conversations.totalMessages,
+      })
       .from(conversations)
       .leftJoin(conversationInsights, eq(conversations.id, conversationInsights.conversationId))
       .where(
         and(
           isNull(conversationInsights.id),
-          isNull(conversations.endTime) === false // Only analyze completed conversations
+          isNotNull(conversations.endTime) // Only analyze completed conversations
         )
       )
       .orderBy(desc(conversations.endTime));
+    return results;
   }
 
   async getConversationsWithoutSummary(): Promise<Conversation[]> {
-    return await db
-      .select()
+    const results = await db
+      .select({
+        id: conversations.id,
+        childId: conversations.childId,
+        startTime: conversations.startTime,
+        endTime: conversations.endTime,
+        duration: conversations.duration,
+        totalMessages: conversations.totalMessages,
+      })
       .from(conversations)
       .leftJoin(conversationInsights, eq(conversations.id, conversationInsights.conversationId))
       .where(isNull(conversationInsights.id))
       .orderBy(desc(conversations.startTime));
+    return results;
   }
 }
 

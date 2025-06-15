@@ -1,0 +1,166 @@
+import { conversationAnalyzer } from "./conversation-analyzer";
+import { milestoneService } from "./milestone-service";
+import { storage } from "./storage";
+
+export class JobScheduler {
+  private intervalId: NodeJS.Timeout | null = null;
+  private isRunning = false;
+
+  // Start the hourly job scheduler
+  start(): void {
+    if (this.isRunning) {
+      console.log('Job scheduler is already running');
+      return;
+    }
+
+    console.log('Starting hourly job scheduler for conversation analysis');
+    
+    // Run immediately on startup
+    this.runHourlyJobs();
+    
+    // Then run every hour (3600000 ms)
+    this.intervalId = setInterval(() => {
+      this.runHourlyJobs();
+    }, 3600000); // 1 hour = 3600000 milliseconds
+    
+    this.isRunning = true;
+  }
+
+  // Stop the job scheduler
+  stop(): void {
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+    this.isRunning = false;
+    console.log('Job scheduler stopped');
+  }
+
+  // Main hourly job execution
+  private async runHourlyJobs(): Promise<void> {
+    const startTime = new Date();
+    console.log(`Starting hourly jobs at ${startTime.toISOString()}`);
+
+    try {
+      // Job 1: Process unanalyzed conversations for summaries and profile suggestions
+      await this.processUnanalyzedConversations();
+
+      // Job 2: Generate daily summaries for parents (if it's the end of day)
+      await this.generateDailySummaries();
+
+      // Job 3: Generate encouragement notifications for children with low activity
+      await this.generateEncouragementNotifications();
+
+      const endTime = new Date();
+      const duration = endTime.getTime() - startTime.getTime();
+      console.log(`Hourly jobs completed in ${duration}ms at ${endTime.toISOString()}`);
+    } catch (error) {
+      console.error('Error running hourly jobs:', error);
+    }
+  }
+
+  // Process conversations that haven't been analyzed yet
+  private async processUnanalyzedConversations(): Promise<void> {
+    try {
+      console.log('Processing unanalyzed conversations...');
+      await conversationAnalyzer.processUnanalyzedConversations();
+    } catch (error) {
+      console.error('Error processing unanalyzed conversations:', error);
+    }
+  }
+
+  // Generate daily summaries for parents
+  private async generateDailySummaries(): Promise<void> {
+    try {
+      // Check if it's evening (between 19:00 and 21:00) to send daily summaries
+      const currentHour = new Date().getHours();
+      if (currentHour >= 19 && currentHour <= 21) {
+        console.log('Generating daily summaries for parents...');
+        
+        // Get all parents and generate summaries
+        const parents = await this.getAllParents();
+        for (const parent of parents) {
+          await milestoneService.generateDailySummary(parent.id);
+          // Add delay to avoid overwhelming the system
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+    } catch (error) {
+      console.error('Error generating daily summaries:', error);
+    }
+  }
+
+  // Generate encouragement notifications for inactive children
+  private async generateEncouragementNotifications(): Promise<void> {
+    try {
+      // Only run encouragement notifications twice a day (morning and evening)
+      const currentHour = new Date().getHours();
+      if (currentHour === 9 || currentHour === 18) {
+        console.log('Generating encouragement notifications...');
+        
+        const children = await this.getAllChildren();
+        for (const child of children) {
+          // Check if child hasn't had conversations in the last 2 days
+          const recentConversations = await storage.getConversationsByChild(child.id, 3);
+          const twoDaysAgo = new Date();
+          twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+          
+          const hasRecentActivity = recentConversations.some(conv => 
+            new Date(conv.startTime) > twoDaysAgo
+          );
+          
+          if (!hasRecentActivity) {
+            await milestoneService.generateEncouragementNotification(child.id);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error generating encouragement notifications:', error);
+    }
+  }
+
+  // Helper method to get all parents
+  private async getAllParents() {
+    try {
+      // This is a simplified query - in practice you might want to add pagination
+      const { db } = await import('./db');
+      const { parents } = await import('@shared/schema');
+      const result = await db.select().from(parents).limit(100);
+      return result;
+    } catch (error) {
+      console.error('Error fetching parents:', error);
+      return [];
+    }
+  }
+
+  // Helper method to get all children
+  private async getAllChildren() {
+    try {
+      // This is a simplified query - in practice you might want to add pagination
+      const { db } = await import('./db');
+      const { children } = await import('@shared/schema');
+      const result = await db.select().from(children).limit(100);
+      return result;
+    } catch (error) {
+      console.error('Error fetching children:', error);
+      return [];
+    }
+  }
+
+  // Manual trigger for testing
+  async runJobsManually(): Promise<void> {
+    console.log('Manually triggering hourly jobs...');
+    await this.runHourlyJobs();
+  }
+
+  // Get job status
+  getStatus(): { isRunning: boolean; nextRun?: Date } {
+    const nextRun = this.isRunning ? new Date(Date.now() + 3600000) : undefined;
+    return {
+      isRunning: this.isRunning,
+      nextRun
+    };
+  }
+}
+
+export const jobScheduler = new JobScheduler();
