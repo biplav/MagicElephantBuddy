@@ -346,7 +346,7 @@ export default function ParentDashboard() {
                             <p className="text-sm font-medium text-green-700 mb-2">Likes:</p>
                             <div className="flex flex-wrap gap-1">
                               {child.profile.likes.map((like: string, idx: number) => (
-                                <Badge key={idx} variant="secondary" className="text-xs bg-green-100 text-green-800">{like}</Badge>
+                                <Badge key={`${child.id}-like-${idx}`} variant="secondary" className="text-xs bg-green-100 text-green-800">{like}</Badge>
                               ))}
                             </div>
                           </div>
@@ -358,7 +358,7 @@ export default function ParentDashboard() {
                             <p className="text-sm font-medium text-red-700 mb-2">Dislikes:</p>
                             <div className="flex flex-wrap gap-1">
                               {child.profile.dislikes.map((dislike: string, idx: number) => (
-                                <Badge key={idx} variant="secondary" className="text-xs bg-red-100 text-red-800">{dislike}</Badge>
+                                <Badge key={`${child.id}-dislike-${idx}`} variant="secondary" className="text-xs bg-red-100 text-red-800">{dislike}</Badge>
                               ))}
                             </div>
                           </div>

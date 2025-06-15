@@ -27,6 +27,7 @@ interface ProfileSuggestionRecord {
 
 interface FlattenedSuggestion {
   id: number;
+  uniqueKey: string;
   childId: number;
   conversationId: number;
   status: string;
@@ -53,10 +54,11 @@ export function ProfileSuggestions({ parentId }: ProfileSuggestionsProps) {
     queryKey: [`/api/parents/${parentId}/profile-suggestions`],
   });
 
-  // Flatten the nested suggestions structure
+  // Flatten the nested suggestions structure with unique IDs
   const suggestions: FlattenedSuggestion[] = (rawSuggestions as ProfileSuggestionRecord[]).flatMap((record: ProfileSuggestionRecord) =>
-    record.suggestions.map((item) => ({
+    record.suggestions.map((item, index) => ({
       id: record.id,
+      uniqueKey: `${record.id}-${index}`, // Create unique key for each suggestion item
       childId: record.childId,
       conversationId: record.conversationId,
       status: record.status,
@@ -197,7 +199,7 @@ export function ProfileSuggestions({ parentId }: ProfileSuggestionsProps) {
           </CardHeader>
           <CardContent className="space-y-4">
             {pendingSuggestions.map((suggestion: FlattenedSuggestion) => (
-              <div key={suggestion.id} className="border rounded-lg p-4 space-y-3">
+              <div key={suggestion.uniqueKey} className="border rounded-lg p-4 space-y-3">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
@@ -278,7 +280,7 @@ export function ProfileSuggestions({ parentId }: ProfileSuggestionsProps) {
           </CardHeader>
           <CardContent className="space-y-3">
             {processedSuggestions.map((suggestion: FlattenedSuggestion) => (
-              <div key={suggestion.id} className="border rounded-lg p-3 space-y-2">
+              <div key={suggestion.uniqueKey} className="border rounded-lg p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     {getStatusIcon(suggestion.status)}
