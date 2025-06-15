@@ -56,9 +56,53 @@ export const conversationInsights = pgTable("conversation_insights", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Learning milestones tracking
+export const learningMilestones = pgTable("learning_milestones", {
+  id: serial("id").primaryKey(),
+  childId: integer("child_id").notNull().references(() => children.id),
+  milestoneType: text("milestone_type").notNull(), // 'counting', 'alphabet', 'colors', 'shapes', 'vocabulary', 'social_skills'
+  milestoneDescription: text("milestone_description").notNull(),
+  targetValue: integer("target_value"), // e.g., 20 for counting to 20
+  currentProgress: integer("current_progress").default(0).notNull(),
+  isCompleted: boolean("is_completed").default(false).notNull(),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Notifications for parents
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  parentId: integer("parent_id").notNull().references(() => parents.id),
+  childId: integer("child_id").references(() => children.id),
+  milestoneId: integer("milestone_id").references(() => learningMilestones.id),
+  type: text("type").notNull(), // 'milestone_achieved', 'progress_update', 'encouragement', 'daily_summary'
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  isRead: boolean("is_read").default(false).notNull(),
+  priority: text("priority").default('normal').notNull(), // 'low', 'normal', 'high'
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Notification preferences for parents
+export const notificationPreferences = pgTable("notification_preferences", {
+  id: serial("id").primaryKey(),
+  parentId: integer("parent_id").notNull().references(() => parents.id),
+  milestoneNotifications: boolean("milestone_notifications").default(true).notNull(),
+  progressUpdates: boolean("progress_updates").default(true).notNull(),
+  dailySummaries: boolean("daily_summaries").default(true).notNull(),
+  encouragementMessages: boolean("encouragement_messages").default(true).notNull(),
+  notificationFrequency: text("notification_frequency").default('immediate').notNull(), // 'immediate', 'daily', 'weekly'
+  quietHoursStart: text("quiet_hours_start").default('20:00'), // Format: HH:mm
+  quietHoursEnd: text("quiet_hours_end").default('08:00'), // Format: HH:mm
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // Relations
 export const parentsRelations = relations(parents, ({ many }) => ({
   children: many(children),
+  notifications: many(notifications),
+  notificationPreferences: many(notificationPreferences),
 }));
 
 export const childrenRelations = relations(children, ({ one, many }) => ({
@@ -67,6 +111,7 @@ export const childrenRelations = relations(children, ({ one, many }) => ({
     references: [parents.id],
   }),
   conversations: many(conversations),
+  learningMilestones: many(learningMilestones),
 }));
 
 export const conversationsRelations = relations(conversations, ({ one, many }) => ({
@@ -89,6 +134,36 @@ export const conversationInsightsRelations = relations(conversationInsights, ({ 
   conversation: one(conversations, {
     fields: [conversationInsights.conversationId],
     references: [conversations.id],
+  }),
+}));
+
+export const learningMilestonesRelations = relations(learningMilestones, ({ one, many }) => ({
+  child: one(children, {
+    fields: [learningMilestones.childId],
+    references: [children.id],
+  }),
+  notifications: many(notifications),
+}));
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  parent: one(parents, {
+    fields: [notifications.parentId],
+    references: [parents.id],
+  }),
+  child: one(children, {
+    fields: [notifications.childId],
+    references: [children.id],
+  }),
+  milestone: one(learningMilestones, {
+    fields: [notifications.milestoneId],
+    references: [learningMilestones.id],
+  }),
+}));
+
+export const notificationPreferencesRelations = relations(notificationPreferences, ({ one }) => ({
+  parent: one(parents, {
+    fields: [notificationPreferences.parentId],
+    references: [parents.id],
   }),
 }));
 
@@ -131,6 +206,35 @@ export const insertConversationInsightSchema = createInsertSchema(conversationIn
   parentalRecommendations: true,
 });
 
+export const insertLearningMilestoneSchema = createInsertSchema(learningMilestones).pick({
+  childId: true,
+  milestoneType: true,
+  milestoneDescription: true,
+  targetValue: true,
+  currentProgress: true,
+});
+
+export const insertNotificationSchema = createInsertSchema(notifications).pick({
+  parentId: true,
+  childId: true,
+  milestoneId: true,
+  type: true,
+  title: true,
+  message: true,
+  priority: true,
+});
+
+export const insertNotificationPreferencesSchema = createInsertSchema(notificationPreferences).pick({
+  parentId: true,
+  milestoneNotifications: true,
+  progressUpdates: true,
+  dailySummaries: true,
+  encouragementMessages: true,
+  notificationFrequency: true,
+  quietHoursStart: true,
+  quietHoursEnd: true,
+});
+
 // Types
 export type InsertParent = z.infer<typeof insertParentSchema>;
 export type Parent = typeof parents.$inferSelect;
@@ -146,6 +250,15 @@ export type Message = typeof messages.$inferSelect;
 
 export type InsertConversationInsight = z.infer<typeof insertConversationInsightSchema>;
 export type ConversationInsight = typeof conversationInsights.$inferSelect;
+
+export type InsertLearningMilestone = z.infer<typeof insertLearningMilestoneSchema>;
+export type LearningMilestone = typeof learningMilestones.$inferSelect;
+
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type Notification = typeof notifications.$inferSelect;
+
+export type InsertNotificationPreferences = z.infer<typeof insertNotificationPreferencesSchema>;
+export type NotificationPreferences = typeof notificationPreferences.$inferSelect;
 
 // Legacy schemas for backward compatibility
 export const users = pgTable("users", {
