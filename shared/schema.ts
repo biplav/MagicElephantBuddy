@@ -49,6 +49,7 @@ export const messages = pgTable("messages", {
 export const conversationInsights = pgTable("conversation_insights", {
   id: serial("id").primaryKey(),
   conversationId: integer("conversation_id").notNull().references(() => conversations.id),
+  summary: text("summary").default('').notNull(), // Brief summary of the conversation
   emotionalTone: text("emotional_tone"), // happy, sad, excited, etc.
   topics: text("topics").array(), // Topics discussed
   learningGoalsAddressed: text("learning_goals_addressed").array(),

@@ -195,7 +195,7 @@ export class DatabaseStorage implements IStorage {
 
   async getParentDashboardData(parentId: number): Promise<{
     children: Child[];
-    recentConversations: (Conversation & { child: Child; messages: Message[] })[];
+    recentConversations: (Conversation & { child: Child; messages: Message[]; summary?: string })[];
     totalConversations: number;
     totalMessages: number;
   }> {

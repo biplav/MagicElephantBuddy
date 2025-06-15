@@ -167,9 +167,10 @@ Ignore information already present in the current profile.
       // Generate conversation summary
       const summary = await this.generateConversationSummary(conv, messages);
 
-      // Store conversation insights
+      // Store conversation insights with summary
       await storage.createConversationInsight({
         conversationId: conv.id,
+        summary: summary.summary,
         emotionalTone: summary.emotionalTone,
         topics: summary.keyTopics,
         learningGoalsAddressed: summary.learningAchievements,
