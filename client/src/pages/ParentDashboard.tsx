@@ -10,7 +10,7 @@ import { Calendar, Clock, MessageSquare, TrendingUp, User, Home, LogOut, ArrowLe
 import { format } from "date-fns";
 import { Link } from "wouter";
 import NotificationCenter from "@/components/NotificationCenter";
-import MilestoneTracker from "@/components/MilestoneTracker";
+import MilestoneTracker from "@/components/MilestoneTrackerFixed";
 import { ProfileSuggestions } from "@/components/ProfileSuggestions";
 
 interface Parent {

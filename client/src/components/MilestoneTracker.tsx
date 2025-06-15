@@ -3,7 +3,6 @@ import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, Target, TrendingUp } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
 
 interface LearningMilestone {
   id: number;
@@ -41,6 +40,7 @@ export default function MilestoneTracker({ childId, childName }: MilestoneTracke
       case 'shapes': return 'bg-orange-100 text-orange-800';
       case 'vocabulary': return 'bg-pink-100 text-pink-800';
       case 'social_skills': return 'bg-yellow-100 text-yellow-800';
+      case 'emotional_intelligence': return 'bg-teal-100 text-teal-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -53,13 +53,16 @@ export default function MilestoneTracker({ childId, childName }: MilestoneTracke
       case 'shapes': return '🔷';
       case 'vocabulary': return '📚';
       case 'social_skills': return '🤝';
+      case 'emotional_intelligence': return '💝';
       default: return '🎯';
     }
   };
 
-  const completedMilestones = milestones.filter(m => m.isCompleted);
-  const inProgressMilestones = milestones.filter(m => !m.isCompleted && m.currentProgress > 0);
-  const upcomingMilestones = milestones.filter(m => !m.isCompleted && m.currentProgress === 0);
+  // Ensure milestones is an array before filtering
+  const milestonesArray = Array.isArray(milestones) ? milestones : [];
+  const completedMilestones = milestonesArray.filter((m: LearningMilestone) => m.isCompleted);
+  const inProgressMilestones = milestonesArray.filter((m: LearningMilestone) => !m.isCompleted && m.currentProgress > 0);
+  const upcomingMilestones = milestonesArray.filter((m: LearningMilestone) => !m.isCompleted && m.currentProgress === 0);
 
   if (isLoading) {
     return (
@@ -102,7 +105,7 @@ export default function MilestoneTracker({ childId, childName }: MilestoneTracke
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {milestones.length === 0 && !isLoading && (
+        {milestonesArray.length === 0 && !isLoading && (
           <div className="text-center py-8 text-muted-foreground">
             <Target className="h-12 w-12 mx-auto mb-4 text-gray-300" />
             <p>No learning milestones found for {childName}</p>
