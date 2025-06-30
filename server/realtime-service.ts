@@ -436,7 +436,7 @@ async function startRealtimeSession(session: RealtimeSession) {
         switch (message.type) {
           case 'conversation.item.input_audio_transcription.completed':
             // Store transcribed input in database
-            if (session.conversationId) {
+            if (session.conversationId && message.transcript) {
               await storage.createMessage({
                 conversationId: session.conversationId,
                 type: 'child_input',
@@ -444,12 +444,21 @@ async function startRealtimeSession(session: RealtimeSession) {
                 transcription: message.transcript
               });
               session.messageCount++;
+              
+              // Form memory from child's input
+              await formMemoryFromContent(
+                session.childId,
+                message.transcript,
+                'user',
+                session.conversationId
+              );
+              console.log(`Memory formed from child input: "${message.transcript.slice(0, 50)}..."`);
             }
             break;
             
           case 'response.audio_transcript.done':
             // Store AI response in database
-            if (session.conversationId) {
+            if (session.conversationId && message.transcript) {
               await storage.createMessage({
                 conversationId: session.conversationId,
                 type: 'appu_response',
@@ -457,6 +466,15 @@ async function startRealtimeSession(session: RealtimeSession) {
                 transcription: null
               });
               session.messageCount++;
+              
+              // Form memory from Appu's response
+              await formMemoryFromContent(
+                session.childId,
+                message.transcript,
+                'assistant',
+                session.conversationId
+              );
+              console.log(`Memory formed from Appu's response: "${message.transcript.slice(0, 50)}..."`);
             }
             break;
         }

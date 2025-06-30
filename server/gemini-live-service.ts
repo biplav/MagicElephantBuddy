@@ -3,6 +3,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { storage } from "./storage";
 import { APPU_SYSTEM_PROMPT } from "@shared/appuPrompts";
 import { getCurrentTimeContext, DEFAULT_PROFILE } from "@shared/childProfile";
+import { memoryService } from './memory-service';
 
 interface GeminiLiveSession {
   ws: WebSocket;
@@ -12,6 +13,113 @@ interface GeminiLiveSession {
   childId: number;
   sessionStartTime: Date;
   messageCount: number;
+}
+
+// Memory formation helper functions (shared with realtime service)
+async function formMemoryFromContent(childId: number, content: string, role: 'user' | 'assistant', conversationId: number) {
+  try {
+    if (role === 'user') {
+      // Child's message - analyze for interests, emotions, learning content
+      const childMessage = content.toLowerCase();
+      
+      // Detect conversational memories
+      if (childMessage.includes('love') || childMessage.includes('like') || childMessage.includes('favorite')) {
+        await memoryService.createMemory(
+          childId,
+          `Child expressed interest: "${content}"`,
+          'conversational',
+          {
+            conversationId,
+            emotionalTone: 'positive',
+            concepts: extractConcepts(content),
+            importance_score: 0.7
+          }
+        );
+      }
+      
+      // Detect learning content
+      if (containsLearningContent(content)) {
+        await memoryService.createMemory(
+          childId,
+          `Learning interaction: "${content}"`,
+          'learning',
+          {
+            conversationId,
+            concepts: extractConcepts(content),
+            learning_outcome: 'engagement'
+          }
+        );
+      }
+      
+      // Detect emotional expressions
+      const emotion = detectEmotion(content);
+      if (emotion) {
+        await memoryService.createMemory(
+          childId,
+          `Child showed ${emotion} emotion: "${content}"`,
+          'emotional',
+          {
+            conversationId,
+            emotionalTone: emotion,
+            concepts: [emotion]
+          }
+        );
+      }
+      
+    } else {
+      // Appu's response - track teaching moments and relationship building
+      if (content.includes('great job') || content.includes('wonderful') || content.includes('proud')) {
+        await memoryService.createMemory(
+          childId,
+          `Appu provided encouragement: "${content.slice(0, 100)}..."`,
+          'relationship',
+          {
+            conversationId,
+            emotionalTone: 'encouraging',
+            importance_score: 0.6
+          }
+        );
+      }
+    }
+  } catch (error) {
+    console.error('Error forming memory from content:', error);
+  }
+}
+
+function extractConcepts(text: string): string[] {
+  const concepts: string[] = [];
+  const lowerText = text.toLowerCase();
+  
+  // Educational concepts
+  const educationalTerms = ['count', 'number', 'color', 'shape', 'letter', 'word', 'math', 'read'];
+  educationalTerms.forEach(term => {
+    if (lowerText.includes(term)) concepts.push(term);
+  });
+  
+  // Interest topics
+  const interests = ['dinosaur', 'animal', 'story', 'song', 'game', 'family', 'friend'];
+  interests.forEach(interest => {
+    if (lowerText.includes(interest)) concepts.push(interest);
+  });
+  
+  return concepts;
+}
+
+function containsLearningContent(text: string): boolean {
+  const learningIndicators = ['count', 'learn', 'teach', 'show', 'how', 'what', 'why', 'number', 'letter', 'color'];
+  return learningIndicators.some(indicator => text.toLowerCase().includes(indicator));
+}
+
+function detectEmotion(text: string): string | null {
+  const lowerText = text.toLowerCase();
+  
+  if (lowerText.includes('happy') || lowerText.includes('excited') || lowerText.includes('fun')) return 'happy';
+  if (lowerText.includes('sad') || lowerText.includes('cry')) return 'sad';
+  if (lowerText.includes('angry') || lowerText.includes('mad')) return 'angry';
+  if (lowerText.includes('scared') || lowerText.includes('afraid')) return 'scared';
+  if (lowerText.includes('tired') || lowerText.includes('sleepy')) return 'tired';
+  
+  return null;
 }
 
 // Function to create enhanced system prompt with child profile and learning milestones for Gemini
@@ -255,6 +363,15 @@ async function handleGeminiTextInput(session: GeminiLiveSession, text: string) {
       transcription: text
     });
 
+    // Form memory from child's input
+    await formMemoryFromContent(
+      session.childId,
+      text,
+      'user',
+      session.conversationId
+    );
+    console.log(`Memory formed from child input: "${text.slice(0, 50)}..."`);
+
     // Generate response using Gemini
     const chat = (session as any).geminiChat;
     const result = await chat.sendMessage(text);
@@ -268,6 +385,15 @@ async function handleGeminiTextInput(session: GeminiLiveSession, text: string) {
       type: 'appu_response',
       content: responseText
     });
+
+    // Form memory from Appu's response
+    await formMemoryFromContent(
+      session.childId,
+      responseText,
+      'assistant',
+      session.conversationId
+    );
+    console.log(`Memory formed from Appu's response: "${responseText.slice(0, 50)}..."`);
 
     // Update conversation message count
     session.messageCount += 2;
