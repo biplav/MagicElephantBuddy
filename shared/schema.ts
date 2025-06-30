@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, json } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, json, doublePrecision } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -302,6 +302,40 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+});
+
+// Memory linking tables for Mem0 integration
+export const memoryConversationLinks = pgTable("memory_conversation_links", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id").notNull().references(() => conversations.id),
+  memoryId: text("memory_id").notNull(), // Mem0 memory ID
+  relevanceScore: real("relevance_score").default(0.5),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const memoryChildContexts = pgTable("memory_child_contexts", {
+  id: serial("id").primaryKey(),
+  childId: integer("child_id").notNull().references(() => children.id),
+  activeMemoryIds: text("active_memory_ids").array(), // Array of Mem0 memory IDs
+  contextVector: text("context_vector"), // Serialized context data
+  personalityProfile: json("personality_profile"), // PersonalityProfile object
+  learningStyle: json("learning_style"), // LearningStyle object
+  relationshipLevel: real("relationship_level").default(0),
+  activeInterests: text("active_interests").array(),
+  emotionalState: text("emotional_state"),
+  lastUpdated: timestamp("last_updated").defaultNow().notNull(),
+});
+
+export const memoryInsights = pgTable("memory_insights", {
+  id: serial("id").primaryKey(),
+  childId: integer("child_id").notNull().references(() => children.id),
+  pattern: text("pattern").notNull(),
+  description: text("description").notNull(),
+  confidence: real("confidence").default(0.5),
+  recommendations: text("recommendations").array(),
+  supportingMemoryIds: text("supporting_memory_ids").array(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  isActive: boolean("is_active").default(true),
 });
 
 export const recordings = pgTable("recordings", {
