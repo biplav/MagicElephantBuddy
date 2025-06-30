@@ -1,4 +1,4 @@
-// PostgreSQL Vector Memory Service with Semantic Similarity
+// CockroachDB Vector Memory Service with Semantic Similarity
 import { OpenAI } from 'openai';
 import { db } from './db';
 import { memories, memoryConversationLinks, memoryChildContexts } from '@shared/schema';
@@ -30,7 +30,7 @@ interface DatabaseMemory {
   updatedAt: Date;
 }
 
-export class PostgreSQLVectorMemoryService implements IMemoryService {
+export class CockroachDBVectorMemoryService implements IMemoryService {
   private openai: OpenAI;
   private memoryContextCache: Map<number, ChildMemoryContext> = new Map();
   private embeddingModel = 'text-embedding-3-small'; // 1536 dimensions
@@ -39,7 +39,7 @@ export class PostgreSQLVectorMemoryService implements IMemoryService {
     this.openai = new OpenAI({ 
       apiKey: process.env.OPENAI_API_KEY 
     });
-    console.log('Initialized PostgreSQL Vector Memory Service');
+    console.log('Initialized CockroachDB Vector Memory Service');
   }
 
   // Generate embedding for text content
@@ -561,4 +561,4 @@ export class PostgreSQLVectorMemoryService implements IMemoryService {
 }
 
 // Export the vector memory service
-export const vectorMemoryService = new PostgreSQLVectorMemoryService();
+export const vectorMemoryService = new CockroachDBVectorMemoryService();
