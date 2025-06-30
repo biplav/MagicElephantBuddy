@@ -309,7 +309,7 @@ export const memoryConversationLinks = pgTable("memory_conversation_links", {
   id: serial("id").primaryKey(),
   conversationId: integer("conversation_id").notNull().references(() => conversations.id),
   memoryId: text("memory_id").notNull(), // Mem0 memory ID
-  relevanceScore: real("relevance_score").default(0.5),
+  relevanceScore: doublePrecision("relevance_score").default(0.5),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -320,7 +320,7 @@ export const memoryChildContexts = pgTable("memory_child_contexts", {
   contextVector: text("context_vector"), // Serialized context data
   personalityProfile: json("personality_profile"), // PersonalityProfile object
   learningStyle: json("learning_style"), // LearningStyle object
-  relationshipLevel: real("relationship_level").default(0),
+  relationshipLevel: doublePrecision("relationship_level").default(0),
   activeInterests: text("active_interests").array(),
   emotionalState: text("emotional_state"),
   lastUpdated: timestamp("last_updated").defaultNow().notNull(),
@@ -331,7 +331,7 @@ export const memoryInsights = pgTable("memory_insights", {
   childId: integer("child_id").notNull().references(() => children.id),
   pattern: text("pattern").notNull(),
   description: text("description").notNull(),
-  confidence: real("confidence").default(0.5),
+  confidence: doublePrecision("confidence").default(0.5),
   recommendations: text("recommendations").array(),
   supportingMemoryIds: text("supporting_memory_ids").array(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

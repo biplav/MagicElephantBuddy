@@ -1,4 +1,5 @@
-import { MemoryClient } from '@mastra/mem0';
+// Note: Using local memory store for Phase 1, will integrate with Mem0 in Phase 2
+// import { Mem0Integration } from '@mastra/mem0';
 
 export interface Memory {
   id: string;
@@ -101,25 +102,14 @@ export interface IMemoryService {
   archiveOldMemories(childId: number, cutoffDate: Date): Promise<number>;
 }
 
-// Mem0-powered implementation
-export class Mem0Service implements IMemoryService {
-  private client: MemoryClient;
+// Local memory implementation for Phase 1 (will be replaced with Mem0 in Phase 2)
+export class LocalMemoryService implements IMemoryService {
+  private memories: Map<string, Memory> = new Map();
   private memoryContextCache: Map<number, ChildMemoryContext> = new Map();
+  private memoryIdCounter = 1;
 
   constructor() {
-    this.client = new MemoryClient({
-      apiKey: process.env.MEM0_API_KEY,
-      // Configure to use CockroachDB as backend
-      config: {
-        vector_store: {
-          provider: 'postgres',
-          config: {
-            url: process.env.DATABASE_URL,
-            collection_name: 'mem0_memories'
-          }
-        }
-      }
-    });
+    console.log('Initialized Local Memory Service (Phase 1)');
   }
 
   async createMemory(
@@ -129,19 +119,10 @@ export class Mem0Service implements IMemoryService {
     metadata: MemoryMetadata = {}
   ): Promise<Memory> {
     try {
-      // Create memory in Mem0 with child-specific user ID
-      const memoryResult = await this.client.add(content, {
-        user_id: `child_${childId}`,
-        metadata: {
-          type,
-          child_id: childId,
-          ...metadata,
-          created_at: new Date().toISOString()
-        }
-      });
-
+      const memoryId = `memory_${this.memoryIdCounter++}`;
+      
       const memory: Memory = {
-        id: memoryResult.id,
+        id: memoryId,
         content,
         type,
         childId,
@@ -150,12 +131,15 @@ export class Mem0Service implements IMemoryService {
         createdAt: new Date()
       };
 
+      // Store in local memory map
+      this.memories.set(memoryId, memory);
+
       // Invalidate cache for this child
       this.memoryContextCache.delete(childId);
 
       console.log(`Created ${type} memory for child ${childId}: ${content.slice(0, 100)}...`);
       return memory;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating memory:', error);
       throw new Error(`Failed to create memory: ${error.message}`);
     }
@@ -163,31 +147,18 @@ export class Mem0Service implements IMemoryService {
 
   async retrieveMemories(query: MemoryQuery): Promise<Memory[]> {
     try {
-      const { query: searchQuery, childId, type, limit = 10, threshold = 0.7 } = query;
+      const { query: searchQuery, childId, type, limit = 10 } = query;
       
-      const searchResults = await this.client.search(searchQuery, {
-        user_id: `child_${childId}`,
-        limit,
-        threshold
-      });
+      // Simple local search implementation
+      const childMemories = Array.from(this.memories.values())
+        .filter(memory => memory.childId === childId)
+        .filter(memory => !type || memory.type === type)
+        .filter(memory => memory.content.toLowerCase().includes(searchQuery.toLowerCase()))
+        .sort((a, b) => b.importance - a.importance)
+        .slice(0, limit);
 
-      const memories: Memory[] = searchResults.map(result => ({
-        id: result.id,
-        content: result.memory,
-        type: (result.metadata?.type || 'conversational') as MemoryType,
-        childId: result.metadata?.child_id || childId,
-        importance: result.score || 0.5,
-        metadata: result.metadata,
-        createdAt: new Date(result.metadata?.created_at || Date.now())
-      }));
-
-      // Filter by type if specified
-      if (type) {
-        return memories.filter(memory => memory.type === type);
-      }
-
-      return memories;
-    } catch (error) {
+      return childMemories;
+    } catch (error: any) {
       console.error('Error retrieving memories:', error);
       return [];
     }
