@@ -15,6 +15,7 @@ import { APPU_SYSTEM_PROMPT } from "../shared/appuPrompts";
 import { DEFAULT_PROFILE } from "../shared/childProfile";
 import { seedDatabase } from "./seed";
 import { openSourceMem0Service } from "./mem0-service";
+import { mem0HybridService } from "./mem0-hybrid-service";
 
 // Define a custom interface for the request with file
 interface MulterRequest extends Request {
@@ -1500,6 +1501,94 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
     } catch (error) {
       console.error('Error updating memory:', error);
       res.status(500).json({ message: 'Failed to update memory' });
+    }
+  });
+
+  // Hybrid Memory Service endpoints - supports both open source and managed Mem0
+  app.get('/api/hybrid-memories/status', async (req: Request, res: Response) => {
+    try {
+      const status = mem0HybridService.getServiceStatus();
+      res.json({
+        ...status,
+        storageInfo: mem0HybridService.getStorageInfo(),
+        consoleUrl: mem0HybridService.getConsoleUrl(),
+        isReady: mem0HybridService.isReady()
+      });
+    } catch (error) {
+      console.error('Error getting hybrid service status:', error);
+      res.status(500).json({ message: 'Failed to get service status' });
+    }
+  });
+
+  app.get('/api/hybrid-memories/:userId', async (req: Request, res: Response) => {
+    try {
+      const { userId } = req.params;
+      const memories = await mem0HybridService.getAllMemories(userId);
+      console.log(`✅ Retrieved ${memories.length} memories for user ${userId}`);
+      res.json(memories);
+    } catch (error) {
+      console.error('Error fetching hybrid memories:', error);
+      res.status(500).json({ message: 'Failed to fetch memories' });
+    }
+  });
+
+  app.post('/api/hybrid-memories/search', async (req: Request, res: Response) => {
+    try {
+      const { query, userId, limit = 10 } = req.body;
+      const results = await mem0HybridService.searchMemories(query, userId, limit);
+      res.json(results);
+    } catch (error) {
+      console.error('Error searching hybrid memories:', error);
+      res.status(500).json({ message: 'Failed to search memories' });
+    }
+  });
+
+  app.post('/api/hybrid-memories', async (req: Request, res: Response) => {
+    try {
+      const { content, userId, metadata } = req.body;
+      const memory = await mem0HybridService.addMemory(content, userId, metadata);
+      res.json(memory);
+    } catch (error) {
+      console.error('Error adding hybrid memory:', error);
+      res.status(500).json({ message: 'Failed to add memory' });
+    }
+  });
+
+  app.delete('/api/hybrid-memories/:memoryId', async (req: Request, res: Response) => {
+    try {
+      const { memoryId } = req.params;
+      const success = await mem0HybridService.deleteMemory(memoryId);
+      res.json({ success });
+    } catch (error) {
+      console.error('Error deleting hybrid memory:', error);
+      res.status(500).json({ message: 'Failed to delete memory' });
+    }
+  });
+
+  app.put('/api/hybrid-memories/:memoryId', async (req: Request, res: Response) => {
+    try {
+      const { memoryId } = req.params;
+      const { content, metadata } = req.body;
+      const memory = await mem0HybridService.updateMemory(memoryId, content, metadata);
+      res.json(memory);
+    } catch (error) {
+      console.error('Error updating hybrid memory:', error);
+      res.status(500).json({ message: 'Failed to update memory' });
+    }
+  });
+
+  // Service mode switching endpoint
+  app.post('/api/hybrid-memories/switch-mode', async (req: Request, res: Response) => {
+    try {
+      const { mode } = req.body;
+      if (!['open-source', 'managed', 'hybrid'].includes(mode)) {
+        return res.status(400).json({ message: 'Invalid mode. Must be open-source, managed, or hybrid' });
+      }
+      mem0HybridService.switchMode(mode);
+      res.json({ message: `Switched to ${mode} mode`, status: mem0HybridService.getServiceStatus() });
+    } catch (error) {
+      console.error('Error switching hybrid service mode:', error);
+      res.status(500).json({ message: 'Failed to switch mode' });
     }
   });
 

@@ -21,6 +21,15 @@ interface SearchResult extends Memory {
   score: number;
 }
 
+interface ServiceStatus {
+  openSource: boolean;
+  managed: boolean;
+  mode: string;
+  storageInfo: string;
+  consoleUrl: string;
+  isReady: boolean;
+}
+
 export default function MemoriesConsole() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('child_1');
