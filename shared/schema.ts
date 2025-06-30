@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, json, doublePrecision } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, json, doublePrecision, vector } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -192,6 +192,8 @@ export const profileUpdateSuggestionsRelations = relations(profileUpdateSuggesti
   }),
 }));
 
+
+
 // Insert schemas
 export const insertParentSchema = createInsertSchema(parents).pick({
   email: true,
@@ -269,6 +271,8 @@ export const insertProfileUpdateSuggestionSchema = createInsertSchema(profileUpd
   parentResponse: true,
 });
 
+
+
 // Types
 export type InsertParent = z.infer<typeof insertParentSchema>;
 export type Parent = typeof parents.$inferSelect;
@@ -304,11 +308,24 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
 });
 
+// Memory table with vector support for Mem0 integration
+export const memories = pgTable("memories", {
+  id: text("id").primaryKey(), // Mem0 memory ID
+  childId: integer("child_id").notNull().references(() => children.id),
+  content: text("content").notNull(),
+  type: text("type").notNull(), // conversational, learning, behavioral, visual, emotional, relationship, cultural, preference
+  importance: doublePrecision("importance").default(0.5),
+  embedding: vector("embedding", { dimensions: 1536 }), // OpenAI text-embedding-3-small dimensions
+  metadata: json("metadata"), // MemoryMetadata object
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // Memory linking tables for Mem0 integration
 export const memoryConversationLinks = pgTable("memory_conversation_links", {
   id: serial("id").primaryKey(),
   conversationId: integer("conversation_id").notNull().references(() => conversations.id),
-  memoryId: text("memory_id").notNull(), // Mem0 memory ID
+  memoryId: text("memory_id").notNull().references(() => memories.id), // Reference to memories table
   relevanceScore: doublePrecision("relevance_score").default(0.5),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -362,3 +379,27 @@ export type User = typeof users.$inferSelect;
 
 export type InsertRecording = z.infer<typeof insertRecordingSchema>;
 export type Recording = typeof recordings.$inferSelect;
+
+// Memory types
+export type InsertMemory = z.infer<typeof insertMemorySchema>;
+export type Memory = typeof memories.$inferSelect;
+
+// Memory relations (placed at end to avoid forward reference issues)
+export const memoriesRelations = relations(memories, ({ one, many }) => ({
+  child: one(children, {
+    fields: [memories.childId],
+    references: [children.id],
+  }),
+  conversationLinks: many(memoryConversationLinks),
+}));
+
+export const memoryConversationLinksRelations = relations(memoryConversationLinks, ({ one }) => ({
+  conversation: one(conversations, {
+    fields: [memoryConversationLinks.conversationId],
+    references: [conversations.id],
+  }),
+  memory: one(memories, {
+    fields: [memoryConversationLinks.memoryId],
+    references: [memories.id],
+  }),
+}));
