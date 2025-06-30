@@ -48,50 +48,48 @@ async function createEnhancedGeminiPrompt(childId: number): Promise<string> {
           result += `- ${displayKey}: ${value.join(', ')}\n`;
         } else if (typeof value === 'object' && value !== null) {
           result += `- ${displayKey}:\n`;
-          for (const [subKey, subValue] of Object.entries(value)) {
-            const subDisplayKey = subKey.charAt(0).toUpperCase() + subKey.slice(1).replace(/([A-Z])/g, ' $1');
-            if (Array.isArray(subValue)) {
-              result += `  * ${subDisplayKey}: ${subValue.join(', ')}\n`;
-            } else {
-              result += `  * ${subDisplayKey}: ${subValue}\n`;
-            }
-          }
+          const subItems = generateProfileSection(value);
+          result += subItems.split('\n').map(line => line ? `  ${line}` : '').join('\n') + '\n';
         } else {
           result += `- ${displayKey}: ${value}\n`;
         }
       }
       return result;
     };
-    
-    // Generate milestones information
+
+    // Generate learning milestones section
     const generateMilestonesSection = (): string => {
       if (!milestones || milestones.length === 0) {
-        return '\n\nLEARNING MILESTONES:\nNo specific milestones set for this child yet.';
+        return '\nLEARNING MILESTONES:\n- No specific milestones tracked yet. Focus on general age-appropriate learning activities.\n';
+      }
+
+      let result = '\nLEARNING MILESTONES AND PROGRESS:\n';
+      
+      const activeMilestones = milestones.filter((m: any) => !m.isCompleted);
+      const completedMilestones = milestones.filter((m: any) => m.isCompleted);
+      
+      if (activeMilestones.length > 0) {
+        result += '\nCurrent Learning Goals:\n';
+        activeMilestones.forEach((milestone: any) => {
+          const progressPercent = milestone.targetValue ? Math.round((milestone.currentProgress / milestone.targetValue) * 100) : 0;
+          result += `- ${milestone.milestoneDescription} (${progressPercent}% complete - ${milestone.currentProgress}/${milestone.targetValue})\n`;
+        });
       }
       
-      let result = '\n\nLEARNING MILESTONES:';
-      
-      // Group milestones by category
-      const categories = [...new Set(milestones.map(m => m.category))];
-      
-      categories.forEach(category => {
-        const categoryMilestones = milestones.filter(m => m.category === category);
-        result += `\n\n${category.toUpperCase()} MILESTONES:`;
-        
-        categoryMilestones.forEach(milestone => {
-          const progressText = milestone.isCompleted 
-            ? '✅ COMPLETED' 
-            : `📈 Progress: ${milestone.currentProgress}/${milestone.targetValue}`;
-          
-          result += `\n- ${milestone.title}: ${milestone.description}`;
-          result += `\n  Status: ${progressText}`;
-          if (milestone.parentNotes) {
-            result += `\n  Parent Notes: ${milestone.parentNotes}`;
-          }
+      if (completedMilestones.length > 0) {
+        result += '\nCompleted Achievements:\n';
+        completedMilestones.forEach((milestone: any) => {
+          const completedDate = milestone.completedAt ? new Date(milestone.completedAt).toLocaleDateString() : 'Recently';
+          result += `- ✅ ${milestone.milestoneDescription} (Completed: ${completedDate})\n`;
         });
-      });
+      }
       
-      result += '\n\nWhen chatting, naturally encourage progress on incomplete milestones and celebrate completed ones!';
+      result += '\nMILESTONE GUIDANCE:\n';
+      result += '- Reference these milestones during conversations to encourage progress\n';
+      result += '- Celebrate achievements and progress made\n';
+      result += '- Incorporate learning activities that support current goals\n';
+      result += '- Use age-appropriate language to discuss progress\n';
+      
       return result;
     };
 
@@ -119,7 +117,7 @@ Use this information to personalize your responses and make them more engaging f
   }
 }
 
-// Video frame handler
+// Video frame handler - defined before main function
 async function handleGeminiVideoFrame(session: GeminiLiveSession, frameData: string) {
   try {
     if (!session.isConnected || !session.conversationId) {
@@ -168,6 +166,81 @@ async function handleGeminiVideoFrame(session: GeminiLiveSession, frameData: str
     console.error('Error handling Gemini video frame:', error);
     // Don't send error to client for vision processing - it's supplementary
   }
+}
+
+export function setupGeminiLiveWebSocket(server: any) {
+  const wss = new WebSocketServer({ 
+    server: server, 
+    path: '/gemini-ws'
+  });
+
+  console.log('Gemini Live WebSocket server initialized on /gemini-ws');
+
+  wss.on('connection', (ws: WebSocket) => {
+    console.log('New Gemini Live WebSocket connection established');
+    
+    const session: GeminiLiveSession = {
+      ws: ws,
+      geminiWs: null,
+      isConnected: false,
+      conversationId: null,
+      childId: 1, // Default child ID, could be dynamic
+      sessionStartTime: new Date(),
+      messageCount: 0
+    };
+
+    ws.on('message', async (data: Buffer) => {
+      try {
+        const message = JSON.parse(data.toString());
+        console.log('Received Gemini Live message:', message.type);
+
+        switch (message.type) {
+          case 'start_session':
+            await startGeminiLiveSession(session);
+            break;
+          
+          case 'audio_chunk':
+            if (session.geminiWs && session.isConnected) {
+              // Forward audio to Gemini Live API
+              session.geminiWs.send(JSON.stringify({
+                type: 'audio',
+                data: message.audioData
+              }));
+            }
+            break;
+          
+          case 'video_frame':
+            await handleGeminiVideoFrame(session, message.frameData);
+            break;
+          
+          case 'text_input':
+            await handleGeminiTextInput(session, message.text);
+            break;
+          
+          case 'end_session':
+            await endGeminiLiveSession(session);
+            break;
+        }
+      } catch (error) {
+        console.error('Error processing Gemini Live message:', error);
+        ws.send(JSON.stringify({
+          type: 'error',
+          error: 'Failed to process message'
+        }));
+      }
+    });
+
+    ws.on('close', async () => {
+      console.log('Gemini Live WebSocket connection closed');
+      await endGeminiLiveSession(session);
+    });
+
+    ws.on('error', (error) => {
+      console.error('Gemini Live WebSocket error:', error);
+    });
+  });
+
+  return wss;
 }
 
 async function startGeminiLiveSession(session: GeminiLiveSession) {
@@ -315,89 +388,11 @@ async function endGeminiLiveSession(session: GeminiLiveSession) {
     }
 
     session.isConnected = false;
-    session.conversationId = null;
-    
-    console.log('Gemini Live session ended');
   } catch (error) {
     console.error('Error ending Gemini Live session:', error);
   }
 }
 
 function generateSessionId(): string {
-  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-}
-
-export function setupGeminiLiveWebSocket(server: any) {
-  const wss = new WebSocketServer({ 
-    server: server, 
-    path: '/gemini-ws'
-  });
-
-  console.log('Gemini Live WebSocket server initialized on /gemini-ws');
-
-  wss.on('connection', (ws: WebSocket) => {
-    console.log('New Gemini Live WebSocket connection established');
-    
-    const session: GeminiLiveSession = {
-      ws: ws,
-      geminiWs: null,
-      isConnected: false,
-      conversationId: null,
-      childId: 1, // Default child ID, could be dynamic
-      sessionStartTime: new Date(),
-      messageCount: 0
-    };
-
-    ws.on('message', async (data: Buffer) => {
-      try {
-        const message = JSON.parse(data.toString());
-        console.log('Received Gemini Live message:', message.type);
-
-        switch (message.type) {
-          case 'start_session':
-            await startGeminiLiveSession(session);
-            break;
-          
-          case 'audio_chunk':
-            if (session.geminiWs && session.isConnected) {
-              // Forward audio to Gemini Live API
-              session.geminiWs.send(JSON.stringify({
-                type: 'audio',
-                data: message.audioData
-              }));
-            }
-            break;
-          
-          case 'video_frame':
-            await handleGeminiVideoFrame(session, message.frameData);
-            break;
-          
-          case 'text_input':
-            await handleGeminiTextInput(session, message.text);
-            break;
-          
-          case 'end_session':
-            await endGeminiLiveSession(session);
-            break;
-        }
-      } catch (error) {
-        console.error('Error processing Gemini Live message:', error);
-        ws.send(JSON.stringify({
-          type: 'error',
-          error: 'Failed to process message'
-        }));
-      }
-    });
-
-    ws.on('close', async () => {
-      console.log('Gemini Live WebSocket connection closed');
-      await endGeminiLiveSession(session);
-    });
-
-    ws.on('error', (error) => {
-      console.error('Gemini Live WebSocket error:', error);
-    });
-  });
-
-  return wss;
+  return `gemini_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }

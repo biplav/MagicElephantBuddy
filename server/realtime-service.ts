@@ -120,6 +120,62 @@ Use this information to personalize your responses and make them more engaging f
   }
 }
 
+// Handle video frame with OpenAI's vision capabilities
+async function handleVideoFrame(session: RealtimeSession, frameData: string) {
+  try {
+    if (!session.isConnected || !session.conversationId) {
+      console.log('Video frame received but session not ready');
+      return;
+    }
+
+    console.log(`OpenAI Realtime processing video frame: ${frameData.slice(0, 50)}...`);
+    
+    // Use OpenAI's vision model to analyze the frame
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "What do you see in this image? Please describe it briefly in a child-friendly way, as if you're Appu the elephant talking to a young child."
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/jpeg;base64,${frameData}`
+              }
+            }
+          ],
+        },
+      ],
+      max_tokens: 100,
+    });
+
+    const visionResponse = response.choices[0].message.content;
+    console.log(`OpenAI vision response: ${visionResponse}`);
+
+    // Send vision response back to client
+    session.ws.send(JSON.stringify({
+      type: 'vision_response',
+      text: visionResponse,
+      conversationId: session.conversationId
+    }));
+
+    // Optional: Store vision analysis as a message
+    await storage.createMessage({
+      conversationId: session.conversationId,
+      type: 'vision_analysis',
+      content: `Vision: ${visionResponse}`
+    });
+
+  } catch (error) {
+    console.error('Error handling video frame:', error);
+    // Don't send error to client for vision processing - it's supplementary
+  }
+}
+
 export function setupRealtimeWebSocket(server: any) {
   const wss = new WebSocketServer({ server, path: '/ws/realtime' });
   
@@ -166,6 +222,10 @@ export function setupRealtimeWebSocket(server: any) {
                 audio: message.audio
               }));
             }
+            break;
+          case 'video_frame':
+            // Handle video frame for OpenAI Realtime API
+            await handleVideoFrame(session, message.frameData);
             break;
           case 'commit_audio':
             if (session.openaiWs && session.isConnected) {
