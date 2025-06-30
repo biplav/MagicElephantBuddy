@@ -36,7 +36,7 @@ export class Mem0ManagedService {
 
     const url = `${this.config.baseUrl}${endpoint}`;
     const headers = {
-      'Authorization': `Bearer ${this.config.apiKey}`,
+      'x-api-key': this.config.apiKey,
       'Content-Type': 'application/json',
       ...options.headers
     };
