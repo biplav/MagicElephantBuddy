@@ -280,7 +280,7 @@ export class OpenSourceMem0Service {
 
   // Local console access - since this is open source and self-hosted
   getConsoleUrl(): string {
-    return 'http://localhost:5000/memories'; // Points to our local interface
+    return '/memories'; // Points to our local interface
   }
 
   getStorageInfo(): string {

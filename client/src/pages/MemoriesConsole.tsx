@@ -93,7 +93,7 @@ export default function MemoriesConsole() {
     return badges;
   };
 
-  const displayMemories = searchResults.length > 0 ? searchResults : allMemories;
+  const displayMemories: (Memory | SearchResult)[] = searchResults.length > 0 ? searchResults : (allMemories || []);
 
   return (
     <div className="container mx-auto p-6 max-w-6xl">
