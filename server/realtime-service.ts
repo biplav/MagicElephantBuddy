@@ -4,6 +4,7 @@ import OpenAI from 'openai';
 import { storage } from './storage';
 import { DEFAULT_PROFILE } from '../shared/childProfile';
 import { APPU_SYSTEM_PROMPT } from '../shared/appuPrompts';
+import { memoryService } from './memory-service';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -18,6 +19,114 @@ interface RealtimeSession {
 }
 
 const sessions = new Map<string, RealtimeSession>();
+
+// Function to form memories from conversation content
+async function formMemoryFromContent(childId: number, content: string, role: 'user' | 'assistant', conversationId: number) {
+  try {
+    if (role === 'user') {
+      // Child's message - analyze for interests, emotions, learning content
+      const childMessage = content.toLowerCase();
+      
+      // Detect conversational memories
+      if (childMessage.includes('love') || childMessage.includes('like') || childMessage.includes('favorite')) {
+        await memoryService.createMemory(
+          childId,
+          `Child expressed interest: "${content}"`,
+          'conversational',
+          {
+            conversationId,
+            emotionalTone: 'positive',
+            concepts: extractConcepts(content),
+            importance_score: 0.7
+          }
+        );
+      }
+      
+      // Detect learning content
+      if (containsLearningContent(content)) {
+        await memoryService.createMemory(
+          childId,
+          `Learning interaction: "${content}"`,
+          'learning',
+          {
+            conversationId,
+            concepts: extractConcepts(content),
+            learning_outcome: 'engagement'
+          }
+        );
+      }
+      
+      // Detect emotional expressions
+      const emotion = detectEmotion(content);
+      if (emotion) {
+        await memoryService.createMemory(
+          childId,
+          `Child showed ${emotion} emotion: "${content}"`,
+          'emotional',
+          {
+            conversationId,
+            emotionalTone: emotion,
+            concepts: [emotion]
+          }
+        );
+      }
+      
+    } else {
+      // Appu's response - track teaching moments and relationship building
+      if (content.includes('great job') || content.includes('wonderful') || content.includes('proud')) {
+        await memoryService.createMemory(
+          childId,
+          `Appu provided encouragement: "${content.slice(0, 100)}..."`,
+          'relationship',
+          {
+            conversationId,
+            emotionalTone: 'encouraging',
+            importance_score: 0.6
+          }
+        );
+      }
+    }
+  } catch (error) {
+    console.error('Error forming memory from content:', error);
+  }
+}
+
+// Helper functions for memory analysis
+function extractConcepts(text: string): string[] {
+  const concepts: string[] = [];
+  const lowerText = text.toLowerCase();
+  
+  // Educational concepts
+  const educationalTerms = ['count', 'number', 'color', 'shape', 'letter', 'word', 'math', 'read'];
+  educationalTerms.forEach(term => {
+    if (lowerText.includes(term)) concepts.push(term);
+  });
+  
+  // Interest topics
+  const interests = ['dinosaur', 'animal', 'story', 'song', 'game', 'family', 'friend'];
+  interests.forEach(interest => {
+    if (lowerText.includes(interest)) concepts.push(interest);
+  });
+  
+  return concepts;
+}
+
+function containsLearningContent(text: string): boolean {
+  const learningIndicators = ['count', 'learn', 'teach', 'show', 'how', 'what', 'why', 'number', 'letter', 'color'];
+  return learningIndicators.some(indicator => text.toLowerCase().includes(indicator));
+}
+
+function detectEmotion(text: string): string | null {
+  const lowerText = text.toLowerCase();
+  
+  if (lowerText.includes('happy') || lowerText.includes('excited') || lowerText.includes('fun')) return 'happy';
+  if (lowerText.includes('sad') || lowerText.includes('cry')) return 'sad';
+  if (lowerText.includes('angry') || lowerText.includes('mad')) return 'angry';
+  if (lowerText.includes('scared') || lowerText.includes('afraid')) return 'scared';
+  if (lowerText.includes('tired') || lowerText.includes('sleepy')) return 'tired';
+  
+  return null;
+}
 
 // Function to create enhanced system prompt with child profile and learning milestones
 async function createEnhancedRealtimePrompt(childId: number): Promise<string> {

@@ -175,9 +175,9 @@ export class LocalMemoryService implements IMemoryService {
 
   async deleteMemory(memoryId: string): Promise<void> {
     try {
-      await this.client.delete(memoryId);
+      this.memories.delete(memoryId);
       console.log(`Deleted memory ${memoryId}`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting memory:', error);
     }
   }
@@ -381,4 +381,4 @@ export class LocalMemoryService implements IMemoryService {
 }
 
 // Export singleton instance
-export const memoryService = new Mem0Service();
+export const memoryService = new LocalMemoryService();
