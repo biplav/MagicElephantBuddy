@@ -374,6 +374,16 @@ export const insertRecordingSchema = createInsertSchema(recordings).pick({
   response: true,
 });
 
+export const insertMemorySchema = createInsertSchema(memories).pick({
+  id: true,
+  childId: true,
+  content: true,
+  type: true,
+  importance: true,
+  embedding: true,
+  metadata: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
