@@ -14,6 +14,7 @@ import { getErrorMessage } from "../shared/errorMessages";
 import { APPU_SYSTEM_PROMPT } from "../shared/appuPrompts";
 import { DEFAULT_PROFILE } from "../shared/childProfile";
 import { seedDatabase } from "./seed";
+import { openSourceMem0Service } from "./mem0-service";
 
 // Define a custom interface for the request with file
 interface MulterRequest extends Request {
@@ -1442,6 +1443,63 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
     } catch (error) {
       console.error('Error getting job status:', error);
       res.status(500).json({ message: 'Failed to get job status' });
+    }
+  });
+
+  // Memory Console API endpoints
+  app.get('/api/memories/:userId', async (req: Request, res: Response) => {
+    try {
+      const { userId } = req.params;
+      const memories = await openSourceMem0Service.getAllMemories(userId);
+      res.json(memories);
+    } catch (error) {
+      console.error('Error fetching memories:', error);
+      res.status(500).json({ message: 'Failed to fetch memories' });
+    }
+  });
+
+  app.post('/api/memories/search', async (req: Request, res: Response) => {
+    try {
+      const { query, userId, limit = 10 } = req.body;
+      const results = await openSourceMem0Service.searchMemories(query, userId, limit);
+      res.json(results);
+    } catch (error) {
+      console.error('Error searching memories:', error);
+      res.status(500).json({ message: 'Failed to search memories' });
+    }
+  });
+
+  app.post('/api/memories', async (req: Request, res: Response) => {
+    try {
+      const { content, userId, metadata } = req.body;
+      const memory = await openSourceMem0Service.addMemory(content, userId, metadata);
+      res.json(memory);
+    } catch (error) {
+      console.error('Error adding memory:', error);
+      res.status(500).json({ message: 'Failed to add memory' });
+    }
+  });
+
+  app.delete('/api/memories/:memoryId', async (req: Request, res: Response) => {
+    try {
+      const { memoryId } = req.params;
+      const success = await openSourceMem0Service.deleteMemory(memoryId);
+      res.json({ success });
+    } catch (error) {
+      console.error('Error deleting memory:', error);
+      res.status(500).json({ message: 'Failed to delete memory' });
+    }
+  });
+
+  app.put('/api/memories/:memoryId', async (req: Request, res: Response) => {
+    try {
+      const { memoryId } = req.params;
+      const { content, metadata } = req.body;
+      const memory = await openSourceMem0Service.updateMemory(memoryId, content, metadata);
+      res.json(memory);
+    } catch (error) {
+      console.error('Error updating memory:', error);
+      res.status(500).json({ message: 'Failed to update memory' });
     }
   });
 

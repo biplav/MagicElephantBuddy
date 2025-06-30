@@ -8,6 +8,7 @@ import Home from "@/pages/Home";
 import AudioTest from "@/pages/AudioTest";
 import ParentDashboard from "@/pages/ParentDashboard";
 import Settings from "@/pages/Settings";
+import MemoriesConsole from "@/pages/MemoriesConsole";
 
 function Router() {
   return (
@@ -15,6 +16,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/audio-test" component={AudioTest} />
       <Route path="/dashboard" component={ParentDashboard} />
+      <Route path="/memories" component={MemoriesConsole} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
