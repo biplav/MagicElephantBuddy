@@ -132,6 +132,15 @@ async function createEnhancedGeminiPrompt(childId: number): Promise<string> {
     // Get learning milestones for the child
     const milestones = await storage.getMilestonesByChild(childId);
     
+    // Get recent memories and child context
+    const childContext = await memoryService.getChildContext(childId);
+    const recentMemories = await memoryService.retrieveMemories({
+      query: '',
+      childId,
+      limit: 5,
+      timeframe: 'week'
+    });
+    
     // Generate current date and time information
     const now = new Date();
     const options: Intl.DateTimeFormatOptions = {
@@ -214,8 +223,44 @@ ${generateProfileSection(childProfile)}
 Use this information to personalize your responses and make them more engaging for ${(childProfile as any).name || 'the child'}.`;
 
     const milestonesInfo = generateMilestonesSection();
+    
+    // Generate memory context section
+    const generateMemorySection = (): string => {
+      if (!recentMemories || recentMemories.length === 0) {
+        return '\n\nMEMORY CONTEXT:\n- No recent conversation memories available. Start building rapport with the child.\n';
+      }
+      
+      let result = '\n\nMEMORY CONTEXT AND PERSONALIZATION:\n';
+      result += 'Recent conversation memories to reference for personalized interactions:\n';
+      
+      recentMemories.forEach((memory, index) => {
+        const typeIndicator = memory.type === 'conversational' ? '💬' : 
+                             memory.type === 'learning' ? '📚' : 
+                             memory.type === 'emotional' ? '😊' : 
+                             memory.type === 'relationship' ? '🤝' : '💭';
+        result += `- ${typeIndicator} ${memory.content}\n`;
+      });
+      
+      result += '\nCHILD CONTEXT INSIGHTS:\n';
+      result += `- Active interests: ${childContext.activeInterests.join(', ')}\n`;
+      result += `- Communication style: ${childContext.personalityProfile.communication_style}\n`;
+      result += `- Relationship level: ${childContext.relationshipLevel}/10\n`;
+      if (childContext.emotionalState) {
+        result += `- Current emotional state: ${childContext.emotionalState}\n`;
+      }
+      
+      result += '\nMEMORY USAGE GUIDANCE:\n';
+      result += '- Reference past conversations naturally to show you remember the child\n';
+      result += '- Build on previous interests and topics the child has shown enthusiasm for\n';
+      result += '- Acknowledge emotional states and continue building positive relationships\n';
+      result += '- Use memories to make conversations feel continuous and personalized\n';
+      
+      return result;
+    };
+    
+    const memoryInfo = generateMemorySection();
 
-    return APPU_SYSTEM_PROMPT + dateTimeInfo + profileInfo + milestonesInfo;
+    return APPU_SYSTEM_PROMPT + dateTimeInfo + profileInfo + milestonesInfo + memoryInfo;
     
   } catch (error) {
     console.error('Error creating enhanced Gemini prompt:', error);

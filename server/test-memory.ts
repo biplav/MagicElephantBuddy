@@ -46,12 +46,12 @@ async function testMemoryService() {
     // Test 2: Retrieve memories
     console.log('\n🔍 Retrieving memories...');
     
-    const dinosaurMemories = await memoryService.retrieveMemories({
+    const initialDinosaurMemories = await memoryService.retrieveMemories({
       query: 'dinosaur',
       childId: 1,
       limit: 5
     });
-    console.log(`✅ Found ${dinosaurMemories.length} dinosaur-related memories`);
+    console.log(`✅ Found ${initialDinosaurMemories.length} dinosaur-related memories`);
 
     const learningMemories = await memoryService.retrieveMemories({
       query: 'counting',
@@ -156,29 +156,29 @@ async function testMemoryService() {
     // Test 6: Verify conversation memories were created
     console.log('\n🔍 Verifying conversation memories...');
     
-    const dinosaurMemories = await memoryService.retrieveMemories({
+    const conversationDinosaurMemories = await memoryService.retrieveMemories({
       query: 'dinosaur',
       childId: 1,
       limit: 10
     });
     
-    const emotionalMemories = await memoryService.retrieveMemories({
+    const conversationEmotionalMemories = await memoryService.retrieveMemories({
       query: 'happy',
       childId: 1,
       type: 'emotional',
       limit: 10
     });
     
-    const relationshipMemories = await memoryService.retrieveMemories({
+    const conversationRelationshipMemories = await memoryService.retrieveMemories({
       query: 'proud',
       childId: 1,
       type: 'relationship',
       limit: 10
     });
     
-    console.log(`✅ Found ${dinosaurMemories.length} dinosaur interest memories`);
-    console.log(`✅ Found ${emotionalMemories.length} emotional memories`);
-    console.log(`✅ Found ${relationshipMemories.length} relationship memories`);
+    console.log(`✅ Found ${conversationDinosaurMemories.length} dinosaur interest memories`);
+    console.log(`✅ Found ${conversationEmotionalMemories.length} emotional memories`);
+    console.log(`✅ Found ${conversationRelationshipMemories.length} relationship memories`);
     
     // Test 7: Generate updated child context after conversation
     console.log('\n👶 Updated child context after conversation...');
