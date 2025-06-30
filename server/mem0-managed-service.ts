@@ -77,15 +77,19 @@ export class Mem0ManagedService {
         body: JSON.stringify(payload)
       });
 
-      if (response.success && response.data) {
+      // Handle both direct response and nested data response
+      const memoryData = response.data || response;
+      
+      if (memoryData && memoryData.id) {
+        console.log(`✅ Memory added to Mem0 Cloud: ${memoryData.id}`);
         return {
-          id: response.data.id,
-          memory: response.data.memory || content,
+          id: memoryData.id,
+          memory: memoryData.memory || content,
           user_id: userId,
-          hash: response.data.hash || '',
-          metadata: response.data.metadata || metadata || {},
-          created_at: response.data.created_at || new Date().toISOString(),
-          updated_at: response.data.updated_at || new Date().toISOString()
+          hash: memoryData.hash || this.generateHash(content),
+          metadata: memoryData.metadata || metadata || {},
+          created_at: memoryData.created_at || new Date().toISOString(),
+          updated_at: memoryData.updated_at || new Date().toISOString()
         };
       }
 
@@ -94,6 +98,17 @@ export class Mem0ManagedService {
       console.error('Failed to add memory to Mem0 managed service:', error);
       return null;
     }
+  }
+
+  private generateHash(content: string): string {
+    // Simple hash function for consistency
+    let hash = 0;
+    for (let i = 0; i < content.length; i++) {
+      const char = content.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash).toString(16);
   }
 
   async searchMemories(query: string, userId: string, limit: number = 10): Promise<Mem0SearchResult[]> {
@@ -203,14 +218,22 @@ export class Mem0ManagedService {
 
   async testConnection(): Promise<boolean> {
     try {
-      // Test with a simple API call
-      const response = await this.makeRequest('/memories?user_id=test&limit=1');
+      // Test with a simple search call that should work with any valid API key
+      const response = await this.makeRequest('/memories/search', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: 'test',
+          user_id: 'connection_test',
+          limit: 1
+        })
+      });
       console.log('✅ Mem0 API connection successful');
       return true;
     } catch (error: any) {
       if (error.message.includes('Invalid API key')) {
         console.log('❌ Mem0 API key is invalid or expired');
-        console.log('   Please check your API key at: https://app.mem0.ai/dashboard/api-keys');
+        console.log('   Please get a valid API key from: https://app.mem0.ai/dashboard/api-keys');
+        console.log('   Current key format:', this.config.apiKey.substring(0, 8) + '...');
         this.isConfigured = false;
       } else {
         console.log('⚠️ Mem0 API connection test failed:', error.message);
