@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, json, doublePrecision } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, json, doublePrecision, vector } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -308,14 +308,14 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
 });
 
-// Memory table with CockroachDB-compatible vector storage for Mem0 integration
+// Memory table with CockroachDB native vector support for Mem0 integration
 export const memories = pgTable("memories", {
   id: text("id").primaryKey(), // Mem0 memory ID
   childId: integer("child_id").notNull().references(() => children.id),
   content: text("content").notNull(),
   type: text("type").notNull(), // conversational, learning, behavioral, visual, emotional, relationship, cultural, preference
   importance: doublePrecision("importance").default(0.5),
-  embedding: json("embedding"), // JSON array of 1536 float values for OpenAI text-embedding-3-small
+  embedding: vector("embedding", { dimensions: 1536 }), // CockroachDB native vector for OpenAI text-embedding-3-small
   metadata: json("metadata"), // MemoryMetadata object
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

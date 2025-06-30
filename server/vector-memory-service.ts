@@ -90,7 +90,7 @@ export class CockroachDBVectorMemoryService implements IMemoryService {
         content,
         type,
         importance,
-        embedding,
+        embedding: embedding as any, // CockroachDB FLOAT[] format
         metadata,
       })
       .returning();
@@ -145,10 +145,10 @@ export class CockroachDBVectorMemoryService implements IMemoryService {
     if (query.query && query.query.trim() !== '') {
       const queryEmbedding = await this.generateEmbedding(query.query);
       
-      // Use pgvector cosine similarity
+      // Use CockroachDB native vector cosine similarity
       const similarityResults = await db.execute(sql`
         SELECT *, 
-               1 - (embedding <=> ${JSON.stringify(queryEmbedding)}::vector) as similarity
+               1 - (embedding <=> ${JSON.stringify(queryEmbedding)}::FLOAT[]) as similarity
         FROM ${memories}
         WHERE child_id = ${query.childId}
           ${query.type ? sql`AND type = ${query.type}` : sql``}
@@ -279,11 +279,11 @@ export class CockroachDBVectorMemoryService implements IMemoryService {
     
     const similarityResults = await db.execute(sql`
       SELECT *, 
-             1 - (embedding <=> ${JSON.stringify(queryEmbedding)}::vector) as similarity
+             1 - (embedding <=> ${JSON.stringify(queryEmbedding)}::FLOAT[]) as similarity
       FROM ${memories}
       WHERE child_id = ${childId}
         ${type ? sql`AND type = ${type}` : sql``}
-        AND 1 - (embedding <=> ${JSON.stringify(queryEmbedding)}::vector) > 0.7
+        AND 1 - (embedding <=> ${JSON.stringify(queryEmbedding)}::FLOAT[]) > 0.7
       ORDER BY similarity DESC
       LIMIT 10
     `);
