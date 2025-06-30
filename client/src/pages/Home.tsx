@@ -999,6 +999,24 @@ export default function Home() {
                       </Button>
                     </div>
                   </div>
+                  
+                  <div className="flex flex-row gap-2 mt-2 items-center justify-between bg-gray-700 p-2 rounded">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-3 h-3 rounded-full ${enableVideo ? 'bg-blue-500' : 'bg-red-500'}`}></div>
+                      <span className="text-sm">Enable My Eyes (Video):</span>
+                    </div>
+                    <div className="flex items-center">
+                      <span className="text-xs mr-2">{enableVideo ? 'Enabled' : 'Disabled'}</span>
+                      <Button 
+                        onClick={() => setEnableVideo(!enableVideo)}
+                        className={`px-3 py-1 rounded text-xs ${enableVideo 
+                          ? 'bg-blue-700 hover:bg-blue-800' 
+                          : 'bg-gray-500 hover:bg-gray-600'}`}
+                      >
+                        {enableVideo ? 'Disable' : 'Enable'}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
