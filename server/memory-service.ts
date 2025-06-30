@@ -80,6 +80,39 @@ export interface MemoryInsight {
   supporting_memories: string[];
 }
 
+// Phase 3: Advanced memory interfaces
+export interface ConsolidationResult {
+  consolidatedMemories: number;
+  mergedMemories: number;
+  archivedMemories: number;
+  newInsights: MemoryInsight[];
+  processingTime: number;
+}
+
+export interface MemoryStatistics {
+  totalMemories: number;
+  memoriesByType: Record<MemoryType, number>;
+  averageImportance: number;
+  memoryTrends: MemoryTrend[];
+  storageEfficiency: number;
+  lastConsolidation: Date | null;
+}
+
+export interface MemoryTrend {
+  period: string;
+  type: MemoryType;
+  count: number;
+  averageImportance: number;
+  concepts: string[];
+}
+
+export interface MergeResult {
+  originalMemories: string[];
+  mergedMemory: Memory;
+  reason: string;
+  confidenceScore: number;
+}
+
 // Abstract interface for memory operations
 export interface IMemoryService {
   // Core memory operations
@@ -100,6 +133,13 @@ export interface IMemoryService {
   // Bulk operations
   bulkCreateMemories(memories: Omit<Memory, 'id' | 'createdAt'>[]): Promise<Memory[]>;
   archiveOldMemories(childId: number, cutoffDate: Date): Promise<number>;
+  
+  // Phase 3: Advanced memory features
+  consolidateMemories(childId: number): Promise<ConsolidationResult>;
+  calculateImportanceScore(memory: Memory, context: ChildMemoryContext): Promise<number>;
+  refreshMemoryImportance(childId: number): Promise<void>;
+  getMemoryStats(childId: number): Promise<MemoryStatistics>;
+  mergeRelatedMemories(childId: number, threshold?: number): Promise<MergeResult[]>;
 }
 
 // Local memory implementation for Phase 1 (will be replaced with Mem0 in Phase 2)
@@ -377,6 +417,298 @@ export class LocalMemoryService implements IMemoryService {
       relationshipLevel: 0,
       activeInterests: []
     };
+  }
+
+  // Phase 3: Advanced memory features implementation
+  async consolidateMemories(childId: number): Promise<ConsolidationResult> {
+    const startTime = Date.now();
+    let consolidatedMemories = 0;
+    let mergedMemories = 0;
+    let archivedMemories = 0;
+
+    console.log(`Starting memory consolidation for child ${childId}...`);
+
+    try {
+      // Get all memories for the child
+      const allMemories = Array.from(this.memories.values())
+        .filter(memory => memory.childId === childId);
+
+      // Step 1: Refresh importance scores
+      await this.refreshMemoryImportance(childId);
+      consolidatedMemories = allMemories.length;
+
+      // Step 2: Merge related memories
+      const mergeResults = await this.mergeRelatedMemories(childId, 0.8);
+      mergedMemories = mergeResults.length;
+
+      // Step 3: Archive low-importance old memories
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - 30); // Archive memories older than 30 days with low importance
+      
+      const lowImportanceOldMemories = allMemories.filter(memory => 
+        memory.createdAt < cutoffDate && memory.importance < 0.3
+      );
+      
+      for (const memory of lowImportanceOldMemories) {
+        this.memories.delete(memory.id);
+        archivedMemories++;
+      }
+
+      // Step 4: Generate new insights from consolidated memories
+      const newInsights = await this.generateMemoryInsights(childId);
+
+      const processingTime = Date.now() - startTime;
+
+      console.log(`Memory consolidation completed: ${consolidatedMemories} processed, ${mergedMemories} merged, ${archivedMemories} archived`);
+
+      return {
+        consolidatedMemories,
+        mergedMemories,
+        archivedMemories,
+        newInsights,
+        processingTime
+      };
+
+    } catch (error) {
+      console.error('Error during memory consolidation:', error);
+      return {
+        consolidatedMemories: 0,
+        mergedMemories: 0,
+        archivedMemories: 0,
+        newInsights: [],
+        processingTime: Date.now() - startTime
+      };
+    }
+  }
+
+  async calculateImportanceScore(memory: Memory, context: ChildMemoryContext): Promise<number> {
+    let importance = 0.5; // Base importance
+
+    // Factor 1: Memory type importance
+    const typeWeights: Record<MemoryType, number> = {
+      'learning': 0.9,      // Learning progress is very important
+      'emotional': 0.8,     // Emotional states are highly important
+      'relationship': 0.7,  // Relationship building is important
+      'conversational': 0.6, // Regular conversations are moderately important
+      'preference': 0.6,    // Preferences are moderately important
+      'behavioral': 0.5,    // Behavioral patterns are baseline important
+      'visual': 0.4,        // Visual memories are less persistent
+      'cultural': 0.5       // Cultural context is baseline important
+    };
+    importance = typeWeights[memory.type] || 0.5;
+
+    // Factor 2: Recency (newer memories are more important)
+    const daysSinceCreation = (Date.now() - memory.createdAt.getTime()) / (1000 * 60 * 60 * 24);
+    const recencyMultiplier = Math.max(0.3, 1 - (daysSinceCreation * 0.1));
+    importance *= recencyMultiplier;
+
+    // Factor 3: Emotional intensity
+    if (memory.metadata?.emotionalTone) {
+      const emotionalBoost = memory.metadata.emotionalTone === 'positive' ? 0.2 : 
+                            memory.metadata.emotionalTone === 'negative' ? 0.3 : 0.1;
+      importance += emotionalBoost;
+    }
+
+    // Factor 4: Concept relevance to active interests
+    if (memory.metadata?.concepts && context.activeInterests) {
+      const conceptOverlap = memory.metadata.concepts.filter(concept => 
+        context.activeInterests.some(interest => 
+          interest.toLowerCase().includes(concept.toLowerCase()) ||
+          concept.toLowerCase().includes(interest.toLowerCase())
+        )
+      ).length;
+      importance += conceptOverlap * 0.1;
+    }
+
+    // Factor 5: Learning milestone connection
+    if (memory.metadata?.milestoneId || memory.metadata?.learning_outcome) {
+      importance += 0.2;
+    }
+
+    // Normalize to 0-1 range
+    return Math.min(1.0, Math.max(0.1, importance));
+  }
+
+  async refreshMemoryImportance(childId: number): Promise<void> {
+    console.log(`Refreshing importance scores for child ${childId}...`);
+    
+    const childMemories = Array.from(this.memories.values())
+      .filter(memory => memory.childId === childId);
+    
+    const context = await this.getChildContext(childId);
+    
+    for (const memory of childMemories) {
+      const newImportance = await this.calculateImportanceScore(memory, context);
+      memory.importance = newImportance;
+      memory.updatedAt = new Date();
+    }
+    
+    console.log(`Updated importance scores for ${childMemories.length} memories`);
+  }
+
+  async getMemoryStats(childId: number): Promise<MemoryStatistics> {
+    const childMemories = Array.from(this.memories.values())
+      .filter(memory => memory.childId === childId);
+
+    const memoriesByType: Record<MemoryType, number> = {
+      'conversational': 0,
+      'behavioral': 0,
+      'learning': 0,
+      'visual': 0,
+      'emotional': 0,
+      'relationship': 0,
+      'cultural': 0,
+      'preference': 0
+    };
+
+    let totalImportance = 0;
+
+    childMemories.forEach(memory => {
+      memoriesByType[memory.type]++;
+      totalImportance += memory.importance;
+    });
+
+    // Generate memory trends (simplified for local implementation)
+    const memoryTrends: MemoryTrend[] = Object.entries(memoriesByType)
+      .filter(([type, count]) => count > 0)
+      .map(([type, count]) => ({
+        period: 'last_week',
+        type: type as MemoryType,
+        count,
+        averageImportance: totalImportance / childMemories.length || 0,
+        concepts: this.extractConceptsFromMemories(
+          childMemories.filter(m => m.type === type)
+        )
+      }));
+
+    return {
+      totalMemories: childMemories.length,
+      memoriesByType,
+      averageImportance: childMemories.length > 0 ? totalImportance / childMemories.length : 0,
+      memoryTrends,
+      storageEfficiency: this.calculateStorageEfficiency(childMemories),
+      lastConsolidation: null // Would track last consolidation in production
+    };
+  }
+
+  async mergeRelatedMemories(childId: number, threshold: number = 0.8): Promise<MergeResult[]> {
+    const childMemories = Array.from(this.memories.values())
+      .filter(memory => memory.childId === childId);
+
+    const mergeResults: MergeResult[] = [];
+    const processedMemories = new Set<string>();
+
+    for (const memory of childMemories) {
+      if (processedMemories.has(memory.id)) continue;
+
+      // Find similar memories
+      const similarMemories = childMemories.filter(other => 
+        !processedMemories.has(other.id) &&
+        other.id !== memory.id &&
+        other.type === memory.type &&
+        this.calculateSimilarity(memory, other) >= threshold
+      );
+
+      if (similarMemories.length > 0) {
+        // Merge memories
+        const allMemories = [memory, ...similarMemories];
+        const mergedContent = this.mergeMemoryContent(allMemories);
+        
+        const mergedMemory: Memory = {
+          id: `merged_${Date.now()}`,
+          content: mergedContent,
+          type: memory.type,
+          childId,
+          importance: Math.max(...allMemories.map(m => m.importance)),
+          metadata: this.mergeMetadata(allMemories),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+
+        // Store merged memory and remove originals
+        this.memories.set(mergedMemory.id, mergedMemory);
+        
+        const originalIds = allMemories.map(m => m.id);
+        originalIds.forEach(id => {
+          this.memories.delete(id);
+          processedMemories.add(id);
+        });
+
+        mergeResults.push({
+          originalMemories: originalIds,
+          mergedMemory,
+          reason: `Merged ${allMemories.length} similar ${memory.type} memories`,
+          confidenceScore: threshold
+        });
+      }
+
+      processedMemories.add(memory.id);
+    }
+
+    return mergeResults;
+  }
+
+  // Helper methods for Phase 3 features
+  private calculateSimilarity(memory1: Memory, memory2: Memory): number {
+    // Simple similarity calculation based on content overlap
+    const words1 = memory1.content.toLowerCase().split(' ');
+    const words2 = memory2.content.toLowerCase().split(' ');
+    
+    const commonWords = words1.filter(word => words2.includes(word));
+    const totalWords = new Set([...words1, ...words2]).size;
+    
+    return commonWords.length / totalWords;
+  }
+
+  private mergeMemoryContent(memories: Memory[]): string {
+    if (memories.length === 1) return memories[0].content;
+    
+    const contents = memories.map(m => m.content);
+    return `Consolidated memory: ${contents.join('; ')}`;
+  }
+
+  private mergeMetadata(memories: Memory[]): MemoryMetadata {
+    const merged: MemoryMetadata = {
+      concepts: [],
+      context_tags: []
+    };
+
+    memories.forEach(memory => {
+      if (memory.metadata?.concepts) {
+        merged.concepts = [...(merged.concepts || []), ...memory.metadata.concepts];
+      }
+      if (memory.metadata?.context_tags) {
+        merged.context_tags = [...(merged.context_tags || []), ...memory.metadata.context_tags];
+      }
+      if (memory.metadata?.conversationId && !merged.conversationId) {
+        merged.conversationId = memory.metadata.conversationId;
+      }
+    });
+
+    // Remove duplicates
+    merged.concepts = Array.from(new Set(merged.concepts));
+    merged.context_tags = Array.from(new Set(merged.context_tags));
+
+    return merged;
+  }
+
+  private extractConceptsFromMemories(memories: Memory[]): string[] {
+    const allConcepts: string[] = [];
+    memories.forEach(memory => {
+      if (memory.metadata?.concepts) {
+        allConcepts.push(...memory.metadata.concepts);
+      }
+    });
+    return Array.from(new Set(allConcepts));
+  }
+
+  private calculateStorageEfficiency(memories: Memory[]): number {
+    // Simple efficiency calculation based on memory density
+    const totalCharacters = memories.reduce((sum, memory) => sum + memory.content.length, 0);
+    const averageLength = totalCharacters / memories.length;
+    
+    // Efficiency is higher when memories are more concise but informative
+    return Math.min(1.0, 100 / (averageLength || 100));
   }
 }
 
