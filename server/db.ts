@@ -1,15 +1,18 @@
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-serverless';
-import ws from "ws";
+import { Pool } from 'pg';
+import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from "@shared/schema";
 
-neonConfig.webSocketConstructor = ws;
+// Use CockroachDB connection
+const COCKROACH_DB_URL = 'postgresql://biplav:LTZ95Qg4fWSYtJ6saL7nrg@exotic-crane-12796.j77.aws-ap-south-1.cockroachlabs.cloud:26257/defaultdb?sslmode=require';
 
-if (!process.env.DATABASE_URL) {
-  throw new Error(
-    "DATABASE_URL must be set. Did you forget to provision a database?",
-  );
-}
+// Override DATABASE_URL with CockroachDB connection
+process.env.DATABASE_URL = COCKROACH_DB_URL;
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-export const db = drizzle({ client: pool, schema });
+export const pool = new Pool({ 
+  connectionString: COCKROACH_DB_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
+
+export const db = drizzle(pool, { schema });
