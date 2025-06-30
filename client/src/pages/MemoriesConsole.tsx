@@ -34,22 +34,35 @@ export default function MemoriesConsole() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('child_1');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [useHybridService, setUseHybridService] = useState(true);
   const queryClient = useQueryClient();
 
-  // Get all memories for selected user
-  const { data: allMemories = [], isLoading } = useQuery<Memory[]>({
-    queryKey: ['/api/memories', selectedUserId],
+  // Get hybrid service status
+  const { data: serviceStatus } = useQuery<ServiceStatus>({
+    queryKey: ['/api/hybrid-memories/status'],
     queryFn: async () => {
-      const response = await fetch(`/api/memories/${selectedUserId}`);
+      const response = await fetch('/api/hybrid-memories/status');
+      return response.json();
+    },
+    refetchInterval: 30000 // Refresh every 30 seconds
+  });
+
+  // Get all memories for selected user (support both services)
+  const { data: allMemories = [], isLoading } = useQuery<Memory[]>({
+    queryKey: [useHybridService ? '/api/hybrid-memories' : '/api/memories', selectedUserId],
+    queryFn: async () => {
+      const endpoint = useHybridService ? `/api/hybrid-memories/${selectedUserId}` : `/api/memories/${selectedUserId}`;
+      const response = await fetch(endpoint);
       return response.json();
     },
     enabled: !!selectedUserId
   });
 
-  // Search memories mutation
+  // Search memories mutation (support both services)
   const searchMutation = useMutation({
     mutationFn: async ({ query, userId }: { query: string; userId: string }): Promise<SearchResult[]> => {
-      const response = await fetch('/api/memories/search', {
+      const endpoint = useHybridService ? '/api/hybrid-memories/search' : '/api/memories/search';
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query, userId, limit: 20 })
@@ -110,14 +123,61 @@ export default function MemoriesConsole() {
         <div className="flex items-center gap-3 mb-4">
           <Brain className="h-8 w-8 text-blue-600" />
           <h1 className="text-3xl font-bold">Memory Console</h1>
-          <Badge variant="secondary" className="ml-auto">
-            Open Source Mem0
-          </Badge>
+          <div className="ml-auto flex items-center gap-2">
+            <Badge variant={useHybridService ? "default" : "secondary"}>
+              {useHybridService ? "Hybrid Service" : "Open Source Only"}
+            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setUseHybridService(!useHybridService)}
+            >
+              Switch to {useHybridService ? "Open Source" : "Hybrid"}
+            </Button>
+          </div>
         </div>
         <p className="text-gray-600">
-          View and manage memories stored in the local CockroachDB vector database
+          {useHybridService 
+            ? "Managing memories across both local CockroachDB and Mem0 Cloud services"
+            : "View and manage memories stored in the local CockroachDB vector database"
+          }
         </p>
       </div>
+
+      {/* Service Status */}
+      {serviceStatus && (
+        <Card className="mb-6 border-blue-200 bg-blue-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-blue-800">
+              <Database className="h-5 w-5" />
+              Service Status
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <div className="text-sm font-medium text-gray-600">Storage</div>
+                <div className="text-lg font-semibold">{serviceStatus.storageInfo}</div>
+              </div>
+              <div>
+                <div className="text-sm font-medium text-gray-600">Mode</div>
+                <div className="text-lg font-semibold capitalize">{serviceStatus.mode}</div>
+              </div>
+              <div>
+                <div className="text-sm font-medium text-gray-600">Services</div>
+                <div className="flex gap-2 mt-1">
+                  <Badge variant={serviceStatus.openSource ? "default" : "secondary"}>
+                    Open Source {serviceStatus.openSource ? "✓" : "✗"}
+                  </Badge>
+                  <Badge variant={serviceStatus.managed ? "default" : "secondary"}>
+                    Managed {serviceStatus.managed ? "✓" : "✗"}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Controls */}
       <Card className="mb-6">
