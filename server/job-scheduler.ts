@@ -1,6 +1,7 @@
 import { conversationAnalyzer } from "./conversation-analyzer";
 import { milestoneService } from "./milestone-service";
 import { storage } from "./storage";
+import { memoryService } from "./memory-service";
 
 export class JobScheduler {
   private intervalId: NodeJS.Timeout | null = null;
@@ -50,6 +51,9 @@ export class JobScheduler {
 
       // Job 3: Generate encouragement notifications for children with low activity
       await this.generateEncouragementNotifications();
+
+      // Job 4: Memory consolidation for all children (Phase 3)
+      await this.consolidateMemoriesForAllChildren();
 
       const endTime = new Date();
       const duration = endTime.getTime() - startTime.getTime();
@@ -144,6 +148,40 @@ export class JobScheduler {
     } catch (error) {
       console.error('Error fetching children:', error);
       return [];
+    }
+  }
+
+  // Phase 3: Memory consolidation for all children
+  private async consolidateMemoriesForAllChildren(): Promise<void> {
+    try {
+      console.log('Starting memory consolidation for all children...');
+      
+      const children = await this.getAllChildren();
+      let totalConsolidations = 0;
+      let totalProcessingTime = 0;
+      
+      for (const child of children) {
+        try {
+          const result = await memoryService.consolidateMemories(child.id);
+          totalConsolidations++;
+          totalProcessingTime += result.processingTime;
+          
+          if (result.consolidatedMemories > 0 || result.mergedMemories > 0 || result.archivedMemories > 0) {
+            console.log(`Memory consolidation for child ${child.id}: ${result.consolidatedMemories} processed, ${result.mergedMemories} merged, ${result.archivedMemories} archived`);
+          }
+        } catch (error) {
+          console.error(`Error consolidating memories for child ${child.id}:`, error);
+        }
+      }
+      
+      if (children.length > 0) {
+        const avgProcessingTime = totalProcessingTime / children.length;
+        console.log(`Memory consolidation completed for ${children.length} children (avg: ${avgProcessingTime.toFixed(2)}ms per child)`);
+      } else {
+        console.log('No children found for memory consolidation');
+      }
+    } catch (error) {
+      console.error('Error during memory consolidation job:', error);
     }
   }
 
