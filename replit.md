@@ -19,7 +19,7 @@ This is a full-stack Node.js application called "Appu" - an AI-powered magical e
 - **Runtime**: Node.js with TypeScript
 - **Framework**: Express.js for REST API and WebSocket handling
 - **Database**: PostgreSQL with Drizzle ORM
-- **Database Provider**: Neon Database (serverless PostgreSQL)
+- **Database Provider**: CockroachDB (distributed PostgreSQL)
 - **AI Service Layer**: Abstracted AI service with factory pattern for configuration-based provider selection
 - **Multi-Provider AI**: OpenAI (GPT-4o, GPT-4o-mini) and Google Gemini (2.0-flash-exp, 1.5-flash)
 - **Audio Processing**: OpenAI Whisper API for speech-to-text with FFmpeg preprocessing
@@ -116,7 +116,7 @@ This is a full-stack Node.js application called "Appu" - an AI-powered magical e
 ### Environment Requirements
 - `OPENAI_API_KEY`: Required for OpenAI services (Whisper, GPT, TTS)
 - `GOOGLE_API_KEY`: Required for Google Gemini API services
-- `DATABASE_URL`: PostgreSQL connection string (auto-provisioned in Replit)
+- `DATABASE_URL`: CockroachDB connection string (configured for distributed database)
 
 ## Changelog
 
@@ -139,6 +139,7 @@ This is a full-stack Node.js application called "Appu" - an AI-powered magical e
 - June 15, 2025: Implemented profile update functionality in parent assistant - AI can now accept parent input to update children's profiles (likes, dislikes, favorite things, learning goals, languages, daily routines) with real-time database updates and confirmation messages
 - June 15, 2025: Fixed critical JSON parsing bug in profile update system - resolved AI response formatting issues and implemented robust JSON extraction to successfully process natural language profile update requests with real-time database modifications
 - June 15, 2025: Configured system timezone to IST (Asia/Kolkata) - all timestamps, logs, and database operations now use Indian Standard Time for consistent user experience
+- June 30, 2025: Successfully migrated database from Neon PostgreSQL to CockroachDB - updated database connection configuration, created missing tables, and verified all functionality working correctly with distributed database architecture
 
 ## User Preferences
 
