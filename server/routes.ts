@@ -1592,6 +1592,26 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
     }
   });
 
+  // Test Mem0 API key endpoint
+  app.post('/api/test-mem0-key', async (req: Request, res: Response) => {
+    try {
+      const { mem0ManagedService } = await import('./mem0-managed-service');
+      const isValid = await mem0ManagedService.testConnection();
+      res.json({ 
+        valid: isValid, 
+        message: isValid ? 'API key is valid' : 'API key is invalid or expired',
+        dashboardUrl: 'https://app.mem0.ai/dashboard/api-keys'
+      });
+    } catch (error) {
+      console.error('Error testing Mem0 API key:', error);
+      res.status(500).json({ 
+        valid: false, 
+        message: 'Failed to test API key',
+        error: (error as Error).message 
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   
   // Set up OpenAI Realtime API WebSocket service

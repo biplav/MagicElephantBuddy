@@ -175,6 +175,31 @@ export default function MemoriesConsole() {
                 </div>
               </div>
             </div>
+            
+            {/* API Key Status Warning */}
+            {!serviceStatus.managed && (
+              <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-md">
+                <div className="flex items-start gap-2">
+                  <div className="text-amber-600 text-sm">
+                    <strong>Mem0 Cloud Service Unavailable:</strong> API key is invalid or expired.
+                    <br />
+                    <span className="text-xs">
+                      You can get a valid API key from{' '}
+                      <a 
+                        href="https://app.mem0.ai/dashboard/api-keys" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="underline hover:text-amber-800"
+                      >
+                        https://app.mem0.ai/dashboard/api-keys
+                      </a>
+                      <br />
+                      The Open Source service is working normally and will be used instead.
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

@@ -53,7 +53,12 @@ export class Mem0ManagedService {
       }
 
       return await response.json();
-    } catch (error) {
+    } catch (error: any) {
+      // Better error handling for API key issues
+      if (error.message.includes('Invalid API key') || error.message.includes('token_not_valid')) {
+        console.warn('❌ Mem0 API key is invalid or expired');
+        this.isConfigured = false;
+      }
       console.error('Mem0 API request failed:', error);
       throw error;
     }
@@ -194,6 +199,24 @@ export class Mem0ManagedService {
 
   getStorageInfo(): string {
     return 'Mem0 Cloud (Managed Service)';
+  }
+
+  async testConnection(): Promise<boolean> {
+    try {
+      // Test with a simple API call
+      const response = await this.makeRequest('/memories?user_id=test&limit=1');
+      console.log('✅ Mem0 API connection successful');
+      return true;
+    } catch (error: any) {
+      if (error.message.includes('Invalid API key')) {
+        console.log('❌ Mem0 API key is invalid or expired');
+        console.log('   Please check your API key at: https://app.mem0.ai/dashboard/api-keys');
+        this.isConfigured = false;
+      } else {
+        console.log('⚠️ Mem0 API connection test failed:', error.message);
+      }
+      return false;
+    }
   }
 }
 
