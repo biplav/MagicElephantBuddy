@@ -22,6 +22,7 @@ export default function Home() {
   const [isProcessingText, setIsProcessingText] = useState<boolean>(false);
   const [enableLocalPlayback, setEnableLocalPlayback] = useState<boolean>(false); // Default to false for server testing
   const [useRealtimeAPI, setUseRealtimeAPI] = useState<boolean>(true); // Toggle for OpenAI Realtime API
+  const [enableVideo, setEnableVideo] = useState<boolean>(false); // Toggle for video capture
   const [aiSettings, setAiSettings] = useState({
     defaultProvider: 'standard',
     voiceMode: 'openai',
@@ -119,6 +120,11 @@ export default function Home() {
         }
       }
     },
+    enableVideo: enableVideo,
+    onVideoFrame: enableVideo ? (frameData) => {
+      console.log("Video frame captured:", frameData.slice(0, 50) + "...");
+      // Video frames are automatically sent to the AI - no additional handling needed
+    } : undefined,
     onError: (error) => {
       console.error("Realtime API error:", error);
       setElephantState("error");

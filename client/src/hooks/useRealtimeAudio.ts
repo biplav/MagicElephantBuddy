@@ -147,7 +147,23 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
         }
 
         // Start capturing video frames
-        startVideoCapture();
+        if (options.onVideoFrame) {
+          const onVideoFrameCallback = options.onVideoFrame;
+          videoIntervalRef.current = setInterval(() => {
+            const video = videoRef.current;
+            const canvas = canvasRef.current;
+            
+            if (video && canvas && video.readyState >= 2) {
+              const context = canvas.getContext('2d');
+              if (context) {
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const frameData = canvas.toDataURL('image/jpeg', 0.7);
+                const base64Data = frameData.split(',')[1];
+                onVideoFrameCallback(base64Data);
+              }
+            }
+          }, 500); // 2 FPS
+        }
       }
       
       // Handle incoming audio from OpenAI
@@ -321,6 +337,9 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
   const disconnect = useCallback(() => {
     isConnectingRef.current = false;
     
+    // Stop video capture
+    stopVideoCapture();
+    
     if (pcRef.current) {
       pcRef.current.close();
       pcRef.current = null;
@@ -336,15 +355,28 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       streamRef.current = null;
     }
     
+    // Clean up video elements
+    if (videoRef.current) {
+      document.body.removeChild(videoRef.current);
+      videoRef.current = null;
+    }
+    
+    if (canvasRef.current) {
+      document.body.removeChild(canvasRef.current);
+      canvasRef.current = null;
+    }
+    
     setState(prev => ({ 
       ...prev, 
       isConnected: false, 
       isRecording: false,
-      isProcessing: false 
+      isProcessing: false,
+      videoEnabled: false,
+      hasVideoPermission: false
     }));
     
     console.log('Disconnected from realtime API');
-  }, []);
+  }, [stopVideoCapture]);
   
   // Start recording (WebRTC handles this automatically when connected)
   const startRecording = useCallback(async () => {
@@ -389,6 +421,8 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     startRecording,
     stopRecording,
     requestMicrophonePermission,
+    startVideoCapture,
+    stopVideoCapture,
     isReady: state.isConnected
   };
 }
