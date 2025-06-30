@@ -5,6 +5,8 @@ interface UseRealtimeAudioOptions {
   onResponseReceived?: (text: string) => void;
   onAudioResponseReceived?: (audioData: string) => void;
   onError?: (error: string) => void;
+  enableVideo?: boolean;
+  onVideoFrame?: (frameData: string) => void;
 }
 
 interface RealtimeAudioState {
@@ -12,6 +14,8 @@ interface RealtimeAudioState {
   isRecording: boolean;
   isProcessing: boolean;
   error: string | null;
+  videoEnabled: boolean;
+  hasVideoPermission: boolean;
 }
 
 export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) {
@@ -19,13 +23,45 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     isConnected: false,
     isRecording: false,
     isProcessing: false,
-    error: null
+    error: null,
+    videoEnabled: false,
+    hasVideoPermission: false
   });
   
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const isConnectingRef = useRef<boolean>(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const videoIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Video frame capture function
+  const startVideoCapture = useCallback(() => {
+    if (!videoRef.current || !canvasRef.current || !options.onVideoFrame) return;
+
+    videoIntervalRef.current = setInterval(() => {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      
+      if (video && canvas && video.readyState >= 2) {
+        const context = canvas.getContext('2d');
+        if (context) {
+          context.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const frameData = canvas.toDataURL('image/jpeg', 0.7);
+          const base64Data = frameData.split(',')[1];
+          options.onVideoFrame?.(base64Data);
+        }
+      }
+    }, 500); // 2 FPS
+  }, [options]);
+
+  const stopVideoCapture = useCallback(() => {
+    if (videoIntervalRef.current) {
+      clearInterval(videoIntervalRef.current);
+      videoIntervalRef.current = null;
+    }
+  }, []);
   
   // Connect to OpenAI Realtime API using WebRTC
   const connect = useCallback(async () => {
@@ -58,21 +94,61 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       const pc = new RTCPeerConnection();
       pcRef.current = pc;
       
-      // Get microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({
+      // Get microphone and optionally video access
+      const mediaConstraints: MediaStreamConstraints = {
         audio: {
           sampleRate: 24000,
           channelCount: 1,
           echoCancellation: true,
           noiseSuppression: true
         }
-      });
+      };
+
+      if (options.enableVideo) {
+        mediaConstraints.video = {
+          width: { ideal: 320 },
+          height: { ideal: 240 },
+          frameRate: { ideal: 2 }
+        };
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
       
       streamRef.current = stream;
       
       // Add the audio track to peer connection
       const audioTrack = stream.getAudioTracks()[0];
       pc.addTrack(audioTrack, stream);
+
+      // Handle video if enabled
+      if (options.enableVideo && stream.getVideoTracks().length > 0) {
+        setState(prev => ({ ...prev, videoEnabled: true, hasVideoPermission: true }));
+        
+        // Set up video preview (hidden)
+        if (!videoRef.current) {
+          const video = document.createElement('video');
+          video.srcObject = stream;
+          video.autoplay = true;
+          video.muted = true;
+          video.playsInline = true;
+          video.style.display = 'none';
+          videoRef.current = video;
+          document.body.appendChild(video);
+        }
+
+        // Set up canvas for frame capture
+        if (!canvasRef.current) {
+          const canvas = document.createElement('canvas');
+          canvas.width = 320;
+          canvas.height = 240;
+          canvas.style.display = 'none';
+          canvasRef.current = canvas;
+          document.body.appendChild(canvas);
+        }
+
+        // Start capturing video frames
+        startVideoCapture();
+      }
       
       // Handle incoming audio from OpenAI
       pc.ontrack = (event) => {
