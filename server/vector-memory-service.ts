@@ -172,8 +172,9 @@ export class PostgreSQLVectorMemoryService implements IMemoryService {
       }));
 
       // Filter by similarity threshold if specified
-      if (query.threshold && query.threshold > 0) {
-        const filtered = typedResults.filter((row) => row.similarity >= query.threshold!);
+      const threshold = query.threshold || 0;
+      if (threshold > 0) {
+        const filtered = typedResults.filter((row) => row.similarity >= threshold);
         return filtered.map(this.convertToMemory);
       }
       
@@ -288,15 +289,15 @@ export class PostgreSQLVectorMemoryService implements IMemoryService {
     `);
 
     return similarityResults.rows.map(row => this.convertToMemory({
-      id: row.id,
-      childId: row.child_id,
-      content: row.content,
-      type: row.type,
-      importance: row.importance,
-      embedding: row.embedding,
-      metadata: row.metadata,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      id: row.id as string,
+      childId: row.child_id as number,
+      content: row.content as string,
+      type: row.type as MemoryType,
+      importance: (row.importance as number) || 0.5,
+      embedding: row.embedding as number[] | null,
+      metadata: row.metadata as MemoryMetadata | null,
+      createdAt: new Date(row.created_at as string),
+      updatedAt: new Date(row.updated_at as string),
     }));
   }
 
