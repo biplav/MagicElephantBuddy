@@ -18,8 +18,8 @@ This is a full-stack Node.js application called "Appu" - an AI-powered magical e
 ### Backend Architecture
 - **Runtime**: Node.js with TypeScript
 - **Framework**: Express.js for REST API and WebSocket handling
-- **Database**: PostgreSQL with Drizzle ORM
-- **Database Provider**: CockroachDB (distributed PostgreSQL)
+- **Database**: CockroachDB (distributed SQL) with Drizzle ORM
+- **Database Provider**: CockroachDB Cloud (unified architecture)
 - **AI Service Layer**: Abstracted AI service with factory pattern for configuration-based provider selection
 - **Multi-Provider AI**: OpenAI (GPT-4o, GPT-4o-mini) and Google Gemini (2.0-flash-exp, 1.5-flash)
 - **Audio Processing**: OpenAI Whisper API for speech-to-text with FFmpeg preprocessing
@@ -143,7 +143,7 @@ This is a full-stack Node.js application called "Appu" - an AI-powered magical e
 - June 30, 2025: Implemented Phase 1 of Mem0 integration - created memory service architecture with TypeScript interfaces, database schema extensions for memory linking tables, and local memory implementation for testing and development
 - June 30, 2025: Completed Phase 2 of Mem0 integration - implemented real-time memory formation during conversations with automatic detection of interests, emotions, learning content, and relationship building moments across both OpenAI Realtime API and Gemini Live API services
 - June 30, 2025: Completed Phase 3 of Mem0 integration - implemented advanced memory features including multi-factor importance scoring, automated memory consolidation with merging and archiving, comprehensive memory analytics, and scheduled hourly memory optimization jobs
-- June 30, 2025: Enhanced memory system with PostgreSQL vector support - added pgvector extension, created vector-enabled memories table with 1536-dimension embeddings, implemented semantic similarity search using OpenAI text-embedding-3-small, and PostgreSQL-based vector memory service with cosine distance similarity matching
+- June 30, 2025: Enhanced memory system with CockroachDB vector support - migrated from mixed PostgreSQL/NeonDB to unified CockroachDB architecture, implemented JSON-based vector embeddings compatible with CockroachDB, created semantic similarity search using OpenAI text-embedding-3-small with application-level cosine distance calculations, and comprehensive vector memory service for distributed database architecture
 
 ## User Preferences
 
