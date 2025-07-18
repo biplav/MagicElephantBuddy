@@ -27,7 +27,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     videoEnabled: false,
     hasVideoPermission: false
   });
-  
+
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
@@ -36,7 +36,8 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const videoWsRef = useRef<WebSocket | null>(null);
-  
+  const videoWsReadyRef = useRef<boolean>(false);
+
   // Video frame capture function
   const startVideoCapture = useCallback(() => {
     if (!videoRef.current || !canvasRef.current || !options.onVideoFrame) return;
@@ -44,7 +45,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     videoIntervalRef.current = setInterval(() => {
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      
+
       if (video && canvas && video.readyState >= 2) {
         const context = canvas.getContext('2d');
         if (context) {
@@ -63,7 +64,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       videoIntervalRef.current = null;
     }
   }, []);
-  
+
   // Connect to OpenAI Realtime API using WebRTC
   const connect = useCallback(async () => {
     // Prevent multiple simultaneous connection attempts
@@ -71,11 +72,11 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       console.log('Connection already in progress or established');
       return;
     }
-    
+
     try {
       isConnectingRef.current = true;
       setState(prev => ({ ...prev, error: null }));
-      
+
       // Create ephemeral token from server
       const response = await fetch('/api/session', {
         method: 'POST',
@@ -90,11 +91,11 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       }
 
       const { client_secret } = await response.json();
-      
+
       // Create WebRTC peer connection
       const pc = new RTCPeerConnection();
       pcRef.current = pc;
-      
+
       // Get microphone and optionally video access
       const mediaConstraints: MediaStreamConstraints = {
         audio: {
@@ -114,9 +115,9 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       }
 
       const stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-      
+
       streamRef.current = stream;
-      
+
       // Add the audio track to peer connection
       const audioTrack = stream.getAudioTracks()[0];
       pc.addTrack(audioTrack, stream);
@@ -124,7 +125,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       // Handle video if enabled
       if (options.enableVideo && stream.getVideoTracks().length > 0) {
         setState(prev => ({ ...prev, videoEnabled: true, hasVideoPermission: true }));
-        
+
         // Set up video preview (hidden)
         if (!videoRef.current) {
           const video = document.createElement('video');
@@ -151,23 +152,27 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
         if (options.onVideoFrame) {
           const videoWsUrl = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
           const wsUrl = `${videoWsUrl}//${window.location.host}/ws/realtime`;
-          
+
           try {
             videoWsRef.current = new WebSocket(wsUrl);
-            
+
             videoWsRef.current.onopen = () => {
               console.log('📹 CLIENT: Video WebSocket connected');
+              videoWsReadyRef.current = true;
             };
-            
+
             videoWsRef.current.onclose = () => {
               console.log('📹 CLIENT: Video WebSocket disconnected');
+              videoWsReadyRef.current = false;
             };
-            
+
             videoWsRef.current.onerror = (error) => {
               console.error('📹 CLIENT: Video WebSocket error:', error);
+              videoWsReadyRef.current = false;
             };
           } catch (error) {
             console.error('📹 CLIENT: Failed to create video WebSocket:', error);
+            videoWsReadyRef.current = false;
           }
         }
 
@@ -177,19 +182,19 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
           videoIntervalRef.current = setInterval(() => {
             const video = videoRef.current;
             const canvas = canvasRef.current;
-            
+
             if (video && canvas && video.readyState >= 2) {
               const context = canvas.getContext('2d');
               if (context) {
                 context.drawImage(video, 0, 0, canvas.width, canvas.height);
                 const frameData = canvas.toDataURL('image/jpeg', 0.7);
                 const base64Data = frameData.split(',')[1];
-                
+
                 // Send frame to callback (for local processing)
                 onVideoFrameCallback(base64Data);
-                
+
                 // Send frame to server via separate WebSocket
-                if (videoWsRef.current && videoWsRef.current.readyState === WebSocket.OPEN) {
+                if (videoWsRef.current && videoWsReadyRef.current && videoWsRef.current.readyState === WebSocket.OPEN) {
                   console.log('📹 CLIENT: Sending video frame to server via WebSocket');
                   videoWsRef.current.send(JSON.stringify({
                     type: 'video_frame',
@@ -201,7 +206,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
           }, 500); // 2 FPS
         }
       }
-      
+
       // Handle incoming audio from OpenAI
       pc.ontrack = (event) => {
         console.log('Received audio track from OpenAI');
@@ -209,24 +214,24 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
         const audio = new Audio();
         audio.srcObject = remoteStream;
         audio.autoplay = true;
-        
+
         audio.onloadedmetadata = () => {
           console.log('Audio metadata loaded, starting playback');
         };
-        
+
         audio.onerror = (error) => {
           console.error('Audio playback error:', error);
         };
       };
-      
+
       // Handle data channel for text responses
       pc.ondatachannel = (event) => {
         const channel = event.channel;
         dataChannelRef.current = channel;
-        
+
         channel.onopen = async () => {
           console.log('Data channel opened');
-          
+
           // Initialize conversation in database when realtime session starts
           try {
             await fetch('/api/start-realtime-conversation', {
@@ -238,12 +243,12 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
             console.error('Error starting realtime conversation:', error);
           }
         };
-        
+
         channel.onmessage = async (messageEvent) => {
           try {
             const message = JSON.parse(messageEvent.data);
             console.log('Received message:', message);
-            
+
             switch (message.type) {
               case 'conversation.item.input_audio_transcription.completed':
                 // Store child input message in database
@@ -276,7 +281,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
                         content.type === 'text' ? content.text : ''
                       ).join('') : ''
                     ).join('');
-                    
+
                     if (responseText) {
                       await fetch('/api/store-realtime-message', {
                         method: 'POST',
@@ -303,16 +308,16 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
             console.error('Error parsing data channel message:', error);
           }
         };
-        
+
         channel.onerror = (error) => {
           console.error('Data channel error:', error);
         };
       };
-      
+
       // Handle connection state changes
       pc.onconnectionstatechange = () => {
         console.log('WebRTC connection state:', pc.connectionState);
-        
+
         switch (pc.connectionState) {
           case 'connected':
             setState(prev => ({ ...prev, isConnected: true, isRecording: true }));
@@ -324,18 +329,18 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
             break;
         }
       };
-      
+
       pc.onicegatheringstatechange = () => {
         console.log('ICE gathering state:', pc.iceGatheringState);
       };
-      
+
       // Create offer and connect to OpenAI
       const offer = await pc.createOffer({
         offerToReceiveAudio: true,
         offerToReceiveVideo: false
       });
       await pc.setLocalDescription(offer);
-      
+
       // Send offer to OpenAI Realtime API
       const realtimeResponse = await fetch('https://api.openai.com/v1/realtime', {
         method: 'POST',
@@ -345,21 +350,21 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
         },
         body: offer.sdp,
       });
-      
+
       if (!realtimeResponse.ok) {
         const errorText = await realtimeResponse.text();
         console.error('OpenAI Realtime API error:', errorText);
         throw new Error(`Failed to connect to OpenAI Realtime API: ${realtimeResponse.status}`);
       }
-      
+
       const answerSdp = await realtimeResponse.text();
       await pc.setRemoteDescription({
         type: 'answer',
         sdp: answerSdp,
       });
-      
+
       console.log('WebRTC connection established with OpenAI Realtime API');
-      
+
     } catch (error: any) {
       console.error('Error connecting to realtime API:', error);
       setState(prev => ({ ...prev, error: error.message || 'Failed to connect to realtime API' }));
@@ -368,45 +373,45 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       isConnectingRef.current = false;
     }
   }, [options]);
-  
+
   // Disconnect from the WebRTC connection
   const disconnect = useCallback(() => {
     isConnectingRef.current = false;
-    
+
     // Stop video capture
     stopVideoCapture();
-    
+
     if (pcRef.current) {
       pcRef.current.close();
       pcRef.current = null;
     }
-    
+
     if (dataChannelRef.current) {
       dataChannelRef.current.close();
       dataChannelRef.current = null;
     }
-    
+
     if (videoWsRef.current) {
       videoWsRef.current.close();
       videoWsRef.current = null;
     }
-    
+
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
-    
+
     // Clean up video elements
     if (videoRef.current) {
       document.body.removeChild(videoRef.current);
       videoRef.current = null;
     }
-    
+
     if (canvasRef.current) {
       document.body.removeChild(canvasRef.current);
       canvasRef.current = null;
     }
-    
+
     setState(prev => ({ 
       ...prev, 
       isConnected: false, 
@@ -415,10 +420,10 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       videoEnabled: false,
       hasVideoPermission: false
     }));
-    
+
     console.log('Disconnected from realtime API');
   }, [stopVideoCapture]);
-  
+
   // Start recording (WebRTC handles this automatically when connected)
   const startRecording = useCallback(async () => {
     if (!state.isConnected) {
@@ -428,13 +433,13 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       console.log('Started realtime audio recording');
     }
   }, [state.isConnected, connect]);
-  
+
   // Stop recording
   const stopRecording = useCallback(() => {
     setState(prev => ({ ...prev, isRecording: false, isProcessing: true }));
     console.log('Stopped realtime audio recording');
   }, []);
-  
+
   // Request microphone permission
   const requestMicrophonePermission = useCallback(async () => {
     try {
@@ -447,14 +452,14 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       return false;
     }
   }, [options]);
-  
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       disconnect();
     };
   }, [disconnect]);
-  
+
   return {
     ...state,
     connect,
