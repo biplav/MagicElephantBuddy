@@ -64,11 +64,16 @@ export default function useConversationWebSocket(options: UseConversationWebSock
         console.log('WebSocket connected');
         setState(prev => ({ ...prev, isConnected: true }));
         
-        // Start session
-        ws.send(JSON.stringify({
-          type: 'start_session',
-          childId: 1 // Default child ID
-        }));
+        // Wait a moment for connection to stabilize before sending start_session
+        setTimeout(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            console.log('Sending start_session message');
+            ws.send(JSON.stringify({
+              type: 'start_session',
+              childId: 1 // Default child ID
+            }));
+          }
+        }, 100);
       };
       
       ws.onmessage = async (event) => {
@@ -77,6 +82,10 @@ export default function useConversationWebSocket(options: UseConversationWebSock
           console.log('Received WebSocket message:', message);
           
           switch (message.type) {
+            case 'connection_established':
+              console.log('Connection established at:', message.timestamp);
+              break;
+              
             case 'session_started':
               console.log('Session started successfully');
               break;

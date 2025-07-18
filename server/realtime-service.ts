@@ -314,7 +314,12 @@ async function analyzeVideoFrame(frameData: string): Promise<string> {
 }
 
 export function setupRealtimeWebSocket(server: any) {
-  const wss = new WebSocketServer({ server, path: '/ws/realtime' });
+  const wss = new WebSocketServer({ 
+    server, 
+    path: '/ws/realtime',
+    perMessageDeflate: false,
+    clientTracking: false
+  });
   
   wss.on('connection', (ws: WebSocket) => {
     const sessionId = generateSessionId();

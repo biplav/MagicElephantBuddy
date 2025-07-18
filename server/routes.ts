@@ -1614,6 +1614,11 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
 
   const httpServer = createServer(app);
   
+  // Enable WebSocket server error handling
+  httpServer.on('upgrade', (request, socket, head) => {
+    console.log('HTTP upgrade request for:', request.url);
+  });
+  
   // Set up OpenAI Realtime API WebSocket service
   setupRealtimeWebSocket(httpServer);
   
@@ -1621,24 +1626,31 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
   setupGeminiLiveWebSocket(httpServer);
   
   // Set up WebSocket server for real-time communication (future use)
-  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  // const wss = new WebSocketServer({ 
+  //   server: httpServer, 
+  //   path: '/ws',
+  //   verifyClient: (info) => {
+  //     console.log('WebSocket connection attempt on /ws from:', info.origin);
+  //     return true;
+  //   }
+  // });
   
-  wss.on('connection', (ws) => {
-    console.log('WebSocket client connected');
-    
-    ws.on('message', (message) => {
-      console.log('Received message:', message);
-      
-      // Echo back for now
-      if (ws.readyState === ws.OPEN) {
-        ws.send(JSON.stringify({ message: 'Received message' }));
-      }
-    });
-    
-    ws.on('close', () => {
-      console.log('WebSocket client disconnected');
-    });
-  });
+  // wss.on('connection', (ws) => {
+  //   console.log('WebSocket client connected to /ws');
+  //   
+  //   ws.on('message', (message) => {
+  //     console.log('Received message on /ws:', message);
+  //     
+  //     // Echo back for now
+  //     if (ws.readyState === ws.OPEN) {
+  //       ws.send(JSON.stringify({ message: 'Received message' }));
+  //     }
+  //   });
+  //   
+  //   ws.on('close', () => {
+  //     console.log('WebSocket client disconnected from /ws');
+  //   });
+  // });
 
   return httpServer;
 }

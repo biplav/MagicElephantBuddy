@@ -306,6 +306,11 @@ async function startGeminiLiveSession(session: GeminiLiveSession) {
   try {
     console.log('Starting Gemini Live session');
     
+    // Check if Google API key is available
+    if (!process.env.GOOGLE_API_KEY) {
+      throw new Error('Google API key not found');
+    }
+    
     // Create new conversation in database
     const conversation = await storage.createConversation({
       childId: session.childId,
@@ -369,8 +374,11 @@ LIVE CONVERSATION GUIDANCE:
     console.error('Error starting Gemini Live session:', error);
     session.ws.send(JSON.stringify({
       type: 'error',
-      error: 'Failed to start session'
+      error: `Failed to start session: ${error.message}`
     }));
+    
+    // Close the WebSocket connection on error
+    session.ws.close();
   }
 }
 
@@ -499,7 +507,9 @@ function generateSessionId(): string {
 export function setupGeminiLiveWebSocket(server: any) {
   const wss = new WebSocketServer({ 
     server: server, 
-    path: '/gemini-ws'
+    path: '/gemini-ws',
+    perMessageDeflate: false,
+    clientTracking: false
   });
 
   console.log('Gemini Live WebSocket server initialized on /gemini-ws');
@@ -517,6 +527,17 @@ export function setupGeminiLiveWebSocket(server: any) {
       messageCount: 0
     };
 
+    // Send immediate connection confirmation
+    try {
+      ws.send(JSON.stringify({
+        type: 'connection_established',
+        timestamp: new Date().toISOString()
+      }));
+      console.log('Sent connection_established message');
+    } catch (error) {
+      console.error('Error sending connection_established message:', error);
+    }
+
     ws.on('message', async (data: Buffer) => {
       try {
         const message = JSON.parse(data.toString());
@@ -524,6 +545,7 @@ export function setupGeminiLiveWebSocket(server: any) {
 
         switch (message.type) {
           case 'start_session':
+            console.log('Processing start_session message');
             await startGeminiLiveSession(session);
             break;
           
@@ -603,6 +625,13 @@ export function setupGeminiLiveWebSocket(server: any) {
 
     ws.on('error', (error) => {
       console.error('Gemini Live WebSocket error:', error);
+      // Send error details to client if connection is still open
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'error',
+          error: 'WebSocket connection error'
+        }));
+      }
     });
   });
 
