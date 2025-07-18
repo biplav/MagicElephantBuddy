@@ -537,6 +537,7 @@ export function setupGeminiLiveWebSocket(server: any) {
             break;
           
           case 'video_frame':
+            console.log(`📹 GEMINI: Received video frame from client - Size: ${message.frameData?.length || 0} bytes`);
             await handleGeminiVideoFrame(session, message.frameData);
             break;
           

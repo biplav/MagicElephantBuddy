@@ -926,6 +926,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Debug video frame reception
+  app.get('/api/debug/video-status', async (req: Request, res: Response) => {
+    try {
+      res.json({
+        message: 'Video frame debug endpoint active',
+        services: {
+          realtime: 'Listening on /ws/realtime for video_frame messages',
+          gemini: 'Listening on /gemini-ws for video_frame messages',
+          langgraph: 'getEyesTool available for LLM-controlled video analysis'
+        },
+        note: 'Check server console for "📹" logs when video frames are received'
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Debug endpoint failed' });
+    }
+  });
+
   // Test LangGraph workflow endpoint
   app.post('/api/admin/test-workflow', async (req: Request, res: Response) => {
     try {

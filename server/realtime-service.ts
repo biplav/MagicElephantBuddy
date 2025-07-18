@@ -379,8 +379,10 @@ export function setupRealtimeWebSocket(server: any) {
             break;
           case 'video_frame':
             // Handle video frame using LangGraph workflow
+            console.log(`📹 REALTIME: Received video frame from client - Size: ${message.frameData?.length || 0} bytes`);
             try {
               const { videoAnalysisWorkflow } = await import('./langgraph-workflows');
+              console.log(`📹 REALTIME: Processing video frame through LangGraph workflow`);
               await videoAnalysisWorkflow.invoke({
                 childId: session.childId,
                 conversationId: session.conversationId,
@@ -390,6 +392,7 @@ export function setupRealtimeWebSocket(server: any) {
               });
             } catch (error) {
               console.error('Video workflow error:', error);
+              console.log(`📹 REALTIME: Falling back to direct video frame handling`);
               await handleVideoFrame(session, message.frameData); // Fallback
             }
             break;

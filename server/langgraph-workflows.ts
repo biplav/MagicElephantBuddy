@@ -569,6 +569,7 @@ function createVideoAnalysisWorkflow() {
 
 async function analyzeVideoFrame(frameData: string): Promise<string> {
   try {
+    console.log(`👁️ LANGGRAPH: Analyzing video frame - Size: ${frameData?.length || 0} bytes`);
     const { defaultAIService } = await import('./ai-service');
     
     // Use OpenAI's vision model to analyze what the child is showing
