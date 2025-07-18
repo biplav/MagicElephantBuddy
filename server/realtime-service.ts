@@ -448,7 +448,7 @@ export function setupRealtimeWebSocket(server: any) {
     console.log(`Realtime session connected: ${sessionId}`);
 
     // Set WebSocket options to prevent frame header issues
-    ws.binaryType = 'arraybuffer';
+    //ws.binaryType = 'arraybuffer';
     
     // Add keepalive and timeout handling
     let isAlive = true;
@@ -466,7 +466,7 @@ export function setupRealtimeWebSocket(server: any) {
       }
       isAlive = false;
       ws.ping();
-    }, 30000);
+    }, 300000);
 
     // Initialize session with default child (for demo purposes, in production this would come from user authentication)
     const session: RealtimeSession = {
