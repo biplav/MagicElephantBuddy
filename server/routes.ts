@@ -961,49 +961,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Visualize LangGraph workflow structure
   app.get('/api/admin/workflow-graph', async (req: Request, res: Response) => {
     try {
-      const { conversationWorkflow, videoAnalysisWorkflow } = await import('./langgraph-workflows');
+      // Instead of trying to access internal graph structure, provide a static representation
+      // based on the known workflow structure from the code
       
-      // Get graph representations
-      const conversationGraph = conversationWorkflow.getGraph();
-      const videoGraph = videoAnalysisWorkflow.getGraph();
-      
-      // Convert to a more readable format
-      const conversationNodes = Array.from(conversationGraph.nodes.entries()).map(([id, node]) => ({
-        id,
-        type: node.data?.name || 'unknown',
-        label: id
-      }));
-      
-      const conversationEdges = Array.from(conversationGraph.edges).map(edge => ({
-        source: edge.source,
-        target: edge.target,
-        label: edge.data || ''
-      }));
+      const conversationWorkflow = {
+        nodes: [
+          { id: '__start__', type: 'start', label: 'Start' },
+          { id: 'transcribe', type: 'process', label: 'Transcribe Audio' },
+          { id: 'loadContext', type: 'process', label: 'Load Child Context' },
+          { id: 'generateResponse', type: 'process', label: 'Generate AI Response' },
+          { id: 'synthesizeSpeech', type: 'process', label: 'Synthesize Speech' },
+          { id: 'storeConversation', type: 'process', label: 'Store Conversation' },
+          { id: '__end__', type: 'end', label: 'End' }
+        ],
+        edges: [
+          { source: '__start__', target: 'transcribe', label: 'start' },
+          { source: 'transcribe', target: 'loadContext', label: 'audio processed' },
+          { source: 'loadContext', target: 'generateResponse', label: 'context loaded' },
+          { source: 'generateResponse', target: 'synthesizeSpeech', label: 'response generated' },
+          { source: 'synthesizeSpeech', target: 'storeConversation', label: 'speech synthesized' },
+          { source: 'storeConversation', target: '__end__', label: 'conversation stored' }
+        ],
+        entryPoint: '__start__'
+      };
 
-      const videoNodes = Array.from(videoGraph.nodes.entries()).map(([id, node]) => ({
-        id,
-        type: node.data?.name || 'unknown',
-        label: id
-      }));
-      
-      const videoEdges = Array.from(videoGraph.edges).map(edge => ({
-        source: edge.source,
-        target: edge.target,
-        label: edge.data || ''
-      }));
+      const videoAnalysisWorkflow = {
+        nodes: [
+          { id: '__start__', type: 'start', label: 'Start' },
+          { id: 'analyzeVideo', type: 'process', label: 'Analyze Video Frame' },
+          { id: '__end__', type: 'end', label: 'End' }
+        ],
+        edges: [
+          { source: '__start__', target: 'analyzeVideo', label: 'start' },
+          { source: 'analyzeVideo', target: '__end__', label: 'video analyzed' }
+        ],
+        entryPoint: '__start__'
+      };
 
       res.json({
         workflows: {
-          conversationWorkflow: {
-            nodes: conversationNodes,
-            edges: conversationEdges,
-            entryPoint: '__start__'
-          },
-          videoAnalysisWorkflow: {
-            nodes: videoNodes,
-            edges: videoEdges,
-            entryPoint: '__start__'
-          }
+          conversationWorkflow,
+          videoAnalysisWorkflow
         }
       });
     } catch (error) {
