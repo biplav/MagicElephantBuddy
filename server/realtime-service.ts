@@ -419,11 +419,24 @@ async function handleVideoFrame(session: RealtimeSession, frameData: string) {
 }
 
 export function setupRealtimeWebSocket(server: any) {
-  const wss = new WebSocketServer({ server, path: "/ws/realtime" });
+  const wss = new WebSocketServer({ 
+    server, 
+    path: "/ws/realtime",
+    // Add WebSocket server configuration to prevent frame header issues
+    perMessageDeflate: false,
+    maxPayload: 1024 * 1024 * 10, // 10MB limit for video frames
+    verifyClient: (info) => {
+      // Basic verification - in production, add proper authentication
+      return true;
+    }
+  });
 
   wss.on("connection", (ws: WebSocket) => {
     const sessionId = generateSessionId();
     console.log(`Realtime session connected: ${sessionId}`);
+
+    // Set WebSocket options to prevent frame header issues
+    ws.binaryType = 'arraybuffer';
 
     // Initialize session with default child (for demo purposes, in production this would come from user authentication)
     const session: RealtimeSession = {
@@ -440,7 +453,20 @@ export function setupRealtimeWebSocket(server: any) {
     // Handle messages from client
     ws.on("message", async (data: Buffer) => {
       try {
-        const message = JSON.parse(data.toString());
+        let message;
+        try {
+          // Handle both string and buffer data
+          const messageStr = data instanceof Buffer ? data.toString('utf8') : data.toString();
+          message = JSON.parse(messageStr);
+        } catch (parseError) {
+          console.error("Error parsing WebSocket message:", parseError);
+          console.error("Raw message data:", data.toString('utf8').substring(0, 100) + "...");
+          ws.send(JSON.stringify({
+            type: "error",
+            message: "Invalid message format - expected JSON"
+          }));
+          return;
+        }
 
         switch (message.type) {
           case "start_session":
@@ -526,14 +552,23 @@ export function setupRealtimeWebSocket(server: any) {
       }
     });
 
-    ws.on("close", () => {
-      console.log(`Realtime Video session closed: ${sessionId}`);
+    ws.on("close", (code, reason) => {
+      console.log(`Realtime Video session closed: ${sessionId}`, { code, reason: reason.toString() });
       endRealtimeSession(session);
       sessions.delete(sessionId);
     });
 
     ws.on("error", (error) => {
       console.error(`Realtime Video session error: ${sessionId}`, error);
+      // Check if it's a frame header error and handle gracefully
+      if (error.message && error.message.includes('Invalid frame header')) {
+        console.log('Frame header error detected - closing connection gracefully');
+        try {
+          ws.close(1000, 'Frame header error');
+        } catch (closeError) {
+          console.error('Error closing WebSocket after frame header error:', closeError);
+        }
+      }
       endRealtimeSession(session);
       sessions.delete(sessionId);
     });

@@ -159,19 +159,27 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
             videoWsRef.current.onopen = () => {
               console.log('📹 CLIENT: Video WebSocket connected');
               
-              // Start the session immediately after connection
-              if (videoWsRef.current && videoWsRef.current.readyState === WebSocket.OPEN) {
-                console.log('📹 CLIENT: Sending start_session message');
-                videoWsRef.current.send(JSON.stringify({
-                  type: 'start_session',
-                  childId: 1
-                }));
-              }
+              // Add a small delay to ensure connection is fully established
+              setTimeout(() => {
+                if (videoWsRef.current && videoWsRef.current.readyState === WebSocket.OPEN) {
+                  console.log('📹 CLIENT: Sending start_session message');
+                  try {
+                    videoWsRef.current.send(JSON.stringify({
+                      type: 'start_session',
+                      childId: 1
+                    }));
+                  } catch (sendError) {
+                    console.error('📹 CLIENT: Error sending start_session:', sendError);
+                  }
+                }
+              }, 100);
             };
 
             videoWsRef.current.onmessage = (event) => {
               try {
-                const message = JSON.parse(event.data);
+                // Ensure we're dealing with text data
+                const data = typeof event.data === 'string' ? event.data : event.data.toString();
+                const message = JSON.parse(data);
                 console.log('📹 CLIENT: Received WebSocket message:', message.type);
                 
                 // Mark as ready only after session is started
@@ -181,17 +189,28 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
                 }
               } catch (error) {
                 console.error('📹 CLIENT: Error parsing WebSocket message:', error);
+                console.error('📹 CLIENT: Raw message data:', event.data);
               }
             };
 
             videoWsRef.current.onclose = (event) => {
               console.log('📹 CLIENT: Video WebSocket disconnected. Code:', event.code, 'Reason:', event.reason);
               videoWsReadyRef.current = false;
+              
+              // Clean up the connection reference
+              if (videoWsRef.current) {
+                videoWsRef.current = null;
+              }
             };
 
             videoWsRef.current.onerror = (error) => {
               console.error('📹 CLIENT: Video WebSocket error:', error);
               videoWsReadyRef.current = false;
+              
+              // Clean up the connection reference on error
+              if (videoWsRef.current) {
+                videoWsRef.current = null;
+              }
             };
           } catch (error) {
             console.error('📹 CLIENT: Failed to create video WebSocket:', error);
@@ -227,7 +246,21 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
                     videoWsRef.current.send(message);
                   } catch (error) {
                     console.error('📹 CLIENT: Error sending video frame:', error);
-                    videoWsReadyRef.current = false;
+                    // Check if it's a connection error
+                    if (error.message && error.message.includes('Invalid frame header')) {
+                      console.error('📹 CLIENT: Frame header error - resetting connection');
+                      videoWsReadyRef.current = false;
+                      // Try to reconnect after a short delay
+                      setTimeout(() => {
+                        if (videoWsRef.current && videoWsRef.current.readyState !== WebSocket.OPEN) {
+                          console.log('📹 CLIENT: Attempting to reconnect video WebSocket');
+                          videoWsRef.current = null;
+                          // Reconnection logic would go here if needed
+                        }
+                      }, 1000);
+                    } else {
+                      videoWsReadyRef.current = false;
+                    }
                   }
                 } else {
                   console.log('📹 CLIENT: WebSocket not ready for video frame. State:', 
@@ -424,9 +457,24 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     }
 
     if (videoWsRef.current) {
-      videoWsRef.current.close();
+      try {
+        // Close the WebSocket connection properly with a normal closure code
+        if (videoWsRef.current.readyState === WebSocket.OPEN) {
+          videoWsRef.current.close(1000, 'Normal closure');
+        } else if (videoWsRef.current.readyState === WebSocket.CONNECTING) {
+          // If still connecting, wait a moment then close
+          setTimeout(() => {
+            if (videoWsRef.current && videoWsRef.current.readyState === WebSocket.OPEN) {
+              videoWsRef.current.close(1000, 'Normal closure');
+            }
+          }, 100);
+        }
+      } catch (error) {
+        console.error('📹 CLIENT: Error closing video WebSocket:', error);
+      }
       videoWsRef.current = null;
     }
+    videoWsReadyRef.current = false;
 
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
