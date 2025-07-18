@@ -100,6 +100,11 @@ app.use((req, res, next) => {
   }, () => {
     log(`serving on port ${port}`);
     
+    // Configure server timeouts
+    server.keepAliveTimeout = 120000; // 2 minutes
+    server.headersTimeout = 120000; // 2 minutes
+    server.timeout = 300000; // 5 minutes for long-running requests
+    
     // Start the hourly job scheduler for conversation analysis
     jobScheduler.start();
     log('Hourly job scheduler started for conversation analysis');

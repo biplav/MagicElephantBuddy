@@ -425,6 +425,9 @@ export function setupRealtimeWebSocket(server: any) {
     // Add WebSocket server configuration to prevent frame header issues
     perMessageDeflate: false,
     maxPayload: 1024 * 1024 * 10, // 10MB limit for video frames
+    // Increase timeout settings
+    handshakeTimeout: 30000, // 30 seconds for handshake
+    clientTracking: true,
     verifyClient: (info) => {
       // Basic verification - in production, add proper authentication
       return true;
@@ -437,6 +440,24 @@ export function setupRealtimeWebSocket(server: any) {
 
     // Set WebSocket options to prevent frame header issues
     ws.binaryType = 'arraybuffer';
+    
+    // Add keepalive and timeout handling
+    let isAlive = true;
+    ws.on('pong', () => {
+      isAlive = true;
+    });
+    
+    // Send ping every 30 seconds
+    const pingInterval = setInterval(() => {
+      if (isAlive === false) {
+        console.log(`Terminating inactive WebSocket: ${sessionId}`);
+        ws.terminate();
+        clearInterval(pingInterval);
+        return;
+      }
+      isAlive = false;
+      ws.ping();
+    }, 30000);
 
     // Initialize session with default child (for demo purposes, in production this would come from user authentication)
     const session: RealtimeSession = {
@@ -554,6 +575,7 @@ export function setupRealtimeWebSocket(server: any) {
 
     ws.on("close", (code, reason) => {
       console.log(`Realtime Video session closed: ${sessionId}`, { code, reason: reason.toString() });
+      clearInterval(pingInterval);
       endRealtimeSession(session);
       sessions.delete(sessionId);
     });
