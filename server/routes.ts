@@ -1004,23 +1004,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         entryPoint: '__start__'
       };
 
-      const videoAnalysisWorkflow = {
-        nodes: [
-          { id: '__start__', type: 'start', label: 'Start' },
-          { id: 'analyzeVideo', type: 'process', label: 'Analyze Video Frame' },
-          { id: '__end__', type: 'end', label: 'End' }
-        ],
-        edges: [
-          { source: '__start__', target: 'analyzeVideo', label: 'start' },
-          { source: 'analyzeVideo', target: '__end__', label: 'video analyzed' }
-        ],
-        entryPoint: '__start__'
-      };
-
       res.json({
         workflows: {
-          conversationWorkflow,
-          videoAnalysisWorkflow
+          conversationWorkflow
         }
       });
     } catch (error) {

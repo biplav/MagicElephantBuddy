@@ -470,30 +470,25 @@ export function setupRealtimeWebSocket(server: any) {
             }
             break;
           case "video_frame":
-            // Handle video frame using LangGraph workflow
+            // Store video frame for potential use by the main conversation workflow's getEyesToool
             console.log(
               `📹 REALTIME: Received video frame from client - Size: ${message.frameData?.length || 0} bytes`,
             );
-            try {
-              const { videoAnalysisWorkflow } = await import(
-                "./langgraph-workflows"
-              );
-              console.log(
-                `📹 REALTIME: Processing video frame through LangGraph workflow`,
-              );
-              await videoAnalysisWorkflow.invoke({
-                childId: session.childId,
-                conversationId: session.conversationId,
-                videoFrame: message.frameData,
-                processingSteps: [],
-                errors: [],
-              });
-            } catch (error) {
-              console.error("Video workflow error:", error);
-              console.log(
-                `📹 REALTIME: Falling back to direct video frame handling`,
-              );
-              await handleVideoFrame(session, message.frameData); // Fallback
+            
+            // Store the latest video frame in the session for the LLM to access via getEyesTool
+            if (session.conversationId) {
+              try {
+                // Just store it as a temporary visual context - the LLM will decide when to analyze it
+                await storage.createMessage({
+                  conversationId: session.conversationId,
+                  type: "video_frame_available",
+                  content: `Video frame available for analysis (${message.frameData?.length || 0} bytes)`,
+                  metadata: { hasVideoFrame: true }
+                });
+                console.log(`📹 REALTIME: Video frame stored for potential LLM analysis via getEyesTool`);
+              } catch (error) {
+                console.error("Error storing video frame availability:", error);
+              }
             }
             break;
           case "commit_audio":

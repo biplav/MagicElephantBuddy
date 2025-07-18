@@ -530,42 +530,7 @@ function createConversationWorkflow() {
 
 
 
-// Video processing workflow (kept for backward compatibility)
-function createVideoAnalysisWorkflow() {
-  const videoWorkflow = new StateGraph(ConversationState)
-    .addNode("analyzeVideo", async (state: ConversationStateType) => {
-      console.log("📹 Analyzing video frame...");
-      
-      if (!state.videoFrame) {
-        return { processingSteps: [...state.processingSteps, "No video frame to analyze"] };
-      }
-
-      try {
-        // Use OpenAI vision or Gemini vision
-        const analysis = await analyzeVideoFrame(state.videoFrame);
-        
-        // Store as vision memory
-        await memoryService.createMemory(
-          state.childId,
-          `Video analysis: ${analysis}`,
-          'visual',
-          { conversationId: state.conversationId }
-        );
-
-        return {
-          processingSteps: [...state.processingSteps, `Video analyzed: ${analysis.slice(0, 50)}...`]
-        };
-      } catch (error) {
-        return {
-          errors: [...state.errors, `Video analysis failed: ${error}`],
-          processingSteps: [...state.processingSteps, "Video analysis failed"]
-        };
-      }
-    })
-    .setEntryPoint("analyzeVideo");
-
-  return videoWorkflow.compile();
-}
+// Video analysis is now handled by the getEyesTool in the main conversation workflow
 
 async function analyzeVideoFrame(frameData: string): Promise<string> {
   try {
@@ -609,9 +574,8 @@ async function analyzeVideoFrame(frameData: string): Promise<string> {
   }
 }
 
-// Export the workflows
+// Export the main workflow
 export const conversationWorkflow = createConversationWorkflow();
-export const videoAnalysisWorkflow = createVideoAnalysisWorkflow();
 
 // Utility function to process a complete conversation
 export async function processConversation(input: {
