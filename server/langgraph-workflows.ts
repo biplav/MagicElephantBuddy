@@ -195,13 +195,144 @@ async function storeConversation(state: ConversationStateType): Promise<Partial<
 
 // Helper function to create enhanced prompt
 async function createEnhancedPrompt(childId: number, child: any, milestones: any[], childContext: any): Promise<string> {
-  // Your existing prompt creation logic from realtime-service.ts
-  const basePrompt = "You are Appu, a friendly elephant AI assistant who speaks in simple Hinglish and helps children learn.";
-  
-  // Add child profile, milestones, and memory context
-  // (Implementation similar to your existing createEnhancedRealtimePrompt function)
-  
-  return basePrompt;
+  try {
+    const { APPU_SYSTEM_PROMPT } = await import('../shared/appuPrompts');
+    const { DEFAULT_PROFILE } = await import('../shared/childProfile');
+    const { memoryService } = await import('./memory-service');
+    
+    const childProfile = child?.profile || DEFAULT_PROFILE;
+    
+    // Get recent memories for context
+    const recentMemories = await memoryService.retrieveMemories({
+      query: '',
+      childId,
+      limit: 5,
+      timeframe: 'week'
+    });
+    
+    // Generate current date and time information
+    const now = new Date();
+    const options: Intl.DateTimeFormatOptions = {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZoneName: 'short'
+    };
+    const currentDateTime = now.toLocaleDateString('en-US', options);
+    const timeOfDay = now.getHours() < 12 ? 'morning' : now.getHours() < 17 ? 'afternoon' : now.getHours() < 20 ? 'evening' : 'night';
+    
+    // Generate profile information
+    const generateProfileSection = (obj: any): string => {
+      let result = '';
+      for (const [key, value] of Object.entries(obj)) {
+        const displayKey = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
+        
+        if (Array.isArray(value)) {
+          result += `- ${displayKey}: ${value.join(', ')}\n`;
+        } else if (typeof value === 'object' && value !== null) {
+          result += `- ${displayKey}:\n`;
+          const subItems = generateProfileSection(value);
+          result += subItems.split('\n').map(line => line ? `  ${line}` : '').join('\n') + '\n';
+        } else {
+          result += `- ${displayKey}: ${value}\n`;
+        }
+      }
+      return result;
+    };
+
+    // Generate learning milestones section
+    const generateMilestonesSection = (): string => {
+      if (!milestones || milestones.length === 0) {
+        return '\nLEARNING MILESTONES:\n- No specific milestones tracked yet. Focus on general age-appropriate learning activities.\n';
+      }
+
+      let result = '\nLEARNING MILESTONES AND PROGRESS:\n';
+      
+      const activeMilestones = milestones.filter((m: any) => !m.isCompleted);
+      const completedMilestones = milestones.filter((m: any) => m.isCompleted);
+      
+      if (activeMilestones.length > 0) {
+        result += '\nCurrent Learning Goals:\n';
+        activeMilestones.forEach((milestone: any) => {
+          const progressPercent = milestone.targetValue ? Math.round((milestone.currentProgress / milestone.targetValue) * 100) : 0;
+          result += `- ${milestone.milestoneDescription} (${progressPercent}% complete - ${milestone.currentProgress}/${milestone.targetValue})\n`;
+        });
+      }
+      
+      if (completedMilestones.length > 0) {
+        result += '\nCompleted Achievements:\n';
+        completedMilestones.forEach((milestone: any) => {
+          const completedDate = milestone.completedAt ? new Date(milestone.completedAt).toLocaleDateString() : 'Recently';
+          result += `- ✅ ${milestone.milestoneDescription} (Completed: ${completedDate})\n`;
+        });
+      }
+      
+      result += '\nMILESTONE GUIDANCE:\n';
+      result += '- Reference these milestones during conversations to encourage progress\n';
+      result += '- Celebrate achievements and progress made\n';
+      result += '- Incorporate learning activities that support current goals\n';
+      result += '- Use age-appropriate language to discuss progress\n';
+      
+      return result;
+    };
+
+    // Generate memory context section
+    const generateMemorySection = (): string => {
+      if (!recentMemories || recentMemories.length === 0) {
+        return '\nMEMORY CONTEXT:\n- No recent conversation memories available. Start building rapport with the child.\n';
+      }
+      
+      let result = '\nMEMORY CONTEXT AND PERSONALIZATION:\n';
+      result += 'Recent conversation memories to reference for personalized interactions:\n';
+      
+      recentMemories.forEach((memory, index) => {
+        const typeIndicator = memory.type === 'conversational' ? '💬' : 
+                             memory.type === 'learning' ? '📚' : 
+                             memory.type === 'emotional' ? '😊' : 
+                             memory.type === 'relationship' ? '🤝' : '💭';
+        result += `- ${typeIndicator} ${memory.content}\n`;
+      });
+      
+      result += '\nCHILD CONTEXT INSIGHTS:\n';
+      result += `- Active interests: ${childContext.activeInterests?.join(', ') || 'Not identified yet'}\n`;
+      result += `- Communication style: ${childContext.personalityProfile?.communication_style || 'Observing'}\n`;
+      result += `- Relationship level: ${childContext.relationshipLevel || 1}/10\n`;
+      if (childContext.emotionalState) {
+        result += `- Current emotional state: ${childContext.emotionalState}\n`;
+      }
+      
+      result += '\nMEMORY USAGE GUIDANCE:\n';
+      result += '- Reference past conversations naturally to show you remember the child\n';
+      result += '- Build on previous interests and topics the child has shown enthusiasm for\n';
+      result += '- Acknowledge emotional states and continue building positive relationships\n';
+      result += '- Use memories to make conversations feel continuous and personalized\n';
+      
+      return result;
+    };
+
+    const dateTimeInfo = `
+CURRENT DATE AND TIME INFORMATION:
+- Current Date & Time: ${currentDateTime}
+- Time of Day: ${timeOfDay}
+- Use this information to provide contextually appropriate responses based on the time of day and current date.`;
+
+    const profileInfo = `
+CHILD PROFILE INFORMATION:
+${generateProfileSection(childProfile)}
+Use this information to personalize your responses and make them more engaging for ${(childProfile as any).name || 'the child'}.`;
+
+    const milestonesInfo = generateMilestonesSection();
+    const memoryInfo = generateMemorySection();
+
+    return APPU_SYSTEM_PROMPT + dateTimeInfo + profileInfo + milestonesInfo + memoryInfo;
+    
+  } catch (error) {
+    console.error('Error creating enhanced prompt in workflow:', error);
+    return "You are Appu, a friendly elephant AI assistant who speaks in simple Hinglish and helps children learn.";
+  }
 }
 
 // Create the main conversation workflow
@@ -277,6 +408,10 @@ export async function processConversation(input: {
   textInput?: string;
   videoFrame?: string;
 }) {
+  const { workflowMonitor } = await import('./workflow-monitor');
+  const workflowId = `conversation-${input.childId}-${Date.now()}`;
+  const { startTime } = workflowMonitor.startWorkflow(workflowId);
+
   const initialState: Partial<ConversationStateType> = {
     childId: input.childId,
     conversationId: input.conversationId || null,
@@ -301,18 +436,31 @@ export async function processConversation(input: {
 
     // Process video if provided
     if (input.videoFrame) {
-      await videoAnalysisWorkflow.invoke({
-        childId: input.childId,
-        conversationId: result.conversationId,
-        videoFrame: input.videoFrame,
-        processingSteps: [],
-        errors: []
-      });
+      const videoWorkflowId = `video-${input.childId}-${Date.now()}`;
+      const { startTime: videoStartTime } = workflowMonitor.startWorkflow(videoWorkflowId);
+      
+      try {
+        await videoAnalysisWorkflow.invoke({
+          childId: input.childId,
+          conversationId: result.conversationId,
+          videoFrame: input.videoFrame,
+          processingSteps: [],
+          errors: []
+        });
+        workflowMonitor.completeWorkflow(videoWorkflowId, videoStartTime, true);
+      } catch (videoError) {
+        workflowMonitor.completeWorkflow(videoWorkflowId, videoStartTime, false, [String(videoError)]);
+        console.error("Video workflow failed:", videoError);
+      }
     }
+
+    const success = result.errors.length === 0;
+    workflowMonitor.completeWorkflow(workflowId, startTime, success, result.errors);
 
     return result;
   } catch (error) {
     console.error("❌ Workflow failed:", error);
+    workflowMonitor.completeWorkflow(workflowId, startTime, false, [String(error)]);
     throw error;
   }
 }

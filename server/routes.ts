@@ -900,6 +900,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Workflow monitoring endpoints
+  app.get('/api/admin/workflow-metrics', async (req: Request, res: Response) => {
+    try {
+      const { workflowMonitor } = await import('./workflow-monitor');
+      const metrics = workflowMonitor.getMetrics();
+      const health = workflowMonitor.getHealthStatus();
+      
+      res.json({ metrics, health });
+    } catch (error) {
+      console.error('Error getting workflow metrics:', error);
+      res.status(500).json({ message: 'Failed to get workflow metrics' });
+    }
+  });
+
+  app.post('/api/admin/workflow-metrics/reset', async (req: Request, res: Response) => {
+    try {
+      const { workflowMonitor } = await import('./workflow-monitor');
+      workflowMonitor.reset();
+      
+      res.json({ message: 'Workflow metrics reset successfully' });
+    } catch (error) {
+      console.error('Error resetting workflow metrics:', error);
+      res.status(500).json({ message: 'Failed to reset workflow metrics' });
+    }
+  });
+
+  // Test LangGraph workflow endpoint
+  app.post('/api/admin/test-workflow', async (req: Request, res: Response) => {
+    try {
+      const { textInput, childId = 1 } = req.body;
+      
+      if (!textInput) {
+        return res.status(400).json({ error: 'textInput is required' });
+      }
+
+      const { processConversation } = await import('./langgraph-workflows');
+      
+      const result = await processConversation({
+        childId,
+        textInput
+      });
+
+      res.json({
+        success: true,
+        result: {
+          transcription: result.transcription,
+          aiResponse: result.aiResponse,
+          processingSteps: result.processingSteps,
+          errors: result.errors,
+          conversationId: result.conversationId
+        }
+      });
+    } catch (error) {
+      console.error('Error testing workflow:', error);
+      res.status(500).json({ error: 'Workflow test failed', details: String(error) });
+    }
+  });
+
   app.post('/api/parent-chat', async (req: Request, res: Response) => {
     try {
       const { parentId, question, childrenIds } = req.body;

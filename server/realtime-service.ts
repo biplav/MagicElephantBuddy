@@ -492,46 +492,64 @@ async function startRealtimeSession(session: RealtimeSession) {
         // Handle different message types from OpenAI
         switch (message.type) {
           case 'conversation.item.input_audio_transcription.completed':
-            // Store transcribed input in database
+            // Use LangGraph workflow for processing transcribed input
             if (session.conversationId && message.transcript) {
-              await storage.createMessage({
-                conversationId: session.conversationId,
-                type: 'child_input',
-                content: message.transcript,
-                transcription: message.transcript
-              });
-              session.messageCount++;
-              
-              // Form memory from child's input
-              await formMemoryFromContent(
-                session.childId,
-                message.transcript,
-                'user',
-                session.conversationId
-              );
-              console.log(`Memory formed from child input: "${message.transcript.slice(0, 50)}..."`);
+              try {
+                const { processConversation } = await import('./langgraph-workflows');
+                await processConversation({
+                  childId: session.childId,
+                  conversationId: session.conversationId,
+                  textInput: message.transcript
+                });
+                session.messageCount++;
+                console.log(`LangGraph processed child input: "${message.transcript.slice(0, 50)}..."`);
+              } catch (workflowError) {
+                console.error('LangGraph workflow error for input:', workflowError);
+                // Fallback to original logic
+                await storage.createMessage({
+                  conversationId: session.conversationId,
+                  type: 'child_input',
+                  content: message.transcript,
+                  transcription: message.transcript
+                });
+                await formMemoryFromContent(
+                  session.childId,
+                  message.transcript,
+                  'user',
+                  session.conversationId
+                );
+              }
             }
             break;
             
           case 'response.audio_transcript.done':
-            // Store AI response in database
+            // Use LangGraph workflow for processing AI responses
             if (session.conversationId && message.transcript) {
-              await storage.createMessage({
-                conversationId: session.conversationId,
-                type: 'appu_response',
-                content: message.transcript,
-                transcription: null
-              });
-              session.messageCount++;
-              
-              // Form memory from Appu's response
-              await formMemoryFromContent(
-                session.childId,
-                message.transcript,
-                'assistant',
-                session.conversationId
-              );
-              console.log(`Memory formed from Appu's response: "${message.transcript.slice(0, 50)}..."`);
+              try {
+                const { processConversation } = await import('./langgraph-workflows');
+                await processConversation({
+                  childId: session.childId,
+                  conversationId: session.conversationId,
+                  textInput: message.transcript
+                });
+                session.messageCount++;
+                console.log(`LangGraph processed Appu response: "${message.transcript.slice(0, 50)}..."`);
+              } catch (workflowError) {
+                console.error('LangGraph workflow error for response:', workflowError);
+                // Fallback to original logic
+                await storage.createMessage({
+                  conversationId: session.conversationId,
+                  type: 'appu_response',
+                  content: message.transcript,
+                  transcription: null
+                });
+                await formMemoryFromContent(
+                  session.childId,
+                  message.transcript,
+                  'assistant',
+                  session.conversationId
+                );
+              }
             }
             break;
         }
