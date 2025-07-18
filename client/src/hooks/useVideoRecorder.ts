@@ -3,13 +3,11 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 interface UseVideoRecorderOptions {
   onVideoFrame?: (frameData: string) => void;
   onError?: (error: string) => void;
-  frameRate?: number; // Frames per second to capture
   quality?: number; // JPEG quality (0-1)
 }
 
 interface VideoRecorderState {
   isEnabled: boolean;
-  isStreaming: boolean;
   hasPermission: boolean;
   error: string | null;
 }
@@ -18,13 +16,11 @@ export default function useVideoRecorder(options: UseVideoRecorderOptions = {}) 
   const {
     onVideoFrame,
     onError,
-    frameRate = 2, // 2 FPS for reasonable bandwidth usage
     quality = 0.7
   } = options;
 
   const [state, setState] = useState<VideoRecorderState>({
     isEnabled: false,
-    isStreaming: false,
     hasPermission: false,
     error: null
   });
@@ -32,9 +28,8 @@ export default function useVideoRecorder(options: UseVideoRecorderOptions = {}) 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Request video permission
+  // Request video permission and set up capture infrastructure
   const requestVideoPermission = useCallback(async (): Promise<boolean> => {
     try {
       setState(prev => ({ ...prev, error: null }));
@@ -43,21 +38,21 @@ export default function useVideoRecorder(options: UseVideoRecorderOptions = {}) 
         video: {
           width: { ideal: 320 },
           height: { ideal: 240 },
-          frameRate: { ideal: frameRate }
+          frameRate: { ideal: 30 } // Higher frame rate for better quality
         }
       });
 
       streamRef.current = stream;
       setState(prev => ({ ...prev, hasPermission: true }));
       
-      // Create video element for preview (optional)
+      // Create video element for capture (hidden)
       if (!videoRef.current) {
         const video = document.createElement('video');
         video.srcObject = stream;
         video.autoplay = true;
         video.muted = true;
         video.playsInline = true;
-        video.style.display = 'none'; // Hidden preview
+        video.style.display = 'none'; // Hidden from user
         videoRef.current = video;
         document.body.appendChild(video);
       }
@@ -80,77 +75,70 @@ export default function useVideoRecorder(options: UseVideoRecorderOptions = {}) 
       onError?.(errorMessage);
       return false;
     }
-  }, [frameRate, onError]);
+  }, [onError]);
 
-  // Start video streaming
-  const startStreaming = useCallback(async () => {
+  // Capture a single frame on demand
+  const captureFrame = useCallback(async (): Promise<string | null> => {
     if (!state.hasPermission) {
       const granted = await requestVideoPermission();
-      if (!granted) return;
+      if (!granted) return null;
     }
 
     if (!videoRef.current || !canvasRef.current || !streamRef.current) {
       console.error('Video components not initialized');
-      return;
+      return null;
     }
 
-    setState(prev => ({ ...prev, isStreaming: true, error: null }));
+    try {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d');
 
-    // Start capturing frames at specified rate
-    intervalRef.current = setInterval(() => {
-      if (videoRef.current && canvasRef.current && onVideoFrame) {
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        const context = canvas.getContext('2d');
-
-        if (context && video.readyState >= 2) { // HAVE_CURRENT_DATA
-          // Draw current video frame to canvas
-          context.drawImage(video, 0, 0, canvas.width, canvas.height);
-          
-          // Convert to base64 JPEG
-          const frameData = canvas.toDataURL('image/jpeg', quality);
-          
-          // Send frame data (remove data:image/jpeg;base64, prefix)
-          const base64Data = frameData.split(',')[1];
-          onVideoFrame(base64Data);
-        }
+      if (context && video.readyState >= 2) { // HAVE_CURRENT_DATA
+        // Draw current video frame to canvas
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // Convert to base64 JPEG
+        const frameData = canvas.toDataURL('image/jpeg', quality);
+        
+        // Return base64 data without prefix
+        const base64Data = frameData.split(',')[1];
+        return base64Data;
       }
-    }, 1000 / frameRate);
-  }, [state.hasPermission, requestVideoPermission, onVideoFrame, frameRate, quality]);
-
-  // Stop video streaming
-  const stopStreaming = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
+      
+      return null;
+    } catch (error) {
+      console.error('Error capturing frame:', error);
+      return null;
     }
-    setState(prev => ({ ...prev, isStreaming: false }));
-  }, []);
+  }, [state.hasPermission, requestVideoPermission, quality]);
 
-  // Enable/disable video
+  // Enable/disable video (grants/revokes camera permission)
   const toggleVideo = useCallback(async (enabled: boolean) => {
     setState(prev => ({ ...prev, isEnabled: enabled }));
     
     if (enabled) {
-      await startStreaming();
+      await requestVideoPermission();
     } else {
-      stopStreaming();
+      // Stop the stream and clean up resources
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      setState(prev => ({ ...prev, hasPermission: false }));
     }
-  }, [startStreaming, stopStreaming]);
+  }, [requestVideoPermission]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
-      if (videoRef.current) {
+      if (videoRef.current && document.body.contains(videoRef.current)) {
         document.body.removeChild(videoRef.current);
       }
-      if (canvasRef.current) {
+      if (canvasRef.current && document.body.contains(canvasRef.current)) {
         document.body.removeChild(canvasRef.current);
       }
     };
@@ -159,8 +147,7 @@ export default function useVideoRecorder(options: UseVideoRecorderOptions = {}) 
   return {
     ...state,
     requestVideoPermission,
-    startStreaming,
-    stopStreaming,
+    captureFrame,
     toggleVideo,
     videoElement: videoRef.current
   };

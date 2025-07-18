@@ -1,0 +1,27 @@
+"Please convert the current video analysis system from a continuous push-based approach to a pull-based tool system where the LLM can request visual information when needed. Currently, video frames are captured at 2 FPS and automatically sent to OpenAI/Gemini for analysis whenever video is enabled. I want to change this so that:
+
+Remove continuous frame processing: Stop the automatic 2 FPS frame capture and analysis in both OpenAI Realtime API and Gemini Live services.
+
+Create a video capture tool: Implement a new tool/function that the LLM can call when it needs visual information. This tool should:
+
+Capture a single frame from the camera when invoked
+Analyze the frame using the appropriate vision model (GPT-4o for OpenAI, Gemini 2.0-flash-exp for Gemini)
+Return the visual analysis to the LLM as part of its context
+Update the system prompts: Modify the enhanced prompts in both realtime-service.ts and gemini-live-service.ts to include information about the video capture tool, explaining when and how the LLM should use it.
+
+Implement tool calling:
+
+For OpenAI Realtime API: Add the video capture as a tool in the session configuration
+For Gemini Live: Implement function calling for the video capture capability
+Handle the tool calls to capture and analyze frames on demand
+Maintain existing video UI: Keep the video enable/disable toggle in the UI, but change its behavior so it only grants permission for the LLM to access the camera when needed, rather than continuously streaming.
+
+Update the video recorder hook: Modify useVideoRecorder.ts to support on-demand frame capture instead of continuous streaming.
+
+Key files to modify:
+
+server/realtime-service.ts - Remove continuous video processing, add tool for on-demand capture
+server/gemini-live-service.ts - Same changes for Gemini
+client/src/hooks/useVideoRecorder.ts - Support on-demand capture
+shared/appuPrompts.ts - Update system prompts to describe the video tool
+The goal is to make video analysis contextual and efficient - the LLM should request visual information only when the conversation context suggests it would be helpful (e.g., when the child asks 'what do you see?', 'look at this', or when discussing visual learning activities)."

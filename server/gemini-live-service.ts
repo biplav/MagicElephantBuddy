@@ -269,18 +269,12 @@ Use this information to personalize your responses and make them more engaging f
   }
 }
 
-// Video frame handler
-async function handleGeminiVideoFrame(session: GeminiLiveSession, frameData: string) {
+// Analyze video frame with Gemini's vision capabilities (for on-demand capture)
+async function analyzeGeminiVideoFrame(frameData: string): Promise<string> {
   try {
-    if (!session.isConnected || !session.conversationId) {
-      console.log('Video frame received but session not ready');
-      return;
-    }
-
-    console.log(`Gemini Live processing video frame: ${frameData.slice(0, 50)}...`);
+    console.log(`Gemini analyzing video frame: ${frameData.slice(0, 50)}...`);
     
-    // For now, we'll analyze the video frame with Gemini's vision capabilities
-    // In a full Live API implementation, this would be handled differently
+    // Use Gemini's vision model to analyze the frame
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
 
@@ -299,24 +293,12 @@ async function handleGeminiVideoFrame(session: GeminiLiveSession, frameData: str
 
     const visionResponse = result.response.text();
     console.log(`Gemini vision response: ${visionResponse}`);
-
-    // Send vision response back to client (this could be combined with other responses)
-    session.ws.send(JSON.stringify({
-      type: 'vision_response',
-      text: visionResponse,
-      conversationId: session.conversationId
-    }));
-
-    // Optional: Store vision analysis as a message
-    await storage.createMessage({
-      conversationId: session.conversationId,
-      type: 'vision_analysis',
-      content: `Vision: ${visionResponse}`
-    });
+    
+    return visionResponse;
 
   } catch (error) {
-    console.error('Error handling Gemini video frame:', error);
-    // Don't send error to client for vision processing - it's supplementary
+    console.error('Error analyzing video frame:', error);
+    return "I'm having trouble seeing what you're showing me right now. Can you try again?";
   }
 }
 
@@ -416,6 +398,25 @@ async function handleGeminiTextInput(session: GeminiLiveSession, text: string) {
       session.conversationId
     );
     console.log(`Memory formed from child input: "${text.slice(0, 50)}..."`);
+
+    // Check if the text contains a request for video capture
+    const videoRequestTriggers = [
+      'look at this', 'can you see', 'what do you see', 'dekho', 'see this',
+      'show you', 'i spy', 'color', 'shape', 'what is this'
+    ];
+    
+    const requestsVideo = videoRequestTriggers.some(trigger => 
+      text.toLowerCase().includes(trigger.toLowerCase())
+    );
+    
+    if (requestsVideo) {
+      // Request video capture from client
+      session.ws.send(JSON.stringify({
+        type: 'video_capture_requested',
+        call_id: `gemini_${Date.now()}`,
+        reason: 'Child wants to show something'
+      }));
+    }
 
     // Generate response using Gemini
     const chat = (session as any).geminiChat;
@@ -537,7 +538,45 @@ export function setupGeminiLiveWebSocket(server: any) {
             break;
           
           case 'video_frame':
-            await handleGeminiVideoFrame(session, message.frameData);
+            // Video frames are now handled on-demand via function calls - ignore continuous frames
+            console.log('Ignoring continuous video frame - using on-demand capture instead');
+            break;
+            
+          case 'video_capture_response':
+            // Handle video frame captured in response to AI request
+            if (session.isConnected && session.conversationId && message.frameData && message.call_id) {
+              try {
+                console.log('Processing on-demand video capture for Gemini...');
+                
+                // Analyze the frame with Gemini's vision model
+                const visionResponse = await analyzeGeminiVideoFrame(message.frameData);
+                
+                // Send function response back to client (Gemini Live doesn't have direct function call returns)
+                session.ws.send(JSON.stringify({
+                  type: 'vision_response',
+                  text: visionResponse,
+                  conversationId: session.conversationId,
+                  call_id: message.call_id
+                }));
+                
+                // Store vision analysis in database
+                await storage.createMessage({
+                  conversationId: session.conversationId,
+                  type: 'vision_analysis',
+                  content: `Vision: ${visionResponse}`
+                });
+                
+              } catch (error) {
+                console.error('Error processing video capture:', error);
+                
+                // Send error response to client
+                session.ws.send(JSON.stringify({
+                  type: 'vision_error',
+                  error: 'Unable to process video capture',
+                  call_id: message.call_id
+                }));
+              }
+            }
             break;
           
           case 'text_input':

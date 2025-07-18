@@ -274,15 +274,10 @@ Use this information to personalize your responses and make them more engaging f
   }
 }
 
-// Handle video frame with OpenAI's vision capabilities
-async function handleVideoFrame(session: RealtimeSession, frameData: string) {
+// Analyze video frame with OpenAI's vision capabilities (for on-demand capture)
+async function analyzeVideoFrame(frameData: string): Promise<string> {
   try {
-    if (!session.isConnected || !session.conversationId) {
-      console.log('Video frame received but session not ready');
-      return;
-    }
-
-    console.log(`OpenAI Realtime processing video frame: ${frameData.slice(0, 50)}...`);
+    console.log(`OpenAI analyzing video frame: ${frameData.slice(0, 50)}...`);
     
     // Use OpenAI's vision model to analyze the frame
     const response = await openai.chat.completions.create({
@@ -304,29 +299,17 @@ async function handleVideoFrame(session: RealtimeSession, frameData: string) {
           ],
         },
       ],
-      max_tokens: 100,
+      max_tokens: 300,
     });
 
-    const visionResponse = response.choices[0].message.content;
+    const visionResponse = response.choices[0].message.content || "I can see something interesting, but I'm not quite sure what it is!";
     console.log(`OpenAI vision response: ${visionResponse}`);
-
-    // Send vision response back to client
-    session.ws.send(JSON.stringify({
-      type: 'vision_response',
-      text: visionResponse,
-      conversationId: session.conversationId
-    }));
-
-    // Optional: Store vision analysis as a message
-    await storage.createMessage({
-      conversationId: session.conversationId,
-      type: 'vision_analysis',
-      content: `Vision: ${visionResponse}`
-    });
+    
+    return visionResponse;
 
   } catch (error) {
-    console.error('Error handling video frame:', error);
-    // Don't send error to client for vision processing - it's supplementary
+    console.error('Error analyzing video frame:', error);
+    return "I'm having trouble seeing what you're showing me right now. Can you try again?";
   }
 }
 
@@ -378,8 +361,61 @@ export function setupRealtimeWebSocket(server: any) {
             }
             break;
           case 'video_frame':
-            // Handle video frame for OpenAI Realtime API
-            await handleVideoFrame(session, message.frameData);
+            // Video frames are now handled on-demand via tools - ignore continuous frames
+            console.log('Ignoring continuous video frame - using on-demand capture instead');
+            break;
+            
+          case 'video_capture_response':
+            // Handle video frame captured in response to AI request
+            if (session.isConnected && session.conversationId && message.frameData && message.call_id) {
+              try {
+                console.log('Processing on-demand video capture...');
+                
+                // Analyze the frame with OpenAI's vision model
+                const visionResponse = await analyzeVideoFrame(message.frameData);
+                
+                // Send the function call result back to OpenAI
+                if (session.openaiWs) {
+                  session.openaiWs.send(JSON.stringify({
+                    type: 'conversation.item.create',
+                    item: {
+                      type: 'function_call_output',
+                      call_id: message.call_id,
+                      output: JSON.stringify({
+                        success: true,
+                        description: visionResponse,
+                        timestamp: new Date().toISOString()
+                      })
+                    }
+                  }));
+                }
+                
+                // Store vision analysis in database
+                await storage.createMessage({
+                  conversationId: session.conversationId,
+                  type: 'vision_analysis',
+                  content: `Vision: ${visionResponse}`
+                });
+                
+              } catch (error) {
+                console.error('Error processing video capture:', error);
+                
+                // Send error response to OpenAI
+                if (session.openaiWs) {
+                  session.openaiWs.send(JSON.stringify({
+                    type: 'conversation.item.create',
+                    item: {
+                      type: 'function_call_output',
+                      call_id: message.call_id,
+                      output: JSON.stringify({
+                        success: false,
+                        error: 'Unable to process video capture'
+                      })
+                    }
+                  }));
+                }
+              }
+            }
             break;
           case 'commit_audio':
             if (session.openaiWs && session.isConnected) {
@@ -460,8 +496,24 @@ async function startRealtimeSession(session: RealtimeSession) {
             prefix_padding_ms: 300,
             silence_duration_ms: 200
           },
-          tools: [],
-          tool_choice: 'none',
+          tools: [
+            {
+              type: 'function',
+              name: 'capture_video_frame',
+              description: 'Capture a single frame from the camera to see what the child is showing. Use this when the child says "look at this", "can you see this?", "what do you see?", or when playing visual games.',
+              parameters: {
+                type: 'object',
+                properties: {
+                  reason: {
+                    type: 'string',
+                    description: 'Brief reason for capturing the frame (e.g., "child wants to show something", "playing I spy game")'
+                  }
+                },
+                required: ['reason']
+              }
+            }
+          ],
+          tool_choice: 'auto',
           temperature: 0.8
         }
       }));
@@ -520,6 +572,20 @@ async function startRealtimeSession(session: RealtimeSession) {
                 session.conversationId
               );
               console.log(`Memory formed from Appu's response: "${message.transcript.slice(0, 50)}..."`);
+            }
+            break;
+            
+          case 'response.function_call_arguments.done':
+            // Handle function call - video capture
+            if (message.name === 'capture_video_frame') {
+              console.log('OpenAI requested video capture:', message.arguments);
+              
+              // Request video frame from client
+              session.ws.send(JSON.stringify({
+                type: 'video_capture_requested',
+                call_id: message.call_id,
+                reason: message.arguments?.reason || 'AI requested to see something'
+              }));
             }
             break;
         }
