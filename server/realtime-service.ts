@@ -6,6 +6,15 @@ import { DEFAULT_PROFILE } from "../shared/childProfile";
 import { APPU_SYSTEM_PROMPT } from "../shared/appuPrompts";
 import { memoryService } from "./memory-service";
 
+// Global video frame storage for getEyesTool access
+declare global {
+  var videoFrameStorage: Map<string, {
+    frameData: string;
+    timestamp: Date;
+    sessionId: number;
+  }> | undefined;
+}
+
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 interface RealtimeSession {
@@ -527,24 +536,41 @@ export function setupRealtimeWebSocket(server: any) {
             }
             break;
           case "video_frame":
-            // Store video frame for potential use by the main conversation workflow's getEyesToool
+            // Store video frame for LangGraph getEyesTool to consume
             console.log(
               `📹 REALTIME: Received video frame from client - Size: ${message.frameData?.length || 0} bytes`,
             );
             
-            // Store the latest video frame in the session for the LLM to access via getEyesTool
-            if (session.conversationId) {
+            // Store the actual video frame data in the session for getEyesTool access
+            if (session.conversationId && message.frameData) {
               try {
-                // Just store it as a temporary visual context - the LLM will decide when to analyze it
+                // Store the latest video frame in a session store for getEyesTool to access
+                const frameStorage = global.videoFrameStorage || new Map();
+                global.videoFrameStorage = frameStorage;
+                
+                // Store frame with session identifier
+                frameStorage.set(`session_${session.conversationId}`, {
+                  frameData: message.frameData,
+                  timestamp: new Date(),
+                  sessionId: session.conversationId
+                });
+                
+                console.log(`📹 REALTIME: Video frame stored in memory for getEyesTool access - Session: ${session.conversationId}`);
+                
+                // Also store availability in database for conversation context
                 await storage.createMessage({
                   conversationId: session.conversationId,
                   type: "video_frame_available",
-                  content: `Video frame available for analysis (${message.frameData?.length || 0} bytes)`,
-                  metadata: { hasVideoFrame: true }
+                  content: `Video frame available for getEyesTool analysis (${message.frameData?.length || 0} bytes)`,
+                  metadata: { 
+                    hasVideoFrame: true,
+                    frameTimestamp: new Date().toISOString()
+                  }
                 });
-                console.log(`📹 REALTIME: Video frame stored for potential LLM analysis via getEyesTool`);
+                
+                console.log(`📹 REALTIME: Video frame availability logged in database`);
               } catch (error) {
-                console.error("Error storing video frame availability:", error);
+                console.error("Error storing video frame for getEyesTool:", error);
               }
             }
             break;

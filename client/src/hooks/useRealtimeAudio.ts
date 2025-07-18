@@ -232,10 +232,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
                 const frameData = canvas.toDataURL('image/jpeg', 0.7);
                 const base64Data = frameData.split(',')[1];
 
-                // Send frame to callback (for local processing)
-                onVideoFrameCallback(base64Data);
-
-                // Send frame to server via separate WebSocket
+                // Send frame to server via separate WebSocket (not to WebRTC/OpenAI)
                 if (videoWsRef.current && videoWsReadyRef.current && videoWsRef.current.readyState === WebSocket.OPEN) {
                   try {
                     const message = JSON.stringify({

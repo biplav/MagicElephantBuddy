@@ -100,12 +100,34 @@ const createGetEyesTool = (state: ConversationStateType) => {
     func: async ({ reason }) => {
       console.log("👁️ LLM decided to use getEyesTool:", reason);
       
-      if (!state.videoFrame) {
+      // Try to get video frame from session storage first
+      let frameData = state.videoFrame;
+      
+      if (!frameData && state.conversationId) {
+        // Access the global video frame storage
+        const frameStorage = global.videoFrameStorage || new Map();
+        const storedFrame = frameStorage.get(`session_${state.conversationId}`);
+        
+        if (storedFrame && storedFrame.frameData) {
+          frameData = storedFrame.frameData;
+          console.log("👁️ getEyesTool: Retrieved video frame from session storage");
+          
+          // Check if frame is recent (within last 30 seconds)
+          const frameAge = Date.now() - storedFrame.timestamp.getTime();
+          if (frameAge > 30000) {
+            console.log("👁️ getEyesTool: Warning - video frame is older than 30 seconds");
+          }
+        }
+      }
+      
+      if (!frameData) {
+        console.log("👁️ getEyesTool: No video frame available in state or session storage");
         return "No video frame available to analyze what the child is showing.";
       }
 
       try {
-        const analysis = await analyzeVideoFrame(state.videoFrame);
+        console.log(`👁️ getEyesTool: Analyzing video frame - Size: ${frameData.length} bytes`);
+        const analysis = await analyzeVideoFrame(frameData);
         
         // Store as vision memory
         await memoryService.createMemory(
