@@ -2,6 +2,8 @@
 import { StateGraph, MemorySaver, Annotation } from "@langchain/langgraph";
 import { OpenAI } from "@langchain/openai";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { DynamicStructuredTool } from "@langchain/core/tools";
+import { z } from "zod";
 import { storage } from "./storage";
 import { memoryService } from "./memory-service";
 import { defaultAIService } from "./ai-service";
@@ -23,6 +25,10 @@ const ConversationState = Annotation.Root({
   // Output data
   aiResponse: Annotation<string>,
   audioResponse: Annotation<Buffer | null>,
+  
+  // Tools and decisions
+  toolCalls: Annotation<any[]>,
+  visualAnalysis: Annotation<string | null>,
   
   // Metadata
   processingSteps: Annotation<string[]>,
@@ -83,8 +89,43 @@ async function loadChildContext(state: ConversationStateType): Promise<Partial<C
   }
 }
 
-async function generateResponse(state: ConversationStateType): Promise<Partial<ConversationStateType>> {
-  console.log("🤖 Generating AI response...");
+// Create the getEyesTool as a LangChain tool
+const createGetEyesTool = (state: ConversationStateType) => {
+  return new DynamicStructuredTool({
+    name: "getEyesTool",
+    description: "Use this tool when the child is showing, pointing to, or talking about something visual that you should look at. This tool analyzes what the child is showing through their camera.",
+    schema: z.object({
+      reason: z.string().describe("Why you want to look at what the child is showing")
+    }),
+    func: async ({ reason }) => {
+      console.log("👁️ LLM decided to use getEyesTool:", reason);
+      
+      if (!state.videoFrame) {
+        return "No video frame available to analyze what the child is showing.";
+      }
+
+      try {
+        const analysis = await analyzeVideoFrame(state.videoFrame);
+        
+        // Store as vision memory
+        await memoryService.createMemory(
+          state.childId,
+          `Child showed something: ${analysis}`,
+          'visual',
+          { conversationId: state.conversationId, importance_score: 0.8 }
+        );
+
+        return `I can see: ${analysis}`;
+      } catch (error) {
+        console.error("getEyesTool error:", error);
+        return "I'm having trouble seeing what you're showing me right now.";
+      }
+    }
+  });
+};
+
+async function generateResponseWithTools(state: ConversationStateType): Promise<Partial<ConversationStateType>> {
+  console.log("🤖 Generating AI response with tools...");
   
   if (!state.transcription) {
     return {
@@ -94,11 +135,144 @@ async function generateResponse(state: ConversationStateType): Promise<Partial<C
   }
 
   try {
-    const response = await defaultAIService.generateResponse(state.transcription);
-    
+    const OpenAI = (await import('openai')).default;
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    // Create enhanced prompt with visual context
+    let enhancedPrompt = state.enhancedPrompt;
+    if (state.videoFrame) {
+      enhancedPrompt += "\n\nNOTE: The child has their camera on and may be showing you something. If they mention showing, pointing to, or talking about something visual, use the getEyesTool to see what they're showing you.";
+    }
+
+    // Define available tools
+    const tools = [
+      {
+        type: "function",
+        function: {
+          name: "getEyesTool",
+          description: "Use this tool when the child is showing, pointing to, or talking about something visual that you should look at. This tool analyzes what the child is showing through their camera.",
+          parameters: {
+            type: "object",
+            properties: {
+              reason: {
+                type: "string",
+                description: "Why you want to look at what the child is showing"
+              }
+            },
+            required: ["reason"]
+          }
+        }
+      }
+    ];
+
+    // First, let the LLM decide if it needs tools
+    const initialResponse = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: enhancedPrompt
+        },
+        {
+          role: "user",
+          content: state.transcription
+        }
+      ],
+      tools: state.videoFrame ? tools : undefined,
+      tool_choice: "auto",
+      max_tokens: 150,
+      temperature: 0.7
+    });
+
+    const message = initialResponse.choices[0]?.message;
+    let finalResponse = message?.content || "I'm here to help!";
+    let toolCalls: any[] = [];
+    let visualAnalysis: string | null = null;
+
+    // Handle tool calls if any
+    if (message?.tool_calls && message.tool_calls.length > 0) {
+      console.log("🔧 LLM requested tool calls:", message.tool_calls.length);
+      
+      for (const toolCall of message.tool_calls) {
+        if (toolCall.function.name === "getEyesTool") {
+          const args = JSON.parse(toolCall.function.arguments);
+          console.log("👁️ LLM wants to see:", args.reason);
+          
+          if (state.videoFrame) {
+            try {
+              visualAnalysis = await analyzeVideoFrame(state.videoFrame);
+              
+              // Store as vision memory
+              await memoryService.createMemory(
+                state.childId,
+                `Child showed something: ${visualAnalysis}`,
+                'visual',
+                { conversationId: state.conversationId, importance_score: 0.8 }
+              );
+
+              toolCalls.push({
+                tool: "getEyesTool",
+                reason: args.reason,
+                result: visualAnalysis
+              });
+            } catch (error) {
+              console.error("Vision analysis failed:", error);
+              toolCalls.push({
+                tool: "getEyesTool",
+                reason: args.reason,
+                result: "I'm having trouble seeing what you're showing me."
+              });
+            }
+          } else {
+            toolCalls.push({
+              tool: "getEyesTool",
+              reason: args.reason,
+              result: "No video available to see what you're showing."
+            });
+          }
+        }
+      }
+
+      // Generate final response with tool results
+      const toolResults = toolCalls.map(tc => `Tool: ${tc.tool}, Result: ${tc.result}`).join('\n');
+      
+      const finalResponseCall = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: enhancedPrompt
+          },
+          {
+            role: "user",
+            content: state.transcription
+          },
+          {
+            role: "assistant",
+            content: message.content,
+            tool_calls: message.tool_calls
+          },
+          ...message.tool_calls.map((tc, i) => ({
+            role: "tool" as const,
+            tool_call_id: tc.id,
+            content: toolCalls[i]?.result || "Tool execution failed"
+          }))
+        ],
+        max_tokens: 150,
+        temperature: 0.7
+      });
+
+      finalResponse = finalResponseCall.choices[0]?.message?.content || finalResponse;
+    }
+
     return {
-      aiResponse: response,
-      processingSteps: [...state.processingSteps, `AI response generated: "${response.slice(0, 50)}..."`]
+      aiResponse: finalResponse,
+      toolCalls,
+      visualAnalysis,
+      processingSteps: [...state.processingSteps, 
+        `AI response generated: "${finalResponse.slice(0, 50)}..."`,
+        ...(toolCalls.length > 0 ? [`Used tools: ${toolCalls.map(tc => tc.tool).join(', ')}`] : [])
+      ]
     };
   } catch (error) {
     return {
@@ -340,13 +514,11 @@ function createConversationWorkflow() {
   const workflow = new StateGraph(ConversationState)
     .addNode("transcribe", transcribeAudio)
     .addNode("loadContext", loadChildContext)
-    .addNode("getEyesTool", getEyesTool)
-    .addNode("generateResponse", generateResponse)
+    .addNode("generateResponse", generateResponseWithTools)
     .addNode("synthesizeSpeech", synthesizeSpeech)
     .addNode("storeConversation", storeConversation)
     .addEdge("transcribe", "loadContext")
-    .addEdge("loadContext", "getEyesTool")
-    .addEdge("getEyesTool", "generateResponse")
+    .addEdge("loadContext", "generateResponse")
     .addEdge("generateResponse", "synthesizeSpeech")
     .addEdge("synthesizeSpeech", "storeConversation")
     .setEntryPoint("transcribe");
@@ -356,42 +528,7 @@ function createConversationWorkflow() {
   return workflow.compile({ checkpointer: memory });
 }
 
-// getEyesTool - Video frame analysis tool
-async function getEyesTool(state: ConversationStateType): Promise<Partial<ConversationStateType>> {
-  console.log("👁️ getEyesTool: Analyzing what child is showing...");
-  
-  if (!state.videoFrame) {
-    return { 
-      processingSteps: [...state.processingSteps, "getEyesTool: No video frame to analyze"]
-    };
-  }
 
-  try {
-    // Use OpenAI vision to analyze what the child is showing
-    const analysis = await analyzeVideoFrame(state.videoFrame);
-    
-    // Store as vision memory
-    await memoryService.createMemory(
-      state.childId,
-      `Child showed something: ${analysis}`,
-      'visual',
-      { conversationId: state.conversationId, importance_score: 0.8 }
-    );
-
-    // Add visual context to the conversation state
-    const visualContext = `\n\nVISUAL CONTEXT: The child is showing you something! Here's what I can see: ${analysis}. Please acknowledge what they're showing and respond appropriately to engage with their visual demonstration.`;
-    
-    return {
-      enhancedPrompt: (state.enhancedPrompt || "") + visualContext,
-      processingSteps: [...state.processingSteps, `getEyesTool: Visual analysis completed - ${analysis.slice(0, 50)}...`]
-    };
-  } catch (error) {
-    return {
-      errors: [...state.errors, `getEyesTool failed: ${error}`],
-      processingSteps: [...state.processingSteps, "getEyesTool: Visual analysis failed"]
-    };
-  }
-}
 
 // Video processing workflow (kept for backward compatibility)
 function createVideoAnalysisWorkflow() {
@@ -493,6 +630,8 @@ export async function processConversation(input: {
     audioData: input.audioData || null,
     textInput: input.textInput || null,
     videoFrame: input.videoFrame || null,
+    toolCalls: [],
+    visualAnalysis: null,
     processingSteps: [],
     errors: []
   };
