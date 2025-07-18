@@ -453,10 +453,20 @@ export function setupRealtimeWebSocket(server: any) {
               console.log(
                 `Created conversation ${conversation.id} for child ${session.childId}`,
               );
+              
+              // Send confirmation that session is ready
+              session.ws.send(JSON.stringify({
+                type: 'session_started',
+                conversationId: conversation.id,
+                message: 'Video session ready for frames'
+              }));
             } catch (error) {
               console.error("Error creating conversation:", error);
+              session.ws.send(JSON.stringify({
+                type: 'error',
+                message: 'Failed to start session'
+              }));
             }
-            await startRealtimeSession(session);
             break;
           case "audio_chunk":
             if (session.openaiWs && session.isConnected) {

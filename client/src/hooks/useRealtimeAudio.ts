@@ -158,12 +158,13 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
 
             videoWsRef.current.onopen = () => {
               console.log('📹 CLIENT: Video WebSocket connected');
-              videoWsReadyRef.current = true;
               
-              // Start the session once connected
+              // Start the session immediately after connection
               if (videoWsRef.current && videoWsRef.current.readyState === WebSocket.OPEN) {
+                console.log('📹 CLIENT: Sending start_session message');
                 videoWsRef.current.send(JSON.stringify({
-                  type: 'start_session'
+                  type: 'start_session',
+                  childId: 1
                 }));
               }
             };
@@ -172,13 +173,19 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
               try {
                 const message = JSON.parse(event.data);
                 console.log('📹 CLIENT: Received WebSocket message:', message.type);
+                
+                // Mark as ready only after session is started
+                if (message.type === 'session_started') {
+                  console.log('📹 CLIENT: Video session ready for frames');
+                  videoWsReadyRef.current = true;
+                }
               } catch (error) {
                 console.error('📹 CLIENT: Error parsing WebSocket message:', error);
               }
             };
 
-            videoWsRef.current.onclose = () => {
-              console.log('📹 CLIENT: Video WebSocket disconnected');
+            videoWsRef.current.onclose = (event) => {
+              console.log('📹 CLIENT: Video WebSocket disconnected. Code:', event.code, 'Reason:', event.reason);
               videoWsReadyRef.current = false;
             };
 
