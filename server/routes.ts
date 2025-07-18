@@ -1028,7 +1028,7 @@ Answer the parent's question using this data. Be specific, helpful, and encourag
   app.patch('/api/children/:childId/profile', async (req: Request, res: Response) => {
     try {
       const { childId } = req.params;
-      const { updates } } = req.body;
+      const { updates } = req.body;
 
       if (!updates || typeof updates !== 'object') {
         return res.status(400).json({ error: 'Updates object is required' });
@@ -1158,7 +1158,7 @@ Answer the parent's question using this data. Be specific, helpful, and encourag
             })) || []
           }
         };
-      }).filter(Boolean);
+      })).filter(Boolean);
 
       // Enhanced system prompt with profile update capabilities
       const systemPrompt = `You are a helpful AI assistant for parents using the Appu educational platform. Your role is to answer questions about their children learning progress, conversation insights, milestone achievements, AND help parents update their children profiles based on new information.
