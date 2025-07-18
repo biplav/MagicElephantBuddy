@@ -159,6 +159,22 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
             videoWsRef.current.onopen = () => {
               console.log('📹 CLIENT: Video WebSocket connected');
               videoWsReadyRef.current = true;
+              
+              // Start the session once connected
+              if (videoWsRef.current && videoWsRef.current.readyState === WebSocket.OPEN) {
+                videoWsRef.current.send(JSON.stringify({
+                  type: 'start_session'
+                }));
+              }
+            };
+
+            videoWsRef.current.onmessage = (event) => {
+              try {
+                const message = JSON.parse(event.data);
+                console.log('📹 CLIENT: Received WebSocket message:', message.type);
+              } catch (error) {
+                console.error('📹 CLIENT: Error parsing WebSocket message:', error);
+              }
             };
 
             videoWsRef.current.onclose = () => {
@@ -195,11 +211,20 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
 
                 // Send frame to server via separate WebSocket
                 if (videoWsRef.current && videoWsReadyRef.current && videoWsRef.current.readyState === WebSocket.OPEN) {
-                  console.log('📹 CLIENT: Sending video frame to server via WebSocket');
-                  videoWsRef.current.send(JSON.stringify({
-                    type: 'video_frame',
-                    frameData: base64Data
-                  }));
+                  try {
+                    const message = JSON.stringify({
+                      type: 'video_frame',
+                      frameData: base64Data
+                    });
+                    console.log('📹 CLIENT: Sending video frame to server via WebSocket, size:', message.length);
+                    videoWsRef.current.send(message);
+                  } catch (error) {
+                    console.error('📹 CLIENT: Error sending video frame:', error);
+                    videoWsReadyRef.current = false;
+                  }
+                } else {
+                  console.log('📹 CLIENT: WebSocket not ready for video frame. State:', 
+                    videoWsRef.current?.readyState, 'Ready:', videoWsReadyRef.current);
                 }
               }
             }
