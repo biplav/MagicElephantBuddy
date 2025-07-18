@@ -906,7 +906,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { workflowMonitor } = await import('./workflow-monitor');
       const metrics = workflowMonitor.getMetrics();
       const health = workflowMonitor.getHealthStatus();
-      
+
       res.json({ metrics, health });
     } catch (error) {
       console.error('Error getting workflow metrics:', error);
@@ -918,7 +918,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { workflowMonitor } = await import('./workflow-monitor');
       workflowMonitor.reset();
-      
+
       res.json({ message: 'Workflow metrics reset successfully' });
     } catch (error) {
       console.error('Error resetting workflow metrics:', error);
@@ -930,13 +930,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/admin/test-workflow', async (req: Request, res: Response) => {
     try {
       const { textInput, childId = 1 } = req.body;
-      
+
       if (!textInput) {
         return res.status(400).json({ error: 'textInput is required' });
       }
 
       const { processConversation } = await import('./langgraph-workflows');
-      
+
       const result = await processConversation({
         childId,
         textInput
@@ -963,12 +963,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Instead of trying to access internal graph structure, provide a static representation
       // based on the known workflow structure from the code
-      
+
       const conversationWorkflow = {
         nodes: [
           { id: '__start__', type: 'start', label: 'Start' },
           { id: 'transcribe', type: 'process', label: 'Transcribe Audio' },
           { id: 'loadContext', type: 'process', label: 'Load Child Context' },
+          { id: 'getEyesTool', type: 'process', label: 'getEyesTool (Vision Analysis)' },
           { id: 'generateResponse', type: 'process', label: 'Generate AI Response' },
           { id: 'synthesizeSpeech', type: 'process', label: 'Synthesize Speech' },
           { id: 'storeConversation', type: 'process', label: 'Store Conversation' },
@@ -977,7 +978,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         edges: [
           { source: '__start__', target: 'transcribe', label: 'start' },
           { source: 'transcribe', target: 'loadContext', label: 'audio processed' },
-          { source: 'loadContext', target: 'generateResponse', label: 'context loaded' },
+          { source: 'loadContext', target: 'getEyesTool', label: 'context loaded' },
+          { source: 'getEyesTool', target: 'generateResponse', label: 'video analyzed' },
           { source: 'generateResponse', target: 'synthesizeSpeech', label: 'response generated' },
           { source: 'synthesizeSpeech', target: 'storeConversation', label: 'speech synthesized' },
           { source: 'storeConversation', target: '__end__', label: 'conversation stored' }

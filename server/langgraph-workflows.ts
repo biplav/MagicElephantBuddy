@@ -340,11 +340,13 @@ function createConversationWorkflow() {
   const workflow = new StateGraph(ConversationState)
     .addNode("transcribe", transcribeAudio)
     .addNode("loadContext", loadChildContext)
+    .addNode("getEyesTool", getEyesTool)
     .addNode("generateResponse", generateResponse)
     .addNode("synthesizeSpeech", synthesizeSpeech)
     .addNode("storeConversation", storeConversation)
     .addEdge("transcribe", "loadContext")
-    .addEdge("loadContext", "generateResponse")
+    .addEdge("loadContext", "getEyesTool")
+    .addEdge("getEyesTool", "generateResponse")
     .addEdge("generateResponse", "synthesizeSpeech")
     .addEdge("synthesizeSpeech", "storeConversation")
     .setEntryPoint("transcribe");
@@ -354,7 +356,44 @@ function createConversationWorkflow() {
   return workflow.compile({ checkpointer: memory });
 }
 
-// Video processing workflow
+// getEyesTool - Video frame analysis tool
+async function getEyesTool(state: ConversationStateType): Promise<Partial<ConversationStateType>> {
+  console.log("👁️ getEyesTool: Analyzing what child is showing...");
+  
+  if (!state.videoFrame) {
+    return { 
+      processingSteps: [...state.processingSteps, "getEyesTool: No video frame to analyze"]
+    };
+  }
+
+  try {
+    // Use OpenAI vision to analyze what the child is showing
+    const analysis = await analyzeVideoFrame(state.videoFrame);
+    
+    // Store as vision memory
+    await memoryService.createMemory(
+      state.childId,
+      `Child showed something: ${analysis}`,
+      'visual',
+      { conversationId: state.conversationId, importance_score: 0.8 }
+    );
+
+    // Add visual context to the conversation state
+    const visualContext = `\n\nVISUAL CONTEXT: The child is showing you something! Here's what I can see: ${analysis}. Please acknowledge what they're showing and respond appropriately to engage with their visual demonstration.`;
+    
+    return {
+      enhancedPrompt: (state.enhancedPrompt || "") + visualContext,
+      processingSteps: [...state.processingSteps, `getEyesTool: Visual analysis completed - ${analysis.slice(0, 50)}...`]
+    };
+  } catch (error) {
+    return {
+      errors: [...state.errors, `getEyesTool failed: ${error}`],
+      processingSteps: [...state.processingSteps, "getEyesTool: Visual analysis failed"]
+    };
+  }
+}
+
+// Video processing workflow (kept for backward compatibility)
 function createVideoAnalysisWorkflow() {
   const videoWorkflow = new StateGraph(ConversationState)
     .addNode("analyzeVideo", async (state: ConversationStateType) => {
@@ -392,8 +431,44 @@ function createVideoAnalysisWorkflow() {
 }
 
 async function analyzeVideoFrame(frameData: string): Promise<string> {
-  // Your existing video analysis logic
-  return "Child is showing something to the camera";
+  try {
+    const { defaultAIService } = await import('./ai-service');
+    
+    // Use OpenAI's vision model to analyze what the child is showing
+    const openai = new (await import('openai')).default({ 
+      apiKey: process.env.OPENAI_API_KEY 
+    });
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "A child is showing something to their AI companion Appu. Please describe what you see in this image in a child-friendly way. Focus on objects, toys, drawings, books, or anything the child might be proudly showing off. Be specific about colors, shapes, and details that would help Appu respond enthusiastically to what the child is showing."
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/jpeg;base64,${frameData}`
+              }
+            }
+          ],
+        },
+      ],
+      max_tokens: 200,
+      temperature: 0.7
+    });
+
+    const analysis = response.choices[0]?.message?.content || "I can see something interesting!";
+    console.log("🎯 Video frame analysis:", analysis);
+    return analysis;
+  } catch (error) {
+    console.error("Video analysis error:", error);
+    return "I can see you're showing me something special!";
+  }
 }
 
 // Export the workflows
@@ -431,28 +506,9 @@ export async function processConversation(input: {
       steps: result.processingSteps,
       errors: result.errors,
       hasResponse: !!result.aiResponse,
-      hasAudio: !!result.audioResponse
+      hasAudio: !!result.audioResponse,
+      hasVideoAnalysis: !!input.videoFrame
     });
-
-    // Process video if provided
-    if (input.videoFrame) {
-      const videoWorkflowId = `video-${input.childId}-${Date.now()}`;
-      const { startTime: videoStartTime } = workflowMonitor.startWorkflow(videoWorkflowId);
-      
-      try {
-        await videoAnalysisWorkflow.invoke({
-          childId: input.childId,
-          conversationId: result.conversationId,
-          videoFrame: input.videoFrame,
-          processingSteps: [],
-          errors: []
-        });
-        workflowMonitor.completeWorkflow(videoWorkflowId, videoStartTime, true);
-      } catch (videoError) {
-        workflowMonitor.completeWorkflow(videoWorkflowId, videoStartTime, false, [String(videoError)]);
-        console.error("Video workflow failed:", videoError);
-      }
-    }
 
     const success = result.errors.length === 0;
     workflowMonitor.completeWorkflow(workflowId, startTime, success, result.errors);
