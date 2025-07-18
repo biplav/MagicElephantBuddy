@@ -958,6 +958,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Visualize LangGraph workflow structure
+  app.get('/api/admin/workflow-graph', async (req: Request, res: Response) => {
+    try {
+      const { conversationWorkflow, videoAnalysisWorkflow } = await import('./langgraph-workflows');
+      
+      // Get graph representations
+      const conversationGraph = conversationWorkflow.getGraph();
+      const videoGraph = videoAnalysisWorkflow.getGraph();
+      
+      // Convert to a more readable format
+      const conversationNodes = Array.from(conversationGraph.nodes.entries()).map(([id, node]) => ({
+        id,
+        type: node.data?.name || 'unknown',
+        label: id
+      }));
+      
+      const conversationEdges = Array.from(conversationGraph.edges).map(edge => ({
+        source: edge.source,
+        target: edge.target,
+        label: edge.data || ''
+      }));
+
+      const videoNodes = Array.from(videoGraph.nodes.entries()).map(([id, node]) => ({
+        id,
+        type: node.data?.name || 'unknown',
+        label: id
+      }));
+      
+      const videoEdges = Array.from(videoGraph.edges).map(edge => ({
+        source: edge.source,
+        target: edge.target,
+        label: edge.data || ''
+      }));
+
+      res.json({
+        workflows: {
+          conversationWorkflow: {
+            nodes: conversationNodes,
+            edges: conversationEdges,
+            entryPoint: '__start__'
+          },
+          videoAnalysisWorkflow: {
+            nodes: videoNodes,
+            edges: videoEdges,
+            entryPoint: '__start__'
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error getting workflow graphs:', error);
+      res.status(500).json({ error: 'Failed to get workflow graphs', details: String(error) });
+    }
+  });
+
   app.post('/api/parent-chat', async (req: Request, res: Response) => {
     try {
       const { parentId, question, childrenIds } = req.body;

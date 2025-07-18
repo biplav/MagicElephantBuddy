@@ -9,6 +9,7 @@ import AudioTest from "@/pages/AudioTest";
 import ParentDashboard from "@/pages/ParentDashboard";
 import Settings from "@/pages/Settings";
 import MemoriesConsole from "@/pages/MemoriesConsole";
+import WorkflowVisualizer from "./pages/WorkflowVisualizer";
 
 function Router() {
   return (
@@ -18,6 +19,7 @@ function Router() {
       <Route path="/dashboard" component={ParentDashboard} />
       <Route path="/memories" component={MemoriesConsole} />
       <Route path="/settings" component={Settings} />
+      <Route path="/workflow-visualizer" component={WorkflowVisualizer} />
       <Route component={NotFound} />
     </Switch>
   );
