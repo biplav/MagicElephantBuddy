@@ -315,10 +315,24 @@ async function analyzeVideoFrame(frameData: string): Promise<string> {
 
 export function setupRealtimeWebSocket(server: any) {
   const wss = new WebSocketServer({ 
-    server, 
-    path: '/ws/realtime',
-    perMessageDeflate: false,
-    clientTracking: false
+    noServer: true
+  });
+  
+  // Handle upgrade event manually for /ws/realtime
+  server.on('upgrade', (request: any, socket: any, head: any) => {
+    if (request.url === '/ws/realtime') {
+      console.log('Handling WebSocket upgrade for /ws/realtime');
+      
+      try {
+        wss.handleUpgrade(request, socket, head, (ws: WebSocket) => {
+          console.log('WebSocket connection established for /ws/realtime');
+          wss.emit('connection', ws, request);
+        });
+      } catch (error) {
+        console.error('Error handling Realtime WebSocket upgrade:', error);
+        socket.destroy();
+      }
+    }
   });
   
   wss.on('connection', (ws: WebSocket) => {

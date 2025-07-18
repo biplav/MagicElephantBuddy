@@ -1614,11 +1614,6 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
 
   const httpServer = createServer(app);
   
-  // Enable WebSocket server error handling
-  httpServer.on('upgrade', (request, socket, head) => {
-    console.log('HTTP upgrade request for:', request.url);
-  });
-  
   // Set up OpenAI Realtime API WebSocket service
   setupRealtimeWebSocket(httpServer);
   

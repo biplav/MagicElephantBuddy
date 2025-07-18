@@ -505,14 +505,41 @@ function generateSessionId(): string {
 }
 
 export function setupGeminiLiveWebSocket(server: any) {
+  console.log('Setting up Gemini Live WebSocket server...');
+  
+  // Create WebSocket server with noServer option
   const wss = new WebSocketServer({ 
-    server: server, 
-    path: '/gemini-ws',
-    perMessageDeflate: false,
-    clientTracking: false
+    noServer: true
   });
 
-  console.log('Gemini Live WebSocket server initialized on /gemini-ws');
+  console.log('Gemini Live WebSocket server initialized');
+
+  // Handle upgrade event manually
+  server.on('upgrade', (request: any, socket: any, head: any) => {
+    console.log('Upgrade request received for:', request.url);
+    console.log('Request headers:', request.headers);
+    
+    if (request.url === '/gemini-ws') {
+      console.log('Handling WebSocket upgrade for /gemini-ws');
+      
+      try {
+        wss.handleUpgrade(request, socket, head, (ws: WebSocket) => {
+          console.log('WebSocket connection established for /gemini-ws');
+          wss.emit('connection', ws, request);
+        });
+      } catch (error) {
+        console.error('Error handling WebSocket upgrade:', error);
+        socket.destroy();
+      }
+    } else {
+      console.log('Destroying socket for non-WebSocket request:', request.url);
+      socket.destroy();
+    }
+  });
+
+  wss.on('error', (error) => {
+    console.error('WebSocket Server error:', error);
+  });
 
   wss.on('connection', (ws: WebSocket) => {
     console.log('New Gemini Live WebSocket connection established');
