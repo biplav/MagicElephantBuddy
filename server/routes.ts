@@ -36,10 +36,10 @@ async function createEnhancedSystemPrompt(childId: number = 1): Promise<string> 
     // Get child profile
     const child = await storage.getChild(childId);
     const childProfile = child?.profile || DEFAULT_PROFILE;
-    
+
     // Get learning milestones for the child
     const milestones = await storage.getMilestonesByChild(childId);
-    
+
     // Generate current date and time information
     const now = new Date();
     const options: Intl.DateTimeFormatOptions = {
@@ -53,14 +53,14 @@ async function createEnhancedSystemPrompt(childId: number = 1): Promise<string> 
     };
     const currentDateTime = now.toLocaleDateString('en-US', options);
     const timeOfDay = now.getHours() < 12 ? 'morning' : now.getHours() < 17 ? 'afternoon' : now.getHours() < 20 ? 'evening' : 'night';
-    
+
     // Dynamically generate profile information from childProfile keys
     const generateProfileSection = (obj: any): string => {
       let result = '';
-      
+
       for (const [key, value] of Object.entries(obj)) {
         const displayKey = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
-        
+
         if (Array.isArray(value)) {
           result += `- ${displayKey}: ${value.join(', ')}\n`;
         } else if (typeof value === 'object' && value !== null) {
@@ -71,7 +71,7 @@ async function createEnhancedSystemPrompt(childId: number = 1): Promise<string> 
           result += `- ${displayKey}: ${value}\n`;
         }
       }
-      
+
       return result;
     };
 
@@ -82,10 +82,10 @@ async function createEnhancedSystemPrompt(childId: number = 1): Promise<string> 
       }
 
       let result = '\nLEARNING MILESTONES AND PROGRESS:\n';
-      
+
       const activeMilestones = milestones.filter((m: any) => !m.isCompleted);
       const completedMilestones = milestones.filter((m: any) => m.isCompleted);
-      
+
       if (activeMilestones.length > 0) {
         result += '\nCurrent Learning Goals:\n';
         activeMilestones.forEach((milestone: any) => {
@@ -93,7 +93,7 @@ async function createEnhancedSystemPrompt(childId: number = 1): Promise<string> 
           result += `- ${milestone.milestoneDescription} (${progressPercent}% complete - ${milestone.currentProgress}/${milestone.targetValue})\n`;
         });
       }
-      
+
       if (completedMilestones.length > 0) {
         result += '\nCompleted Achievements:\n';
         completedMilestones.forEach((milestone: any) => {
@@ -101,13 +101,13 @@ async function createEnhancedSystemPrompt(childId: number = 1): Promise<string> 
           result += `- ✅ ${milestone.milestoneDescription} (Completed: ${completedDate})\n`;
         });
       }
-      
+
       result += '\nMILESTONE GUIDANCE:\n';
       result += '- Reference these milestones during conversations to encourage progress\n';
       result += '- Celebrate achievements and progress made\n';
       result += '- Incorporate learning activities that support current goals\n';
       result += '- Use age-appropriate language to discuss progress\n';
-      
+
       return result;
     };
 
@@ -127,7 +127,7 @@ Use this information to personalize your responses and make them more engaging f
     const milestonesInfo = generateMilestonesSection();
 
     return APPU_SYSTEM_PROMPT + dateTimeInfo + profileInfo + milestonesInfo;
-    
+
   } catch (error) {
     console.error('Error creating enhanced system prompt:', error);
     // Fallback to basic prompt if there's an error
@@ -138,10 +138,10 @@ Use this information to personalize your responses and make them more engaging f
 export async function registerRoutes(app: Express): Promise<Server> {
   // Configure body parser
   app.use(bodyParser.json());
-  
+
   // Store generated audio in memory for testing
   const audioCache = new Map<string, Buffer>();
-  
+
   // Endpoint to generate and download audio directly
   app.post('/api/generate-audio', async (req: Request, res: Response) => {
     try {
@@ -152,14 +152,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`Generating downloadable audio for: ${text}`);
       const speechAudio = await generateSpeech(text);
-      
+
       // Store in cache for download
       const audioId = `audio-${Date.now()}`;
       audioCache.set(audioId, speechAudio);
-      
+
       console.log(`Audio generated: ${speechAudio.length} bytes, ID: ${audioId}`);
       console.log(`Download URL: http://localhost:5000/api/download-audio/${audioId}`);
-      
+
       res.json({ 
         audioId,
         downloadUrl: `/api/download-audio/${audioId}`,
@@ -170,22 +170,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to generate audio' });
     }
   });
-  
+
   // Download endpoint for cached audio
   app.get('/api/download-audio/:audioId', (req: Request, res: Response) => {
     const { audioId } = req.params;
     const audioBuffer = audioCache.get(audioId);
-    
+
     if (!audioBuffer) {
       return res.status(404).json({ error: 'Audio not found' });
     }
-    
+
     res.set({
       'Content-Type': 'audio/wav',
       'Content-Disposition': `attachment; filename="appu-speech-${audioId}.wav"`,
       'Content-Length': audioBuffer.length
     });
-    
+
     res.send(audioBuffer);
     console.log(`Audio downloaded: ${audioId}`);
   });
@@ -195,7 +195,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const childId = parseInt(req.params.childId) || 1;
       const enhancedPrompt = await createEnhancedSystemPrompt(childId);
-      
+
       res.json({
         childId,
         promptLength: enhancedPrompt.length,
@@ -218,14 +218,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const testText = "Hello! Main Appu hoon, tumhara magical elephant dost! Namaste!";
       console.log('Generating test audio...');
-      
+
       const speechAudio = await generateSpeech(testText);
       const audioId = `test-${Date.now()}`;
       audioCache.set(audioId, speechAudio);
-      
+
       const downloadUrl = `http://localhost:5000/api/download-audio/${audioId}`;
       console.log(`Test audio ready: ${downloadUrl}`);
-      
+
       res.json({ 
         success: true,
         text: testText,
@@ -244,17 +244,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/process-text', async (req: Request, res: Response) => {
     try {
       const { text } = req.body;
-      
+
       if (!text) {
         return res.status(400).json({ error: 'No text provided' });
       }
-      
+
       console.log(`Received text: ${text}`);
 
       // Get or create conversation for the default child (demo child)
       const childId = 1; // Using the seeded child ID for demo
       let conversation = await storage.getCurrentConversation(childId);
-      
+
       if (!conversation) {
         // Create new conversation if none exists
         conversation = await storage.createConversation({
@@ -262,19 +262,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         console.log(`Created new conversation ${conversation.id} for child ${childId}`);
       }
-      
+
       // Generate a response using enhanced system prompt with milestone details
       const enhancedPrompt = await createEnhancedSystemPrompt(childId);
-      
+
       // Log the enhanced prompt structure for debugging
       console.log('=== ENHANCED PROMPT STRUCTURE FOR REALTIME API ===');
       console.log('Child ID:', childId);
       console.log('Prompt Length:', enhancedPrompt.length);
       console.log('Prompt Preview (first 500 chars):', enhancedPrompt.substring(0, 500) + '...');
       console.log('=== END PROMPT STRUCTURE ===');
-      
+
       const responseText = await generateResponse(`${enhancedPrompt}\n\nChild's message: ${text}`);
-      
+
       console.log(`Response text: ${responseText}`);
 
       // Store messages in database
@@ -304,25 +304,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error('Error storing messages:', error);
       }
-      
+
       // Generate speech audio using OpenAI's TTS API
       const speechAudio = await generateSpeech(responseText);
-      
+
       console.log(`Generated speech audio: ${speechAudio.length} bytes`);
-      
+
       // Save the audio file for download/testing
       const timestamp = Date.now();
       const audioFileName = `appu-speech-${timestamp}.wav`;
       const publicDir = path.join(process.cwd(), 'public');
       const audioFilePath = path.join(publicDir, audioFileName);
-      
+
       // Ensure public directory exists
       try {
         if (!fs.existsSync(publicDir)) {
           fs.mkdirSync(publicDir, { recursive: true });
           console.log(`Created public directory: ${publicDir}`);
         }
-        
+
         // Save the audio file
         fs.writeFileSync(audioFilePath, speechAudio);
         console.log(`Speech audio saved as: ${audioFileName} (${speechAudio.length} bytes)`);
@@ -331,7 +331,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (saveError) {
         console.error(`Error saving audio file: ${saveError}`);
       }
-      
+
       // Return a JSON response with both the text and Base64 encoded audio
       res.json({
         text: responseText,
@@ -341,10 +341,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error('Error processing text:', error);
-      
+
       // Get the appropriate error type and message
       let errorType = 'generic';
-      
+
       // Map the error message to an error type
       if (error.message === 'rateLimit') {
         errorType = 'rateLimit';
@@ -359,9 +359,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else if (error.message === 'textProcessingError') {
         errorType = 'textProcessingError';
       }
-      
+
       const errorState = getErrorMessage(errorType);
-      
+
       res.status(500).json({ 
         error: errorState.userMessage,
         errorType: errorType,
@@ -374,34 +374,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/process-with-config', async (req: Request, res: Response) => {
     try {
       const { text, aiConfig = 'standard', useCreative = false } = req.body;
-      
+
       if (!text || text.trim() === '') {
         return res.status(400).json({ error: 'Text input is required' });
       }
-      
+
       console.log(`Processing text with AI config: ${aiConfig}, creative: ${useCreative}`);
-      
+
       // Create AI service based on configuration
       const aiService = createAIService(aiConfig as keyof typeof AI_CONFIGS);
-      
+
       // Generate response using the configured AI service
       const responseText = await aiService.generateResponse(text);
       console.log(`Response text: ${responseText}`);
-      
+
       // Generate speech with optional creative voice
       const speechConfig = useCreative ? { audioVoice: 'fable' as const } : undefined;
       const speechAudio = await aiService.generateSpeech(responseText, speechConfig);
-      
+
       // Convert audio to base64 for response
       const audioBase64 = speechAudio.toString('base64');
-      
+
       res.json({
         text: responseText,
         audioData: audioBase64,
         config: aiConfig,
         creative: useCreative
       });
-      
+
     } catch (error: any) {
       console.error('Error in config-based processing:', error);
       res.status(500).json({ 
@@ -414,18 +414,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Handle audio processing with OpenAI
   // Endpoint to create ephemeral token for OpenAI Realtime API
   // Parent Dashboard API Routes
-  
+
   // Parent registration
   app.post('/api/parents/register', async (req: Request, res: Response) => {
     try {
       const { email, password, name } = req.body;
-      
+
       // Check if parent already exists
       const existingParent = await storage.getParentByEmail(email);
       if (existingParent) {
         return res.status(400).json({ error: 'Parent already exists with this email' });
       }
-      
+
       const parent = await storage.createParent({ email, password, name });
       res.json({ parent: { id: parent.id, email: parent.email, name: parent.name } });
     } catch (error) {
@@ -433,24 +433,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to register parent' });
     }
   });
-  
+
   // Parent login
   app.post('/api/parents/login', async (req: Request, res: Response) => {
     try {
       const { email, password } = req.body;
-      
+
       const parent = await storage.getParentByEmail(email);
       if (!parent || parent.password !== password) {
         return res.status(401).json({ error: 'Invalid credentials' });
       }
-      
+
       res.json({ parent: { id: parent.id, email: parent.email, name: parent.name } });
     } catch (error) {
       console.error('Error logging in parent:', error);
       res.status(500).json({ error: 'Failed to login' });
     }
   });
-  
+
   // Get parent dashboard data
   app.get('/api/parents/:parentId/dashboard', async (req: Request, res: Response) => {
     try {
@@ -463,7 +463,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to fetch dashboard data' });
     }
   });
-  
+
   // Create child profile
   app.post('/api/children', async (req: Request, res: Response) => {
     try {
@@ -475,7 +475,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to create child profile' });
     }
   });
-  
+
   // Get conversations for a child
   app.get('/api/children/:childId/conversations', async (req: Request, res: Response) => {
     try {
@@ -488,7 +488,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to fetch conversations' });
     }
   });
-  
+
   // Get messages for a conversation
   app.get('/api/conversations/:conversationId/messages', async (req: Request, res: Response) => {
     try {
@@ -506,17 +506,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const childId = 1; // Using the seeded child ID for demo
       const conversation = await storage.getCurrentConversation(childId);
-      
+
       if (conversation) {
         const endTime = new Date();
         const duration = Math.floor((endTime.getTime() - new Date(conversation.startTime).getTime()) / 1000);
-        
+
         await storage.updateConversation(conversation.id, {
           endTime,
           duration,
           totalMessages: conversation.totalMessages
         });
-        
+
         console.log(`Closed conversation ${conversation.id} - Duration: ${duration}s`);
         res.json({ 
           message: 'Conversation closed successfully',
@@ -554,10 +554,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/start-realtime-conversation', async (req: Request, res: Response) => {
     try {
       const { childId } = req.body;
-      
+
       // Create a new conversation for the realtime session
       const conversation = await storage.createConversation({ childId });
-      
+
       res.json({ success: true, conversationId: conversation.id });
     } catch (error) {
       console.error('Error starting realtime conversation:', error);
@@ -569,16 +569,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/store-realtime-message', async (req: Request, res: Response) => {
     try {
       const { type, content, transcription } = req.body;
-      
+
       // Get the current active conversation for child ID 1 (default child)
       const childId = 1;
       let conversation = await storage.getCurrentConversation(childId);
-      
+
       // If no active conversation, create one
       if (!conversation) {
         conversation = await storage.createConversation({ childId });
       }
-      
+
       // Store the message
       await storage.createMessage({
         conversationId: conversation.id,
@@ -586,13 +586,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         content,
         transcription
       });
-      
+
       // Update conversation message count
       const currentMessages = await storage.getMessagesByConversation(conversation.id);
       await storage.updateConversation(conversation.id, {
         totalMessages: currentMessages.length
       });
-      
+
       res.json({ success: true, conversationId: conversation.id });
     } catch (error) {
       console.error('Error storing realtime message:', error);
@@ -609,24 +609,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate enhanced prompt and ensure it's a string
       console.log('Starting enhanced prompt generation...');
       let enhancedInstructions;
-      
+
       try {
         enhancedInstructions = await createEnhancedSystemPrompt(1);
         console.log('Enhanced instructions generated successfully');
         console.log('Type:', typeof enhancedInstructions);
         console.log('Length:', enhancedInstructions?.length || 0);
         console.log('Is string:', typeof enhancedInstructions === 'string');
-        
+
         if (typeof enhancedInstructions !== 'string') {
           console.error('Instructions is not a string:', enhancedInstructions);
           return res.status(500).json({ error: 'Failed to generate instructions - not a string' });
         }
-        
+
         if (!enhancedInstructions || enhancedInstructions.length === 0) {
           console.error('Instructions is empty');
           return res.status(500).json({ error: 'Failed to generate instructions - empty' });
         }
-        
+
       } catch (promptError) {
         console.error('Error generating enhanced prompt:', promptError);
         const errorMessage = promptError instanceof Error ? promptError.message : 'Unknown error';
@@ -716,7 +716,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const milestoneId = parseInt(req.params.milestoneId);
       const milestone = await storage.completeMilestone(milestoneId);
-      
+
       // Create milestone achievement notification
       const child = await storage.getChild(milestone.childId);
       if (child) {
@@ -730,7 +730,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           priority: 'high'
         });
       }
-      
+
       res.json(milestone);
     } catch (error) {
       console.error('Error completing milestone:', error);
@@ -816,189 +816,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/process-audio', upload.single('audio'), async (req: MulterRequest, res: Response) => {
-    if (!req.file) {
-      return res.status(400).json({ 
-        error: 'No audio file provided',
-        errorType: 'audioProcessingError',
-        debugMessage: 'Missing audio file in the request'
-      });
-    }
-    
-    // Check if the audio file is empty
-    if (req.file.size === 0) {
-      return res.status(400).json({ 
-        error: 'The audio file is empty',
-        errorType: 'audioProcessingError',
-        debugMessage: 'Received an empty audio file'
-      });
-    }
-
-    console.log(`Received audio file of size: ${req.file.size} bytes with MIME type: ${req.file.mimetype}`);
-
+  // Process audio with AI endpoint using LangGraph workflow
+  app.post('/api/process-audio', upload.single('audio'), async (req: Request, res: Response) => {
     try {
-      // Get or create conversation for the default child (demo child)
-      const childId = 1; // Using the seeded child ID for demo
-      let conversation = await storage.getCurrentConversation(childId);
-      
-      if (!conversation) {
-        // Create new conversation if none exists
-        conversation = await storage.createConversation({
-          childId: childId
-        });
-        console.log(`Created new conversation ${conversation.id} for child ${childId}`);
+      if (!req.file) {
+        return res.status(400).json({ error: 'No audio file provided' });
       }
 
-      // Step 1: Transcribe audio using OpenAI's Whisper API
-      const audioBuffer = req.file.buffer;
-      
-      if (!audioBuffer || audioBuffer.length === 0) {
-        console.error("Empty audio buffer received in request");
-        return res.status(400).json({ 
-          error: "The audio data is empty or corrupted",
-          errorType: "audioProcessingError",
-          debugMessage: "Received empty audio buffer"
-        });
-      }
-      
-      console.log(`Audio buffer received, size: ${audioBuffer.length} bytes`);
-      
-      // Create a short summary of the buffer content for debugging
-      const bufferSummary = Buffer.from(audioBuffer.slice(0, 20)).toString('hex');
-      console.log(`Audio buffer starts with: ${bufferSummary}...`);
-      
-      // Determine the file extension based on mime type
-      let fileExtension = 'webm';
-      const mimeType = req.file.mimetype;
-      
-      if (mimeType.includes('wav')) {
-        fileExtension = 'wav';
-      } else if (mimeType.includes('mp4')) {
-        fileExtension = 'mp4';
-      } else if (mimeType.includes('ogg')) {
-        fileExtension = 'ogg';
-      }
-      
-      console.log(`Processing audio file with MIME type: ${mimeType}, extension: ${fileExtension}`);
-      const transcribedText = await transcribeAudio(audioBuffer, `recording-${Date.now()}.${fileExtension}`);
-      
-      // Step 2: Generate a response using enhanced system prompt with milestone details
-      const enhancedPrompt = await createEnhancedSystemPrompt(childId);
-      const responseText = await generateResponse(`${enhancedPrompt}\n\nChild's message: ${transcribedText}`);
-      
-      console.log(`Transcribed text: ${transcribedText}`);
-      console.log(`Response text: ${responseText}`);
+      console.log('Processing audio file with LangGraph workflow:', req.file.originalname);
 
-      // Step 3: Store messages in database
-      try {
-        // Store child's input message
-        await storage.createMessage({
-          conversationId: conversation.id,
-          type: 'child_input',
-          content: transcribedText,
-          transcription: transcribedText
-        });
+      // Use LangGraph workflow for processing
+      const { processConversation } = await import('./langgraph-workflows');
 
-        // Store Appu's response message
-        await storage.createMessage({
-          conversationId: conversation.id,
-          type: 'appu_response',
-          content: responseText
-        });
+      const result = await processConversation({
+        childId: 1, // Default child for demo
+        audioData: req.file.buffer
+      });
 
-        // Update conversation message count
-        const currentMessages = await storage.getMessagesByConversation(conversation.id);
-        await storage.updateConversation(conversation.id, {
-          totalMessages: currentMessages.length
-        });
-
-        console.log(`Stored messages for conversation ${conversation.id}`);
-      } catch (error) {
-        console.error('Error storing messages:', error);
+      // Save audio file if generated
+      let audioUrl = null;
+      if (result.audioResponse) {
+        const audioFileName = `appu-speech-${Date.now()}.wav`;
+        const audioPath = path.join(process.cwd(), 'public', 'public', audioFileName);
+        fs.writeFileSync(audioPath, result.audioResponse);
+        audioUrl = `/${audioFileName}`;
       }
-      
-      // Generate a simple tone to make the elephant appear to be speaking
-      // In a real implementation, we would use a proper TTS service
-      // Create a WAV file with a short beep sound
-      const sampleRate = 44100;
-      const duration = 0.3; // seconds
-      const frequency = 440; // Hz (A4 note)
-      
-      // Generate WAV header
-      const numSamples = Math.floor(sampleRate * duration);
-      const dataSize = numSamples * 2; // 16-bit samples = 2 bytes per sample
-      const fileSize = 36 + dataSize;
-      
-      const header = Buffer.alloc(44);
-      // "RIFF" chunk descriptor
-      header.write('RIFF', 0);
-      header.writeUInt32LE(fileSize - 8, 4);
-      header.write('WAVE', 8);
-      
-      // "fmt " sub-chunk
-      header.write('fmt ', 12);
-      header.writeUInt32LE(16, 16); // fmt chunk size
-      header.writeUInt16LE(1, 20); // audio format (1 = PCM)
-      header.writeUInt16LE(1, 22); // num channels (1 = mono)
-      header.writeUInt32LE(sampleRate, 24); // sample rate
-      header.writeUInt32LE(sampleRate * 2, 28); // byte rate (sample rate * block align)
-      header.writeUInt16LE(2, 32); // block align (channels * bits per sample / 8)
-      header.writeUInt16LE(16, 34); // bits per sample
-      
-      // "data" sub-chunk
-      header.write('data', 36);
-      header.writeUInt32LE(dataSize, 40);
-      
-      // Generate audio data (simple sine wave)
-      const audioData = Buffer.alloc(numSamples * 2);
-      for (let i = 0; i < numSamples; i++) {
-        const t = i / sampleRate;
-        // Create a fading sine wave
-        const fadeInOut = Math.sin(Math.PI * t / duration);
-        const sample = Math.sin(2 * Math.PI * frequency * t) * fadeInOut * 0.5;
-        // Convert to 16-bit PCM
-        const value = Math.floor(sample * 32767);
-        audioData.writeInt16LE(value, i * 2);
-      }
-      
-      // Combine header and audio data
-      const dummyAudio = Buffer.concat([header, audioData]);
-      
-      // Return a JSON response with both the text and Base64 encoded audio
+
       res.json({
-        text: responseText,
-        transcribedText: transcribedText,
-        audioData: dummyAudio.toString('base64'),
-        contentType: 'audio/wav'
+        transcription: result.transcription,
+        response: result.aiResponse,
+        audioUrl,
+        processingSteps: result.processingSteps,
+        errors: result.errors,
+        conversationId: result.conversationId
       });
     } catch (error: any) {
-      console.error('Error processing audio:', error);
-      
-      // Get the appropriate error type and message
-      let errorType = 'generic';
-      
-      // Map the error message to an error type
-      if (error.message === 'rateLimit') {
-        errorType = 'rateLimit';
-      } else if (error.message === 'auth') {
-        errorType = 'auth';
-      } else if (error.message === 'serviceUnavailable') {
-        errorType = 'serviceUnavailable';
-      } else if (error.message === 'network') {
-        errorType = 'network';
-      } else if (error.message === 'audioProcessingError') {
-        errorType = 'audioProcessingError';
-      } else if (error.message === 'textProcessingError') {
-        errorType = 'textProcessingError';
-      }
-      
-      const errorState = getErrorMessage(errorType);
-      
-      res.status(500).json({ 
-        error: errorState.userMessage,
-        errorType: errorType,
-        debugMessage: errorState.debugMessage
-      });
+      console.error('Error processing audio with workflow:', error);
+      res.status(500).json({ error: error.message });
     }
   });
 
@@ -1007,7 +861,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const parentId = parseInt(req.params.parentId);
       const status = req.query.status as string;
-      
+
       const suggestions = await storage.getProfileUpdateSuggestionsByParent(parentId, status);
       res.json(suggestions);
     } catch (error) {
@@ -1020,13 +874,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const suggestionId = parseInt(req.params.suggestionId);
       const { status, parentResponse } = req.body;
-      
+
       const updatedSuggestion = await storage.updateProfileUpdateSuggestionStatus(
         suggestionId, 
         status, 
         parentResponse
       );
-      
+
       res.json(updatedSuggestion);
     } catch (error) {
       console.error('Error updating profile suggestion:', error);
@@ -1174,7 +1028,7 @@ Answer the parent's question using this data. Be specific, helpful, and encourag
   app.patch('/api/children/:childId/profile', async (req: Request, res: Response) => {
     try {
       const { childId } = req.params;
-      const { updates } = req.body;
+      const { updates } } = req.body;
 
       if (!updates || typeof updates !== 'object') {
         return res.status(400).json({ error: 'Updates object is required' });
@@ -1194,7 +1048,7 @@ Answer the parent's question using this data. Be specific, helpful, and encourag
         updatedProfile.likes = Array.isArray(updates.likes) ? updates.likes : 
           [...(currentProfile.likes || []), updates.likes];
       }
-      
+
       if (updates.dislikes) {
         updatedProfile.dislikes = Array.isArray(updates.dislikes) ? updates.dislikes :
           [...(currentProfile.dislikes || []), updates.dislikes];
@@ -1258,10 +1112,10 @@ Answer the parent's question using this data. Be specific, helpful, and encourag
 
         // Get conversations for this child
         const recentConversations = await storage.getConversationsByChild(child.id, 10);
-        
+
         const totalMessages = recentConversations?.reduce((sum: number, conv: any) => 
           sum + (conv.totalMessages || 0), 0) || 0;
-        
+
         const avgConversationDuration = recentConversations?.length > 0 ? 
           recentConversations.reduce((sum: number, conv: any) => sum + (conv.duration || 0), 0) / recentConversations.length : 0;
 
@@ -1304,7 +1158,7 @@ Answer the parent's question using this data. Be specific, helpful, and encourag
             })) || []
           }
         };
-      }).filter(Boolean));
+      }).filter(Boolean);
 
       // Enhanced system prompt with profile update capabilities
       const systemPrompt = `You are a helpful AI assistant for parents using the Appu educational platform. Your role is to answer questions about their children learning progress, conversation insights, milestone achievements, AND help parents update their children profiles based on new information.
@@ -1359,11 +1213,11 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
         try {
           // Extract the JSON part after the marker
           const afterMarker = response.substring(markerIndex + profileUpdateMarker.length);
-          
+
           // Simple approach: extract the first line that looks like JSON after the marker
           const lines = afterMarker.split('\n');
           let jsonLine = '';
-          
+
           for (const line of lines) {
             const trimmed = line.trim();
             if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
@@ -1371,7 +1225,7 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
               break;
             }
           }
-          
+
           if (jsonLine) {
             console.log('Found JSON line:', jsonLine);
             profileUpdateData = JSON.parse(jsonLine);
@@ -1415,7 +1269,7 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
             });
 
             await storage.updateChildProfile(profileUpdateData.childId, updatedProfile);
-            
+
             res.json({ 
               response: cleanResponse + "\n\n✅ Profile updated successfully!",
               profileUpdated: true,
@@ -1613,28 +1467,28 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
   });
 
   const httpServer = createServer(app);
-  
+
   // Set up OpenAI Realtime API WebSocket service
   setupRealtimeWebSocket(httpServer);
-  
+
   // Set up Gemini Live API WebSocket service
   setupGeminiLiveWebSocket(httpServer);
-  
+
   // Set up WebSocket server for real-time communication (future use)
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
-  
+
   wss.on('connection', (ws) => {
     console.log('WebSocket client connected');
-    
+
     ws.on('message', (message) => {
       console.log('Received message:', message);
-      
+
       // Echo back for now
       if (ws.readyState === ws.OPEN) {
         ws.send(JSON.stringify({ message: 'Received message' }));
       }
     });
-    
+
     ws.on('close', () => {
       console.log('WebSocket client disconnected');
     });

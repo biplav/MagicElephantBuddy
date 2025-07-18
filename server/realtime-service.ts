@@ -378,8 +378,20 @@ export function setupRealtimeWebSocket(server: any) {
             }
             break;
           case 'video_frame':
-            // Handle video frame for OpenAI Realtime API
-            await handleVideoFrame(session, message.frameData);
+            // Handle video frame using LangGraph workflow
+            try {
+              const { videoAnalysisWorkflow } = await import('./langgraph-workflows');
+              await videoAnalysisWorkflow.invoke({
+                childId: session.childId,
+                conversationId: session.conversationId,
+                videoFrame: message.frameData,
+                processingSteps: [],
+                errors: []
+              });
+            } catch (error) {
+              console.error('Video workflow error:', error);
+              await handleVideoFrame(session, message.frameData); // Fallback
+            }
             break;
           case 'commit_audio':
             if (session.openaiWs && session.isConnected) {
