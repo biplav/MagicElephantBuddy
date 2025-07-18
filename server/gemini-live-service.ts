@@ -4,155 +4,6 @@ import { storage } from "./storage";
 import { APPU_SYSTEM_PROMPT } from "@shared/appuPrompts";
 import { getCurrentTimeContext, DEFAULT_PROFILE } from "@shared/childProfile";
 import { memoryService } from './memory-service';
-import OpenAI from 'openai';
-import * as fs from 'fs';
-import * as path from 'path';
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
-
-// Audio processing helper function
-async function handleAudioChunk(session: GeminiLiveSession, audioData: string) {
-  try {
-    // Convert base64 audio to buffer
-    const audioBuffer = Buffer.from(audioData, 'base64');
-    
-    // Create temporary file for audio processing
-    const tempDir = path.join(process.cwd(), 'tmp');
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true });
-    }
-    
-    const tempFile = path.join(tempDir, `audio_${Date.now()}.webm`);
-    fs.writeFileSync(tempFile, audioBuffer);
-    
-    // Transcribe using OpenAI Whisper
-    const transcription = await openai.audio.transcriptions.create({
-      file: fs.createReadStream(tempFile),
-      model: "whisper-1",
-      language: "en" // or "hi" for Hindi
-    });
-    
-    // Clean up temporary file
-    fs.unlinkSync(tempFile);
-    
-    const text = transcription.text;
-    console.log(`Transcribed audio: ${text}`);
-    
-    if (text.trim()) {
-      // Send transcription to client
-      session.ws.send(JSON.stringify({
-        type: 'transcription',
-        text: text,
-        conversationId: session.conversationId
-      }));
-      
-      // Process the transcribed text using Gemini
-      await processAudioTranscription(session, text);
-    }
-    
-  } catch (error) {
-    console.error('Error handling audio chunk:', error);
-    session.ws.send(JSON.stringify({
-      type: 'error',
-      error: 'Failed to process audio'
-    }));
-  }
-}
-
-// Process transcribed audio and generate audio response
-async function processAudioTranscription(session: GeminiLiveSession, text: string) {
-  try {
-    // Store child's message
-    await storage.createMessage({
-      conversationId: session.conversationId!,
-      type: 'child_input',
-      content: text,
-      transcription: text
-    });
-
-    // Form memory from child's input
-    await formMemoryFromContent(
-      session.childId,
-      text,
-      'user',
-      session.conversationId!
-    );
-
-    // Check if the text contains a request for video capture
-    const videoRequestTriggers = [
-      'look at this', 'can you see', 'what do you see', 'dekho', 'see this',
-      'show you', 'i spy', 'color', 'shape', 'what is this'
-    ];
-    
-    const requestsVideo = videoRequestTriggers.some(trigger => 
-      text.toLowerCase().includes(trigger.toLowerCase())
-    );
-    
-    if (requestsVideo) {
-      // Request video capture from client
-      session.ws.send(JSON.stringify({
-        type: 'video_capture_requested',
-        call_id: `gemini_${Date.now()}`,
-        reason: 'Child wants to show something'
-      }));
-    }
-
-    // Generate response using Gemini
-    const chat = (session as any).geminiChat;
-    const result = await chat.sendMessage(text);
-    const responseText = result.response.text();
-
-    console.log(`Gemini Live response: ${responseText}`);
-
-    // Store Appu's response
-    await storage.createMessage({
-      conversationId: session.conversationId!,
-      type: 'appu_response',
-      content: responseText
-    });
-
-    // Form memory from Appu's response
-    await formMemoryFromContent(
-      session.childId,
-      responseText,
-      'assistant',
-      session.conversationId!
-    );
-
-    // Generate audio response using OpenAI TTS
-    const speechResponse = await openai.audio.speech.create({
-      model: "tts-1",
-      voice: "nova", // Child-friendly voice
-      input: responseText
-    });
-
-    // Convert audio response to base64
-    const audioBuffer = Buffer.from(await speechResponse.arrayBuffer());
-    const audioBase64 = audioBuffer.toString('base64');
-
-    // Update conversation message count
-    session.messageCount += 2;
-    await storage.updateConversation(session.conversationId!, {
-      totalMessages: session.messageCount
-    });
-
-    // Send audio response back to client
-    session.ws.send(JSON.stringify({
-      type: 'audio_response',
-      audioData: audioBase64,
-      text: responseText,
-      conversationId: session.conversationId
-    }));
-
-    console.log(`Processed audio conversation ${session.conversationId}`);
-  } catch (error) {
-    console.error('Error processing audio transcription:', error);
-    session.ws.send(JSON.stringify({
-      type: 'error',
-      error: 'Failed to process audio transcription'
-    }));
-  }
-}
 
 interface GeminiLiveSession {
   ws: WebSocket;
@@ -418,12 +269,18 @@ Use this information to personalize your responses and make them more engaging f
   }
 }
 
-// Analyze video frame with Gemini's vision capabilities (for on-demand capture)
-async function analyzeGeminiVideoFrame(frameData: string): Promise<string> {
+// Video frame handler
+async function handleGeminiVideoFrame(session: GeminiLiveSession, frameData: string) {
   try {
-    console.log(`Gemini analyzing video frame: ${frameData.slice(0, 50)}...`);
+    if (!session.isConnected || !session.conversationId) {
+      console.log('Video frame received but session not ready');
+      return;
+    }
+
+    console.log(`Gemini Live processing video frame: ${frameData.slice(0, 50)}...`);
     
-    // Use Gemini's vision model to analyze the frame
+    // For now, we'll analyze the video frame with Gemini's vision capabilities
+    // In a full Live API implementation, this would be handled differently
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
 
@@ -442,23 +299,30 @@ async function analyzeGeminiVideoFrame(frameData: string): Promise<string> {
 
     const visionResponse = result.response.text();
     console.log(`Gemini vision response: ${visionResponse}`);
-    
-    return visionResponse;
+
+    // Send vision response back to client (this could be combined with other responses)
+    session.ws.send(JSON.stringify({
+      type: 'vision_response',
+      text: visionResponse,
+      conversationId: session.conversationId
+    }));
+
+    // Optional: Store vision analysis as a message
+    await storage.createMessage({
+      conversationId: session.conversationId,
+      type: 'vision_analysis',
+      content: `Vision: ${visionResponse}`
+    });
 
   } catch (error) {
-    console.error('Error analyzing video frame:', error);
-    return "I'm having trouble seeing what you're showing me right now. Can you try again?";
+    console.error('Error handling Gemini video frame:', error);
+    // Don't send error to client for vision processing - it's supplementary
   }
 }
 
 async function startGeminiLiveSession(session: GeminiLiveSession) {
   try {
     console.log('Starting Gemini Live session');
-    
-    // Check if Google API key is available
-    if (!process.env.GOOGLE_API_KEY) {
-      throw new Error('Google API key not found');
-    }
     
     // Create new conversation in database
     const conversation = await storage.createConversation({
@@ -523,11 +387,8 @@ LIVE CONVERSATION GUIDANCE:
     console.error('Error starting Gemini Live session:', error);
     session.ws.send(JSON.stringify({
       type: 'error',
-      error: `Failed to start session: ${error.message}`
+      error: 'Failed to start session'
     }));
-    
-    // Close the WebSocket connection on error
-    session.ws.close();
   }
 }
 
@@ -555,25 +416,6 @@ async function handleGeminiTextInput(session: GeminiLiveSession, text: string) {
       session.conversationId
     );
     console.log(`Memory formed from child input: "${text.slice(0, 50)}..."`);
-
-    // Check if the text contains a request for video capture
-    const videoRequestTriggers = [
-      'look at this', 'can you see', 'what do you see', 'dekho', 'see this',
-      'show you', 'i spy', 'color', 'shape', 'what is this'
-    ];
-    
-    const requestsVideo = videoRequestTriggers.some(trigger => 
-      text.toLowerCase().includes(trigger.toLowerCase())
-    );
-    
-    if (requestsVideo) {
-      // Request video capture from client
-      session.ws.send(JSON.stringify({
-        type: 'video_capture_requested',
-        call_id: `gemini_${Date.now()}`,
-        reason: 'Child wants to show something'
-      }));
-    }
 
     // Generate response using Gemini
     const chat = (session as any).geminiChat;
@@ -654,41 +496,12 @@ function generateSessionId(): string {
 }
 
 export function setupGeminiLiveWebSocket(server: any) {
-  console.log('Setting up Gemini Live WebSocket server...');
-  
-  // Create WebSocket server with noServer option
   const wss = new WebSocketServer({ 
-    noServer: true
+    server: server, 
+    path: '/gemini-ws'
   });
 
-  console.log('Gemini Live WebSocket server initialized');
-
-  // Handle upgrade event manually
-  server.on('upgrade', (request: any, socket: any, head: any) => {
-    console.log('Upgrade request received for:', request.url);
-    console.log('Request headers:', request.headers);
-    
-    if (request.url === '/gemini-ws') {
-      console.log('Handling WebSocket upgrade for /gemini-ws');
-      
-      try {
-        wss.handleUpgrade(request, socket, head, (ws: WebSocket) => {
-          console.log('WebSocket connection established for /gemini-ws');
-          wss.emit('connection', ws, request);
-        });
-      } catch (error) {
-        console.error('Error handling WebSocket upgrade:', error);
-        socket.destroy();
-      }
-    } else {
-      console.log('Destroying socket for non-WebSocket request:', request.url);
-      socket.destroy();
-    }
-  });
-
-  wss.on('error', (error) => {
-    console.error('WebSocket Server error:', error);
-  });
+  console.log('Gemini Live WebSocket server initialized on /gemini-ws');
 
   wss.on('connection', (ws: WebSocket) => {
     console.log('New Gemini Live WebSocket connection established');
@@ -703,17 +516,6 @@ export function setupGeminiLiveWebSocket(server: any) {
       messageCount: 0
     };
 
-    // Send immediate connection confirmation
-    try {
-      ws.send(JSON.stringify({
-        type: 'connection_established',
-        timestamp: new Date().toISOString()
-      }));
-      console.log('Sent connection_established message');
-    } catch (error) {
-      console.error('Error sending connection_established message:', error);
-    }
-
     ws.on('message', async (data: Buffer) => {
       try {
         const message = JSON.parse(data.toString());
@@ -721,57 +523,21 @@ export function setupGeminiLiveWebSocket(server: any) {
 
         switch (message.type) {
           case 'start_session':
-            console.log('Processing start_session message');
             await startGeminiLiveSession(session);
             break;
           
           case 'audio_chunk':
-            if (session.isConnected && session.conversationId) {
-              // Process audio chunk using OpenAI Whisper for transcription
-              await handleAudioChunk(session, message.audioData);
+            if (session.geminiWs && session.isConnected) {
+              // Forward audio to Gemini Live API
+              session.geminiWs.send(JSON.stringify({
+                type: 'audio',
+                data: message.audioData
+              }));
             }
             break;
           
           case 'video_frame':
-            // Video frames are now handled on-demand via function calls - ignore continuous frames
-            console.log('Ignoring continuous video frame - using on-demand capture instead');
-            break;
-            
-          case 'video_capture_response':
-            // Handle video frame captured in response to AI request
-            if (session.isConnected && session.conversationId && message.frameData && message.call_id) {
-              try {
-                console.log('Processing on-demand video capture for Gemini...');
-                
-                // Analyze the frame with Gemini's vision model
-                const visionResponse = await analyzeGeminiVideoFrame(message.frameData);
-                
-                // Send function response back to client (Gemini Live doesn't have direct function call returns)
-                session.ws.send(JSON.stringify({
-                  type: 'vision_response',
-                  text: visionResponse,
-                  conversationId: session.conversationId,
-                  call_id: message.call_id
-                }));
-                
-                // Store vision analysis in database
-                await storage.createMessage({
-                  conversationId: session.conversationId,
-                  type: 'vision_analysis',
-                  content: `Vision: ${visionResponse}`
-                });
-                
-              } catch (error) {
-                console.error('Error processing video capture:', error);
-                
-                // Send error response to client
-                session.ws.send(JSON.stringify({
-                  type: 'vision_error',
-                  error: 'Unable to process video capture',
-                  call_id: message.call_id
-                }));
-              }
-            }
+            await handleGeminiVideoFrame(session, message.frameData);
             break;
           
           case 'text_input':
@@ -798,13 +564,6 @@ export function setupGeminiLiveWebSocket(server: any) {
 
     ws.on('error', (error) => {
       console.error('Gemini Live WebSocket error:', error);
-      // Send error details to client if connection is still open
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: 'error',
-          error: 'WebSocket connection error'
-        }));
-      }
     });
   });
 

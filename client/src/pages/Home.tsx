@@ -6,7 +6,6 @@ import Elephant from "@/components/Elephant";
 import { motion, AnimatePresence } from "framer-motion";
 import useAudioRecorder from "@/hooks/useAudioRecorder";
 import useRealtimeAudio from "@/hooks/useRealtimeAudio";
-import useConversationWebSocket from "@/hooks/useConversationWebSocket";
 import PermissionModal from "@/components/PermissionModal";
 // Import error messages when needed
 
@@ -85,38 +84,7 @@ export default function Home() {
     }
   };
 
-  // Initialize conversation WebSocket hook (new pull-based video system)
-  const conversationWs = useConversationWebSocket({
-    onTranscriptionReceived: (transcription) => {
-      setTranscribedText(transcription);
-    },
-    onResponseReceived: (text) => {
-      setElephantState("speaking");
-      setSpeechText(text);
-      
-      // Return to idle state after speaking
-      setTimeout(() => {
-        setElephantState("idle");
-        setTimeout(() => {
-          setSpeechText(undefined);
-        }, 1000);
-      }, 4000);
-    },
-    onError: (error) => {
-      console.error("Conversation WebSocket error:", error);
-      setElephantState("error");
-      setSpeechText("Something went wrong with the connection. Let's try again.");
-      
-      setTimeout(() => {
-        setElephantState("idle");
-        setSpeechText(undefined);
-      }, 3000);
-    },
-    enableVideo: enableVideo,
-    serviceType: aiSettings.voiceMode === 'gemini' ? 'gemini' : 'realtime'
-  });
-
-  // Initialize realtime audio hook (legacy WebRTC system)
+  // Initialize realtime audio hook
   const realtimeAudio = useRealtimeAudio({
     onTranscriptionReceived: (transcription) => {
       setTranscribedText(transcription);
@@ -222,13 +190,13 @@ export default function Home() {
 
   // Create unified recorder interface
   const currentRecorder = useRealtimeAPI ? {
-    isReady: conversationWs.isConnected,
-    isRecording: conversationWs.isRecording,
-    isProcessing: conversationWs.isProcessing,
-    startRecording: conversationWs.startRecording,
-    stopRecording: conversationWs.stopRecording,
-    requestMicrophonePermission: conversationWs.requestMicrophonePermission,
-    recorderState: conversationWs.isRecording ? 'recording' : 'inactive'
+    isReady: realtimeAudio.isConnected,
+    isRecording: realtimeAudio.isRecording,
+    isProcessing: realtimeAudio.isProcessing,
+    startRecording: realtimeAudio.startRecording,
+    stopRecording: realtimeAudio.stopRecording,
+    requestMicrophonePermission: realtimeAudio.requestMicrophonePermission,
+    recorderState: realtimeAudio.isRecording ? 'recording' : 'inactive'
   } : {
     isReady: traditionalRecorder.isReady,
     isRecording: traditionalRecorder.isRecording,
@@ -250,17 +218,10 @@ export default function Home() {
       currentRecorder.stopRecording();
     }
     
-    // Disconnect from appropriate service
-    if (useRealtimeAPI) {
-      if (conversationWs.isConnected) {
-        console.log("Disconnecting from conversation WebSocket");
-        conversationWs.disconnect();
-      }
-    } else {
-      if (realtimeAudio.isConnected) {
-        console.log("Disconnecting from realtime API");
-        realtimeAudio.disconnect();
-      }
+    // Disconnect from realtime API if connected
+    if (useRealtimeAPI && realtimeAudio.isConnected) {
+      console.log("Disconnecting from realtime API");
+      realtimeAudio.disconnect();
     }
     
     // Close conversation in database
@@ -332,7 +293,7 @@ export default function Home() {
   // Removed automatic connection on toggle
 
   useEffect(() => {
-    if (useRealtimeAPI && conversationWs.isConnected && appState === "interaction") {
+    if (useRealtimeAPI && realtimeAudio.isConnected && appState === "interaction") {
       setTimeout(() => {
         setElephantState("speaking");
         setSpeechText("Hi there! I'm Appu. What would you like to talk about?");
@@ -343,7 +304,7 @@ export default function Home() {
             setSpeechText(undefined);
             
             // Auto-restart recording after initial greeting
-            if (conversationWs.isConnected && appState === "interaction" && !currentRecorder.isRecording && !currentRecorder.isProcessing) {
+            if (realtimeAudio.isConnected && appState === "interaction" && !currentRecorder.isRecording && !currentRecorder.isProcessing) {
               console.log("Auto-restarting recording after initial greeting");
               currentRecorder.startRecording();
             }
@@ -351,7 +312,7 @@ export default function Home() {
         }, 3000);
       }, 1000);
     }
-  }, [useRealtimeAPI, conversationWs.isConnected, appState, currentRecorder]);
+  }, [useRealtimeAPI, realtimeAudio.isConnected, appState, currentRecorder]);
 
   useEffect(() => {
     if (currentRecorder.isRecording) {
@@ -369,17 +330,9 @@ export default function Home() {
         await enterFullscreen();
         setAppState("interaction");
         
-        // Connect to the appropriate service based on settings
-        if (useRealtimeAPI) {
-          if (!conversationWs.isConnected) {
-            console.log("Connecting to conversation WebSocket");
-            conversationWs.connect();
-          }
-        } else {
-          if (!realtimeAudio.isConnected) {
-            console.log("Connecting to realtime API");
-            realtimeAudio.connect();
-          }
+        if (useRealtimeAPI && !realtimeAudio.isConnected) {
+          console.log("Connecting to realtime API");
+          realtimeAudio.connect();
         }
       } else {
         // Need to request permission
