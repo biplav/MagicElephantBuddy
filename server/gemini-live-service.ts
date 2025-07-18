@@ -4,6 +4,155 @@ import { storage } from "./storage";
 import { APPU_SYSTEM_PROMPT } from "@shared/appuPrompts";
 import { getCurrentTimeContext, DEFAULT_PROFILE } from "@shared/childProfile";
 import { memoryService } from './memory-service';
+import OpenAI from 'openai';
+import * as fs from 'fs';
+import * as path from 'path';
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
+
+// Audio processing helper function
+async function handleAudioChunk(session: GeminiLiveSession, audioData: string) {
+  try {
+    // Convert base64 audio to buffer
+    const audioBuffer = Buffer.from(audioData, 'base64');
+    
+    // Create temporary file for audio processing
+    const tempDir = path.join(process.cwd(), 'tmp');
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+    
+    const tempFile = path.join(tempDir, `audio_${Date.now()}.webm`);
+    fs.writeFileSync(tempFile, audioBuffer);
+    
+    // Transcribe using OpenAI Whisper
+    const transcription = await openai.audio.transcriptions.create({
+      file: fs.createReadStream(tempFile),
+      model: "whisper-1",
+      language: "en" // or "hi" for Hindi
+    });
+    
+    // Clean up temporary file
+    fs.unlinkSync(tempFile);
+    
+    const text = transcription.text;
+    console.log(`Transcribed audio: ${text}`);
+    
+    if (text.trim()) {
+      // Send transcription to client
+      session.ws.send(JSON.stringify({
+        type: 'transcription',
+        text: text,
+        conversationId: session.conversationId
+      }));
+      
+      // Process the transcribed text using Gemini
+      await processAudioTranscription(session, text);
+    }
+    
+  } catch (error) {
+    console.error('Error handling audio chunk:', error);
+    session.ws.send(JSON.stringify({
+      type: 'error',
+      error: 'Failed to process audio'
+    }));
+  }
+}
+
+// Process transcribed audio and generate audio response
+async function processAudioTranscription(session: GeminiLiveSession, text: string) {
+  try {
+    // Store child's message
+    await storage.createMessage({
+      conversationId: session.conversationId!,
+      type: 'child_input',
+      content: text,
+      transcription: text
+    });
+
+    // Form memory from child's input
+    await formMemoryFromContent(
+      session.childId,
+      text,
+      'user',
+      session.conversationId!
+    );
+
+    // Check if the text contains a request for video capture
+    const videoRequestTriggers = [
+      'look at this', 'can you see', 'what do you see', 'dekho', 'see this',
+      'show you', 'i spy', 'color', 'shape', 'what is this'
+    ];
+    
+    const requestsVideo = videoRequestTriggers.some(trigger => 
+      text.toLowerCase().includes(trigger.toLowerCase())
+    );
+    
+    if (requestsVideo) {
+      // Request video capture from client
+      session.ws.send(JSON.stringify({
+        type: 'video_capture_requested',
+        call_id: `gemini_${Date.now()}`,
+        reason: 'Child wants to show something'
+      }));
+    }
+
+    // Generate response using Gemini
+    const chat = (session as any).geminiChat;
+    const result = await chat.sendMessage(text);
+    const responseText = result.response.text();
+
+    console.log(`Gemini Live response: ${responseText}`);
+
+    // Store Appu's response
+    await storage.createMessage({
+      conversationId: session.conversationId!,
+      type: 'appu_response',
+      content: responseText
+    });
+
+    // Form memory from Appu's response
+    await formMemoryFromContent(
+      session.childId,
+      responseText,
+      'assistant',
+      session.conversationId!
+    );
+
+    // Generate audio response using OpenAI TTS
+    const speechResponse = await openai.audio.speech.create({
+      model: "tts-1",
+      voice: "nova", // Child-friendly voice
+      input: responseText
+    });
+
+    // Convert audio response to base64
+    const audioBuffer = Buffer.from(await speechResponse.arrayBuffer());
+    const audioBase64 = audioBuffer.toString('base64');
+
+    // Update conversation message count
+    session.messageCount += 2;
+    await storage.updateConversation(session.conversationId!, {
+      totalMessages: session.messageCount
+    });
+
+    // Send audio response back to client
+    session.ws.send(JSON.stringify({
+      type: 'audio_response',
+      audioData: audioBase64,
+      text: responseText,
+      conversationId: session.conversationId
+    }));
+
+    console.log(`Processed audio conversation ${session.conversationId}`);
+  } catch (error) {
+    console.error('Error processing audio transcription:', error);
+    session.ws.send(JSON.stringify({
+      type: 'error',
+      error: 'Failed to process audio transcription'
+    }));
+  }
+}
 
 interface GeminiLiveSession {
   ws: WebSocket;
@@ -577,12 +726,9 @@ export function setupGeminiLiveWebSocket(server: any) {
             break;
           
           case 'audio_chunk':
-            if (session.geminiWs && session.isConnected) {
-              // Forward audio to Gemini Live API
-              session.geminiWs.send(JSON.stringify({
-                type: 'audio',
-                data: message.audioData
-              }));
+            if (session.isConnected && session.conversationId) {
+              // Process audio chunk using OpenAI Whisper for transcription
+              await handleAudioChunk(session, message.audioData);
             }
             break;
           

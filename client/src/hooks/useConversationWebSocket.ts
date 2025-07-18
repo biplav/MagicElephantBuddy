@@ -1,5 +1,17 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import useVideoRecorder from '@/hooks/useVideoRecorder';
+import useAudioRecorder from '@/hooks/useAudioRecorder';
+
+// Utility function to convert base64 to blob
+function base64ToBlob(base64: string, mimeType: string): Blob {
+  const byteCharacters = atob(base64);
+  const byteNumbers = new Array(byteCharacters.length);
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  }
+  const byteArray = new Uint8Array(byteNumbers);
+  return new Blob([byteArray], { type: mimeType });
+}
 
 interface UseConversationWebSocketOptions {
   onTranscriptionReceived?: (transcription: string) => void;
@@ -38,6 +50,31 @@ export default function useConversationWebSocket(options: UseConversationWebSock
       options.onError?.(error);
     },
     quality: 0.8
+  });
+  
+  // Audio streaming setup
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  
+  // Initialize audio recorder for traditional recording (used for microphone permissions)
+  const audioRecorder = useAudioRecorder({
+    enableLocalPlayback: false,
+    onProcessingStart: () => {
+      setState(prev => ({ ...prev, isProcessing: true }));
+    },
+    onTranscriptionReceived: (transcription) => {
+      options.onTranscriptionReceived?.(transcription);
+    },
+    onResponseReceived: (response) => {
+      options.onResponseReceived?.(response);
+      setState(prev => ({ ...prev, isProcessing: false }));
+    },
+    onError: (error) => {
+      console.error('Audio recorder error:', error);
+      options.onError?.(error);
+      setState(prev => ({ ...prev, isProcessing: false }));
+    }
   });
   
   // Connect to WebSocket service
@@ -96,12 +133,40 @@ export default function useConversationWebSocket(options: UseConversationWebSock
               
             case 'text_response':
               options.onResponseReceived?.(message.text);
+              setState(prev => ({ ...prev, isProcessing: false }));
+              break;
+              
+            case 'audio_response':
+              // Handle audio response from Gemini Live
+              if (message.audioData) {
+                try {
+                  // Convert base64 audio to blob and play (OpenAI TTS returns MP3)
+                  const audioBlob = base64ToBlob(message.audioData, 'audio/mp3');
+                  const audioUrl = URL.createObjectURL(audioBlob);
+                  const audio = new Audio(audioUrl);
+                  
+                  audio.onended = () => {
+                    URL.revokeObjectURL(audioUrl);
+                  };
+                  
+                  audio.play();
+                  console.log('Playing audio response');
+                } catch (error) {
+                  console.error('Error playing audio:', error);
+                }
+              }
+              // Also show text response
+              if (message.text) {
+                options.onResponseReceived?.(message.text);
+              }
+              setState(prev => ({ ...prev, isProcessing: false }));
               break;
               
             case 'vision_response':
               // Handle vision analysis response
               console.log('Vision analysis:', message.text);
               options.onResponseReceived?.(message.text);
+              setState(prev => ({ ...prev, isProcessing: false }));
               break;
               
             case 'video_capture_requested':
@@ -187,6 +252,19 @@ export default function useConversationWebSocket(options: UseConversationWebSock
   
   // Disconnect from WebSocket
   const disconnect = useCallback(() => {
+    // Stop any ongoing recording
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current = null;
+    }
+    
+    // Close media stream
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    
+    // Close WebSocket connection
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
@@ -225,33 +303,74 @@ export default function useConversationWebSocket(options: UseConversationWebSock
     }
   }, []);
   
-  // Start recording
+  // Start recording - real-time WebSocket streaming
   const startRecording = useCallback(async () => {
     if (!state.isConnected) {
       await connect();
     }
-    setState(prev => ({ ...prev, isRecording: true }));
-    console.log('Started recording');
-  }, [state.isConnected, connect]);
+    
+    try {
+      // Get microphone stream
+      if (!streamRef.current) {
+        streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+      
+      // Create MediaRecorder for real-time streaming
+      const mediaRecorder = new MediaRecorder(streamRef.current, {
+        mimeType: 'audio/webm;codecs=opus'
+      });
+      
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+      
+      // Handle audio data
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0 && wsRef.current?.readyState === WebSocket.OPEN) {
+          // Convert audio blob to base64 and send to WebSocket
+          const reader = new FileReader();
+          reader.onload = () => {
+            const audioData = reader.result as string;
+            const base64Data = audioData.split(',')[1]; // Remove data:audio/webm;base64, prefix
+            
+            wsRef.current?.send(JSON.stringify({
+              type: 'audio_chunk',
+              audioData: base64Data
+            }));
+          };
+          reader.readAsDataURL(event.data);
+        }
+      };
+      
+      // Start recording with timeslice for real-time streaming
+      mediaRecorder.start(100); // 100ms chunks
+      setState(prev => ({ ...prev, isRecording: true }));
+      console.log('Started real-time recording');
+      
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      options.onError?.('Failed to start recording');
+    }
+  }, [state.isConnected, connect, options]);
   
-  // Stop recording
+  // Stop recording - stop WebSocket streaming
   const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current = null;
+    }
     setState(prev => ({ ...prev, isRecording: false, isProcessing: true }));
     console.log('Stopped recording');
   }, []);
   
-  // Request microphone permission
+  // Request microphone permission - use audio recorder's method
   const requestMicrophonePermission = useCallback(async () => {
-    try {
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-      return true;
-    } catch (error) {
-      console.error('Microphone permission denied:', error);
+    const granted = await audioRecorder.requestMicrophonePermission();
+    if (!granted) {
       setState(prev => ({ ...prev, error: 'Microphone permission denied' }));
       options.onError?.('Microphone permission denied');
-      return false;
     }
-  }, [options]);
+    return granted;
+  }, [audioRecorder, options]);
   
   // Cleanup on unmount
   useEffect(() => {
@@ -262,15 +381,21 @@ export default function useConversationWebSocket(options: UseConversationWebSock
   
   return {
     ...state,
+    // Override state properties with audio recorder state
+    isRecording: audioRecorder.isRecording || state.isRecording,
+    isProcessing: audioRecorder.isProcessing || state.isProcessing,
+    // WebSocket functions
     connect,
     disconnect,
-    startRecording,
-    stopRecording,
     sendTextMessage,
     sendAudioChunk,
+    // Audio recording functions
+    startRecording,
+    stopRecording,
     requestMicrophonePermission,
+    isReady: audioRecorder.isReady && state.isConnected,
+    // Video recorder integration
     videoRecorder,
-    // Video-specific functions
     hasVideoPermission: videoRecorder.hasPermission,
     requestVideoPermission: videoRecorder.requestVideoPermission,
     captureFrame: videoRecorder.captureFrame,
