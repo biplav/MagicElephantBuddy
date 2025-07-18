@@ -35,6 +35,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const videoWsRef = useRef<WebSocket | null>(null);
   
   // Video frame capture function
   const startVideoCapture = useCallback(() => {
@@ -146,7 +147,31 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
           document.body.appendChild(canvas);
         }
 
-        // Start capturing video frames
+        // Initialize video WebSocket connection
+        if (options.onVideoFrame) {
+          const videoWsUrl = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const wsUrl = `${videoWsUrl}//${window.location.host}/ws/realtime`;
+          
+          try {
+            videoWsRef.current = new WebSocket(wsUrl);
+            
+            videoWsRef.current.onopen = () => {
+              console.log('📹 CLIENT: Video WebSocket connected');
+            };
+            
+            videoWsRef.current.onclose = () => {
+              console.log('📹 CLIENT: Video WebSocket disconnected');
+            };
+            
+            videoWsRef.current.onerror = (error) => {
+              console.error('📹 CLIENT: Video WebSocket error:', error);
+            };
+          } catch (error) {
+            console.error('📹 CLIENT: Failed to create video WebSocket:', error);
+          }
+        }
+
+        // Start capturing video frames and send them to server
         if (options.onVideoFrame) {
           const onVideoFrameCallback = options.onVideoFrame;
           videoIntervalRef.current = setInterval(() => {
@@ -159,7 +184,18 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
                 context.drawImage(video, 0, 0, canvas.width, canvas.height);
                 const frameData = canvas.toDataURL('image/jpeg', 0.7);
                 const base64Data = frameData.split(',')[1];
+                
+                // Send frame to callback (for local processing)
                 onVideoFrameCallback(base64Data);
+                
+                // Send frame to server via separate WebSocket
+                if (videoWsRef.current && videoWsRef.current.readyState === WebSocket.OPEN) {
+                  console.log('📹 CLIENT: Sending video frame to server via WebSocket');
+                  videoWsRef.current.send(JSON.stringify({
+                    type: 'video_frame',
+                    frameData: base64Data
+                  }));
+                }
               }
             }
           }, 500); // 2 FPS
@@ -348,6 +384,11 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     if (dataChannelRef.current) {
       dataChannelRef.current.close();
       dataChannelRef.current = null;
+    }
+    
+    if (videoWsRef.current) {
+      videoWsRef.current.close();
+      videoWsRef.current = null;
     }
     
     if (streamRef.current) {
