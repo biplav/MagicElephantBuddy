@@ -5,6 +5,9 @@ import { storage } from "./storage";
 import { DEFAULT_PROFILE } from "../shared/childProfile";
 import { APPU_SYSTEM_PROMPT } from "../shared/appuPrompts";
 import { memoryService } from "./memory-service";
+import { createServiceLogger } from './logger';
+
+const realtimeLogger = createServiceLogger('realtime');
 
 // Global video frame storage for getEyesTool access
 declare global {
@@ -108,7 +111,7 @@ async function formMemoryFromContent(
       }
     }
   } catch (error) {
-    console.error("Error forming memory from content:", error);
+    realtimeLogger.error("Error forming memory from content:", { error: error.message });
   }
 }
 
@@ -362,7 +365,7 @@ Use this information to personalize your responses and make them more engaging f
       memoryInfo
     );
   } catch (error) {
-    console.error("Error creating enhanced realtime prompt:", error);
+    realtimeLogger.error("Error creating enhanced realtime prompt:", { error: error.message });
     // Fallback to basic prompt if there's an error
     return APPU_SYSTEM_PROMPT;
   }
@@ -372,11 +375,11 @@ Use this information to personalize your responses and make them more engaging f
 async function handleVideoFrame(session: RealtimeSession, frameData: string) {
   try {
     if (!session.isConnected || !session.conversationId) {
-      console.log("Video frame received but session not ready");
+      realtimeLogger.info("Video frame received but session not ready");
       return;
     }
 
-    console.log(
+    realtimeLogger.debug(
       `OpenAI Realtime processing video frame: ${frameData.slice(0, 50)}...`,
     );
 
@@ -404,7 +407,7 @@ async function handleVideoFrame(session: RealtimeSession, frameData: string) {
     });
 
     const visionResponse = response.choices[0].message.content;
-    console.log(`OpenAI vision response: ${visionResponse}`);
+    realtimeLogger.debug(`OpenAI vision response: ${visionResponse}`);
 
     // Send vision response back to client
     session.ws.send(
@@ -422,7 +425,7 @@ async function handleVideoFrame(session: RealtimeSession, frameData: string) {
       content: `Vision: ${visionResponse}`,
     });
   } catch (error) {
-    console.error("Error handling video frame:", error);
+    realtimeLogger.error("Error handling video frame:", { error: error.message });
     // Don't send error to client for vision processing - it's supplementary
   }
 }
@@ -445,21 +448,21 @@ export function setupRealtimeWebSocket(server: any) {
 
   wss.on("connection", (ws: WebSocket) => {
     const sessionId = generateSessionId();
-    console.log(`Realtime session connected: ${sessionId}`);
+    realtimeLogger.info(`Realtime session connected: ${sessionId}`);
 
     // Set WebSocket options to prevent frame header issues
     //ws.binaryType = 'arraybuffer';
-    
+
     // Add keepalive and timeout handling
     let isAlive = true;
     ws.on('pong', () => {
       isAlive = true;
     });
-    
+
     // Send ping every 30 seconds
     const pingInterval = setInterval(() => {
       if (isAlive === false) {
-        console.log(`Terminating inactive WebSocket: ${sessionId}`);
+        realtimeLogger.warn(`Terminating inactive WebSocket: ${sessionId}`);
         ws.terminate();
         clearInterval(pingInterval);
         return;
@@ -489,8 +492,8 @@ export function setupRealtimeWebSocket(server: any) {
           const messageStr = data instanceof Buffer ? data.toString('utf8') : data.toString();
           message = JSON.parse(messageStr);
         } catch (parseError) {
-          console.error("Error parsing WebSocket message:", parseError);
-          console.error("Raw message data:", data.toString('utf8').substring(0, 100) + "...");
+          realtimeLogger.error('📹 SERVER: Error parsing WebSocket message:', { error: parseError.message, sessionId });
+          realtimeLogger.error("Raw message data:", data.toString('utf8').substring(0, 100) + "...");
           ws.send(JSON.stringify({
             type: "error",
             message: "Invalid message format - expected JSON"
@@ -506,10 +509,10 @@ export function setupRealtimeWebSocket(server: any) {
                 childId: session.childId,
               });
               session.conversationId = conversation.id;
-              console.log(
+              realtimeLogger.info(
                 `Created conversation ${conversation.id} for child ${session.childId}`,
               );
-              
+
               // Send confirmation that session is ready
               session.ws.send(JSON.stringify({
                 type: 'session_started',
@@ -517,7 +520,7 @@ export function setupRealtimeWebSocket(server: any) {
                 message: 'Video session ready for frames'
               }));
             } catch (error) {
-              console.error("Error creating conversation:", error);
+              realtimeLogger.error("Error creating conversation:", { error: error.message });
               session.ws.send(JSON.stringify({
                 type: 'error',
                 message: 'Failed to start session'
@@ -537,26 +540,26 @@ export function setupRealtimeWebSocket(server: any) {
             break;
           case "video_frame":
             // Store video frame for LangGraph getEyesTool to consume
-            console.log(
+            realtimeLogger.debug(
               `📹 REALTIME: Received video frame from client - Size: ${message.frameData?.length || 0} bytes`,
             );
-            
+
             // Store the actual video frame data in the session for getEyesTool access
             if (session.conversationId && message.frameData) {
               try {
                 // Store the latest video frame in a session store for getEyesTool to access
                 const frameStorage = global.videoFrameStorage || new Map();
                 global.videoFrameStorage = frameStorage;
-                
+
                 // Store frame with session identifier
                 frameStorage.set(`session_${session.conversationId}`, {
                   frameData: message.frameData,
                   timestamp: new Date(),
                   sessionId: session.conversationId
                 });
-                
-                console.log(`📹 REALTIME: Video frame stored in memory for getEyesTool access - Session: ${session.conversationId}`);
-                
+
+                realtimeLogger.debug(`📹 REALTIME: Video frame stored in memory for getEyesTool access - Session: ${session.conversationId}`);
+
                 // Also store availability in database for conversation context
                 await storage.createMessage({
                   conversationId: session.conversationId,
@@ -567,10 +570,10 @@ export function setupRealtimeWebSocket(server: any) {
                     frameTimestamp: new Date().toISOString()
                   }
                 });
-                
-                console.log(`📹 REALTIME: Video frame availability logged in database`);
+
+                realtimeLogger.debug(`📹 REALTIME: Video frame availability logged in database`);
               } catch (error) {
-                console.error("Error storing video frame for getEyesTool:", error);
+                realtimeLogger.error("Error storing video frame for getEyesTool:", { error: error.message });
               }
             }
             break;
@@ -589,7 +592,7 @@ export function setupRealtimeWebSocket(server: any) {
             break;
         }
       } catch (error) {
-        console.error("Error handling realtime message:", error);
+        realtimeLogger.error("Error handling realtime message:", { error: error.message });
         ws.send(
           JSON.stringify({
             type: "error",
@@ -600,21 +603,21 @@ export function setupRealtimeWebSocket(server: any) {
     });
 
     ws.on("close", (code, reason) => {
-      console.log(`Realtime Video session closed: ${sessionId}`, { code, reason: reason.toString() });
+      realtimeLogger.info(`Realtime Video session closed: ${sessionId}`, { code, reason: reason.toString() });
       clearInterval(pingInterval);
       endRealtimeSession(session);
       sessions.delete(sessionId);
     });
 
     ws.on("error", (error) => {
-      console.error(`Realtime Video session error: ${sessionId}`, error);
+      realtimeLogger.error(`Realtime Video session error: ${sessionId}`, { error: error.message });
       // Check if it's a frame header error and handle gracefully
       if (error.message && error.message.includes('Invalid frame header')) {
-        console.log('Frame header error detected - closing connection gracefully');
+        realtimeLogger.warn('Frame header error detected - closing connection gracefully');
         try {
           ws.close(1000, 'Frame header error');
         } catch (closeError) {
-          console.error('Error closing WebSocket after frame header error:', closeError);
+          realtimeLogger.error('Error closing WebSocket after frame header error:', { error: closeError.message });
         }
       }
       endRealtimeSession(session);
@@ -627,7 +630,7 @@ export function setupRealtimeWebSocket(server: any) {
 
 async function startRealtimeSession(session: RealtimeSession) {
   try {
-    console.log("Attempting to connect to OpenAI Realtime API...");
+    realtimeLogger.info("Attempting to connect to OpenAI Realtime API...");
 
     // Check if API key exists
     if (!process.env.OPENAI_API_KEY) {
@@ -636,7 +639,7 @@ async function startRealtimeSession(session: RealtimeSession) {
 
     // Create enhanced system prompt with milestone details
     const enhancedPrompt = await createEnhancedRealtimePrompt(session.childId);
-    console.log(
+    realtimeLogger.info(
       "Enhanced Realtime Prompt with Milestones prepared for child:",
       session.childId,
     );
@@ -653,7 +656,7 @@ async function startRealtimeSession(session: RealtimeSession) {
     });
 
     session.openaiWs.on("open", () => {
-      console.log("Connected to OpenAI Realtime API");
+      realtimeLogger.info("Connected to OpenAI Realtime API");
       session.isConnected = true;
 
       // Send session configuration with enhanced prompt
@@ -710,13 +713,13 @@ async function startRealtimeSession(session: RealtimeSession) {
                   textInput: message.transcript,
                 });
                 session.messageCount++;
-                console.log(
+                realtimeLogger.debug(
                   `LangGraph processed child input: "${message.transcript.slice(0, 50)}..."`,
                 );
               } catch (workflowError) {
-                console.error(
+                realtimeLogger.error(
                   "LangGraph workflow error for input:",
-                  workflowError,
+                  { error: workflowError.message },
                 );
                 // Fallback to original logic
                 await storage.createMessage({
@@ -748,13 +751,13 @@ async function startRealtimeSession(session: RealtimeSession) {
                   textInput: message.transcript,
                 });
                 session.messageCount++;
-                console.log(
+                realtimeLogger.debug(
                   `LangGraph processed Appu response: "${message.transcript.slice(0, 50)}..."`,
                 );
               } catch (workflowError) {
-                console.error(
+                realtimeLogger.error(
                   "LangGraph workflow error for response:",
-                  workflowError,
+                  { error: workflowError.message },
                 );
                 // Fallback to original logic
                 await storage.createMessage({
@@ -777,12 +780,12 @@ async function startRealtimeSession(session: RealtimeSession) {
         // Forward all messages from OpenAI to client
         session.ws.send(data.toString());
       } catch (error) {
-        console.error("Error processing OpenAI message:", error);
+        realtimeLogger.error("Error processing OpenAI message:", { error: error.message });
       }
     });
 
     session.openaiWs.on("error", (error) => {
-      console.error("OpenAI Realtime API error:", error);
+      realtimeLogger.error("OpenAI Realtime API error:", { error: error.message });
       session.ws.send(
         JSON.stringify({
           type: "error",
@@ -792,11 +795,11 @@ async function startRealtimeSession(session: RealtimeSession) {
     });
 
     session.openaiWs.on("close", () => {
-      console.log("OpenAI Realtime API connection closed");
+      realtimeLogger.info("OpenAI Realtime API connection closed");
       session.isConnected = false;
     });
   } catch (error) {
-    console.error("Error starting realtime session:", error);
+    realtimeLogger.error("Error starting realtime session:", { error: error.message });
     session.ws.send(
       JSON.stringify({
         type: "error",
@@ -824,11 +827,11 @@ async function endRealtimeSession(session: RealtimeSession) {
         totalMessages: session.messageCount,
       });
 
-      console.log(
+      realtimeLogger.info(
         `Closed conversation ${session.conversationId} - Duration: ${duration}s, Messages: ${session.messageCount}`,
       );
     } catch (error) {
-      console.error("Error updating conversation:", error);
+      realtimeLogger.error("Error updating conversation:", { error: error.message });
     }
   }
 }

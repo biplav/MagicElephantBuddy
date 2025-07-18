@@ -1,7 +1,11 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { setupVite, serveStatic } from "./vite";
 import { jobScheduler } from "./job-scheduler";
+import { logger, log, createServiceLogger } from "./logger";
+
+// Create service-specific logger
+const serverLogger = createServiceLogger('server');
 
 // Set timezone to IST (Indian Standard Time)
 process.env.TZ = 'Asia/Kolkata';
@@ -24,16 +28,19 @@ app.use((req, res, next) => {
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
+      const logData = {
+        method: req.method,
+        path,
+        statusCode: res.statusCode,
+        duration,
+        response: capturedJsonResponse
+      };
 
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
+      if (res.statusCode >= 400) {
+        serverLogger.error(`API Error: ${req.method} ${path}`, logData);
+      } else {
+        serverLogger.info(`API Request: ${req.method} ${path}`, logData);
       }
-
-      log(logLine);
     }
   });
 
@@ -46,6 +53,14 @@ app.use((req, res, next) => {
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
+
+    serverLogger.error('Express error handler:', {
+      error: message,
+      status,
+      stack: err.stack,
+      url: _req.url,
+      method: _req.method
+    });
 
     res.status(status).json({ message });
     throw err;
@@ -68,7 +83,7 @@ app.use((req, res, next) => {
   // Handle port conflicts gracefully
   server.on('error', (err: any) => {
     if (err.code === 'EADDRINUSE') {
-      console.error(`Port ${port} is already in use. Attempting to find available port...`);
+      serverLogger.error(`Port ${port} is already in use. Attempting to find available port...`);
       // Try to find an available port starting from 5001
       let altPort = port + 1;
       const tryPort = () => {
@@ -76,20 +91,20 @@ app.use((req, res, next) => {
           port: altPort,
           host: "0.0.0.0",
         }, () => {
-          log(`serving on port ${altPort} (port ${port} was in use)`);
+          serverLogger.info(`serving on port ${altPort} (port ${port} was in use)`);
         }).on('error', (altErr: any) => {
           if (altErr.code === 'EADDRINUSE' && altPort < port + 10) {
             altPort++;
             tryPort();
           } else {
-            console.error('Failed to find available port:', altErr);
+            serverLogger.error('Failed to find available port:', altErr);
             process.exit(1);
           }
         });
       };
       tryPort();
     } else {
-      console.error('Server error:', err);
+      serverLogger.error('Server error:', err);
       process.exit(1);
     }
   });
@@ -98,7 +113,7 @@ app.use((req, res, next) => {
     port,
     host: "0.0.0.0",
   }, () => {
-    log(`serving on port ${port}`);
+    serverLogger.info(`serving on port ${port}`);
     
     // Configure server timeouts
     server.keepAliveTimeout = 120000; // 2 minutes
@@ -107,6 +122,6 @@ app.use((req, res, next) => {
     
     // Start the hourly job scheduler for conversation analysis
     jobScheduler.start();
-    log('Hourly job scheduler started for conversation analysis');
+    serverLogger.info('Hourly job scheduler started for conversation analysis');
   });
 })();

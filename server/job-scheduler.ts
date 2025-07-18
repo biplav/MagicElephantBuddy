@@ -2,6 +2,9 @@ import { conversationAnalyzer } from "./conversation-analyzer";
 import { milestoneService } from "./milestone-service";
 import { storage } from "./storage";
 import { memoryService } from "./memory-service";
+import { createServiceLogger } from './logger';
+
+const jobLogger = createServiceLogger('job-scheduler');
 
 export class JobScheduler {
   private intervalId: NodeJS.Timeout | null = null;
@@ -10,20 +13,20 @@ export class JobScheduler {
   // Start the hourly job scheduler
   start(): void {
     if (this.isRunning) {
-      console.log('Job scheduler is already running');
+      jobLogger.info('Job scheduler is already running');
       return;
     }
 
-    console.log('Starting hourly job scheduler for conversation analysis');
-    
+    jobLogger.info('Starting hourly job scheduler for conversation analysis');
+
     // Run immediately on startup
     this.runHourlyJobs();
-    
+
     // Then run every hour (3600000 ms)
     this.intervalId = setInterval(() => {
       this.runHourlyJobs();
     }, 3600000); // 1 hour = 3600000 milliseconds
-    
+
     this.isRunning = true;
   }
 
@@ -34,13 +37,13 @@ export class JobScheduler {
       this.intervalId = null;
     }
     this.isRunning = false;
-    console.log('Job scheduler stopped');
+    jobLogger.info('Job scheduler stopped');
   }
 
   // Main hourly job execution
   private async runHourlyJobs(): Promise<void> {
     const startTime = new Date();
-    console.log(`Starting hourly jobs at ${startTime.toISOString()}`);
+    jobLogger.info(`Starting hourly jobs at ${startTime.toISOString()}`);
 
     try {
       // Job 1: Process unanalyzed conversations for summaries and profile suggestions
@@ -57,19 +60,19 @@ export class JobScheduler {
 
       const endTime = new Date();
       const duration = endTime.getTime() - startTime.getTime();
-      console.log(`Hourly jobs completed in ${duration}ms at ${endTime.toISOString()}`);
+      jobLogger.info(`Hourly jobs completed in ${duration}ms at ${endTime.toISOString()}`);
     } catch (error) {
-      console.error('Error running hourly jobs:', error);
+      jobLogger.error('Error running hourly jobs:', error);
     }
   }
 
   // Process conversations that haven't been analyzed yet
   private async processUnanalyzedConversations(): Promise<void> {
     try {
-      console.log('Processing unanalyzed conversations...');
+      jobLogger.info('Processing unanalyzed conversations...');
       await conversationAnalyzer.processUnanalyzedConversations();
     } catch (error) {
-      console.error('Error processing unanalyzed conversations:', error);
+      jobLogger.error('Error processing unanalyzed conversations:', error);
     }
   }
 
@@ -79,8 +82,8 @@ export class JobScheduler {
       // Check if it's evening (between 19:00 and 21:00) to send daily summaries
       const currentHour = new Date().getHours();
       if (currentHour >= 19 && currentHour <= 21) {
-        console.log('Generating daily summaries for parents...');
-        
+        jobLogger.info('Generating daily summaries for parents...');
+
         // Get all parents and generate summaries
         const parents = await this.getAllParents();
         for (const parent of parents) {
@@ -90,7 +93,7 @@ export class JobScheduler {
         }
       }
     } catch (error) {
-      console.error('Error generating daily summaries:', error);
+      jobLogger.error('Error generating daily summaries:', error);
     }
   }
 
@@ -100,26 +103,26 @@ export class JobScheduler {
       // Only run encouragement notifications twice a day (morning and evening)
       const currentHour = new Date().getHours();
       if (currentHour === 9 || currentHour === 18) {
-        console.log('Generating encouragement notifications...');
-        
+        jobLogger.info('Generating encouragement notifications...');
+
         const children = await this.getAllChildren();
         for (const child of children) {
           // Check if child hasn't had conversations in the last 2 days
           const recentConversations = await storage.getConversationsByChild(child.id, 3);
           const twoDaysAgo = new Date();
           twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-          
+
           const hasRecentActivity = recentConversations.some(conv => 
             new Date(conv.startTime) > twoDaysAgo
           );
-          
+
           if (!hasRecentActivity) {
             await milestoneService.generateEncouragementNotification(child.id);
           }
         }
       }
     } catch (error) {
-      console.error('Error generating encouragement notifications:', error);
+      jobLogger.error('Error generating encouragement notifications:', error);
     }
   }
 
@@ -132,7 +135,7 @@ export class JobScheduler {
       const result = await db.select().from(parents).limit(100);
       return result;
     } catch (error) {
-      console.error('Error fetching parents:', error);
+      jobLogger.error('Error fetching parents:', error);
       return [];
     }
   }
@@ -146,7 +149,7 @@ export class JobScheduler {
       const result = await db.select().from(children).limit(100);
       return result;
     } catch (error) {
-      console.error('Error fetching children:', error);
+      jobLogger.error('Error fetching children:', error);
       return [];
     }
   }
@@ -154,40 +157,40 @@ export class JobScheduler {
   // Phase 3: Memory consolidation for all children
   private async consolidateMemoriesForAllChildren(): Promise<void> {
     try {
-      console.log('Starting memory consolidation for all children...');
-      
+      jobLogger.info('Starting memory consolidation for all children...');
+
       const children = await this.getAllChildren();
       let totalConsolidations = 0;
       let totalProcessingTime = 0;
-      
+
       for (const child of children) {
         try {
           const result = await memoryService.consolidateMemories(child.id);
           totalConsolidations++;
           totalProcessingTime += result.processingTime;
-          
+
           if (result.consolidatedMemories > 0 || result.mergedMemories > 0 || result.archivedMemories > 0) {
-            console.log(`Memory consolidation for child ${child.id}: ${result.consolidatedMemories} processed, ${result.mergedMemories} merged, ${result.archivedMemories} archived`);
+            jobLogger.info(`Memory consolidation for child ${child.id}: ${result.consolidatedMemories} processed, ${result.mergedMemories} merged, ${result.archivedMemories} archived`);
           }
         } catch (error) {
-          console.error(`Error consolidating memories for child ${child.id}:`, error);
+          jobLogger.error(`Error consolidating memories for child ${child.id}:`, error);
         }
       }
-      
+
       if (children.length > 0) {
         const avgProcessingTime = totalProcessingTime / children.length;
-        console.log(`Memory consolidation completed for ${children.length} children (avg: ${avgProcessingTime.toFixed(2)}ms per child)`);
+        jobLogger.info(`Memory consolidation completed for ${children.length} children (avg: ${avgProcessingTime.toFixed(2)}ms per child)`);
       } else {
-        console.log('No children found for memory consolidation');
+        jobLogger.info('No children found for memory consolidation');
       }
     } catch (error) {
-      console.error('Error during memory consolidation job:', error);
+      jobLogger.error('Error during memory consolidation job:', error);
     }
   }
 
   // Manual trigger for testing
   async runJobsManually(): Promise<void> {
-    console.log('Manually triggering hourly jobs...');
+    jobLogger.info('Manually triggering hourly jobs...');
     await this.runHourlyJobs();
   }
 
