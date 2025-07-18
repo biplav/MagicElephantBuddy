@@ -86,7 +86,7 @@ This is a full-stack Node.js application called "Appu" - an AI-powered magical e
 
 ### Core Services
 - **OpenAI API**: Whisper (STT), GPT-4 (conversation), TTS (speech synthesis)
-- **Neon Database**: Serverless PostgreSQL hosting
+- **CockroachDB**: Distributed SQL database with native vector support
 - **WebSocket**: Real-time communication protocol
 
 ### Development Tools
@@ -139,13 +139,14 @@ This is a full-stack Node.js application called "Appu" - an AI-powered magical e
 - June 15, 2025: Implemented profile update functionality in parent assistant - AI can now accept parent input to update children's profiles (likes, dislikes, favorite things, learning goals, languages, daily routines) with real-time database updates and confirmation messages
 - June 15, 2025: Fixed critical JSON parsing bug in profile update system - resolved AI response formatting issues and implemented robust JSON extraction to successfully process natural language profile update requests with real-time database modifications
 - June 15, 2025: Configured system timezone to IST (Asia/Kolkata) - all timestamps, logs, and database operations now use Indian Standard Time for consistent user experience
-- June 30, 2025: Successfully migrated database from Neon PostgreSQL to CockroachDB - updated database connection configuration, created missing tables, and verified all functionality working correctly with distributed database architecture
+- June 30, 2025: Successfully migrated database from PostgreSQL to CockroachDB - updated database connection configuration, created missing tables, and verified all functionality working correctly with distributed database architecture
 - June 30, 2025: Implemented Phase 1 of Mem0 integration - created memory service architecture with TypeScript interfaces, database schema extensions for memory linking tables, and local memory implementation for testing and development
 - June 30, 2025: Completed Phase 2 of Mem0 integration - implemented real-time memory formation during conversations with automatic detection of interests, emotions, learning content, and relationship building moments across both OpenAI Realtime API and Gemini Live API services
 - June 30, 2025: Completed Phase 3 of Mem0 integration - implemented advanced memory features including multi-factor importance scoring, automated memory consolidation with merging and archiving, comprehensive memory analytics, and scheduled hourly memory optimization jobs
-- June 30, 2025: Enhanced memory system with CockroachDB native vector support - migrated from mixed PostgreSQL/NeonDB to unified CockroachDB architecture, implemented CockroachDB native VECTOR(1536) data type with OpenAI text-embedding-3-small embeddings, integrated semantic similarity search using cosine similarity (<=> operator), created high-performance vector operations with native SQL support, and comprehensive distributed vector memory service
+- June 30, 2025: Enhanced memory system with CockroachDB native vector support - migrated from PostgreSQL to unified CockroachDB architecture, implemented CockroachDB native VECTOR(1536) data type with OpenAI text-embedding-3-small embeddings, integrated semantic similarity search using cosine similarity (<=> operator), created high-performance vector operations with native SQL support, and comprehensive distributed vector memory service
 - June 30, 2025: Implemented open source Mem0 service integration - created self-hosted memory service using CockroachDB vector storage, implemented full CRUD operations with vector similarity search, memory deduplication with hash-based duplicate detection, and local console interface, providing complete Mem0 functionality without external API dependencies
 - June 30, 2025: Integrated Mem0 managed services with provided API key (m0-2IdIqmadwhL5Lf5hI...) - created hybrid memory service supporting both open source and cloud operations, implemented automatic fallback when API key issues occur, added comprehensive Memory Console with service status display and mode switching, graceful error handling shows API key validation status and helpful guidance for users
+- July 18, 2025: Completed dependency cleanup - removed @neondatabase/serverless package and all references to NeonDB from documentation, confirmed unified CockroachDB architecture with native vector support for all database operations
 
 ## User Preferences
 
