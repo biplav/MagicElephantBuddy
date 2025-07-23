@@ -447,7 +447,7 @@ export function setupRealtimeWebSocket(server: any) {
     path: "/ws/realtime",
     // Add WebSocket server configuration to prevent frame header issues
     perMessageDeflate: false,
-    maxPayload: 1024 * 1024 * 10, // 10MB limit for video frames
+    maxPayload: 1024 * 1024 * 5, // Reduce to 5MB limit for video frames
     // Increase timeout settings
     handshakeTimeout: 30000, // 30 seconds for handshake
     clientTracking: true,
@@ -566,13 +566,20 @@ export function setupRealtimeWebSocket(server: any) {
             }
             break;
           case "video_frame":
-            // Store video frame for LangGraph getEyesTool to consume
+            // Validate frame size before processing
+            const frameSize = message.frameData?.length || 0;
             realtimeLogger.info(
-              "📹 REALTIME: Received video frame from client - Size: ${message.frameData?.length || 0} bytes",
+              `📹 REALTIME: Received video frame from client - Size: ${frameSize} bytes`,
             );
 
+            // Check if frame is too large (over 4MB)
+            if (frameSize > 4 * 1024 * 1024) {
+              realtimeLogger.warn(`📹 REALTIME: Video frame too large: ${frameSize} bytes, skipping`);
+              break;
+            }
+
             // Store the actual video frame data in the session for getEyesTool access
-            if (session.conversationId && message.frameData) {
+            if (session.conversationId && message.frameData && frameSize > 0) {
               try {
                 // Store the latest video frame in a session store for getEyesTool to access
                 const frameStorage = global.videoFrameStorage || new Map();
@@ -652,20 +659,31 @@ export function setupRealtimeWebSocket(server: any) {
       realtimeLogger.error(`Realtime Video session error: ${sessionId}`, {
         error: error.message,
       });
-      // Check if it's a frame header error and handle gracefully
+      
+      // Handle different types of WebSocket errors
       if (error.message && error.message.includes("Invalid frame header")) {
-        realtimeLogger.warn(
-          "Frame header error detected - closing connection gracefully",
-        );
+        realtimeLogger.warn("Frame header error detected - closing connection gracefully");
         try {
           ws.close(1000, "Frame header error");
         } catch (closeError) {
-          realtimeLogger.error(
-            "Error closing WebSocket after frame header error:",
-            { error: closeError.message },
-          );
+          realtimeLogger.error("Error closing WebSocket after frame header error:", { error: closeError.message });
+        }
+      } else if (error.message && error.message.includes("too big")) {
+        realtimeLogger.warn("Message too large error - closing connection");
+        try {
+          ws.close(1009, "Message too big");
+        } catch (closeError) {
+          realtimeLogger.error("Error closing WebSocket after message size error:", { error: closeError.message });
+        }
+      } else {
+        // For other errors, try graceful close
+        try {
+          ws.close(1011, "Server error");
+        } catch (closeError) {
+          realtimeLogger.error("Error closing WebSocket:", { error: closeError.message });
         }
       }
+      
       endRealtimeSession(session);
       sessions.delete(sessionId);
     });

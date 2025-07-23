@@ -170,6 +170,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
                     }));
                   } catch (sendError) {
                     console.error('📹 CLIENT: Error sending start_session:', sendError);
+                    videoWsReadyRef.current = false;
                   }
                 }
               }, 100);
@@ -193,9 +194,21 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
               }
             };
 
+            videoWsRef.current.onerror = (error) => {
+              console.error('📹 CLIENT: Video WebSocket error:', error);
+              videoWsReadyRef.current = false;
+            };
+
             videoWsRef.current.onclose = (event) => {
               console.log('📹 CLIENT: Video WebSocket disconnected. Code:', event.code, 'Reason:', event.reason);
               videoWsReadyRef.current = false;
+              
+              // Handle specific close codes
+              if (event.code === 1006) {
+                console.warn('📹 CLIENT: Abnormal closure detected - possible network or data issue');
+              } else if (event.code === 1009) {
+                console.warn('📹 CLIENT: Message too big - video frames may be too large');
+              }
               
               // Clean up the connection reference
               if (videoWsRef.current) {
