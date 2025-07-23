@@ -16,18 +16,18 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  
+
   // Parent dashboard methods
   getParent(id: number): Promise<Parent | undefined>;
   getParentByEmail(email: string): Promise<Parent | undefined>;
   createParent(parent: InsertParent): Promise<Parent>;
-  
+
   // Child management
   createChild(child: InsertChild): Promise<Child>;
   getChildrenByParent(parentId: string | number): Promise<Child[]>;
   getChild(id: number): Promise<Child | undefined>;
   updateChildProfile(childId: number, profile: any): Promise<Child>;
-  
+
   // Conversation management
   createConversation(conversation: InsertConversation): Promise<Conversation>;
   updateConversation(id: number, updates: Partial<InsertConversation>): Promise<Conversation>;
@@ -35,11 +35,11 @@ export interface IStorage {
   getConversationsByChild(childId: number, limit?: number): Promise<Conversation[]>;
   getChildConversations(childId: number, limit?: number): Promise<Conversation[]>;
   getCurrentConversation(childId: number): Promise<Conversation | undefined>;
-  
+
   // Message management
   createMessage(message: InsertMessage): Promise<Message>;
   getMessagesByConversation(conversationId: number): Promise<Message[]>;
-  
+
   // Analytics and insights
   createConversationInsight(insight: InsertConversationInsight): Promise<ConversationInsight>;
   getConversationInsights(conversationId: number): Promise<ConversationInsight[]>;
@@ -49,30 +49,30 @@ export interface IStorage {
     totalConversations: number;
     totalMessages: number;
   }>;
-  
+
   // Learning milestones
   createLearningMilestone(milestone: InsertLearningMilestone): Promise<LearningMilestone>;
   updateMilestoneProgress(milestoneId: number, progress: number): Promise<LearningMilestone>;
   completeMilestone(milestoneId: number): Promise<LearningMilestone>;
   getMilestonesByChild(childId: number): Promise<LearningMilestone[]>;
   getChildMilestones(childId: number): Promise<LearningMilestone[]>;
-  
+
   // Notifications
   createNotification(notification: InsertNotification): Promise<Notification>;
   getNotificationsByParent(parentId: number, unreadOnly?: boolean): Promise<Notification[]>;
   markNotificationAsRead(notificationId: number): Promise<Notification>;
   markAllNotificationsAsRead(parentId: number): Promise<void>;
-  
+
   // Notification preferences
   createNotificationPreferences(preferences: InsertNotificationPreferences): Promise<NotificationPreferences>;
   updateNotificationPreferences(parentId: number, preferences: Partial<InsertNotificationPreferences>): Promise<NotificationPreferences>;
   getNotificationPreferences(parentId: number): Promise<NotificationPreferences | undefined>;
-  
+
   // Profile update suggestions
   createProfileUpdateSuggestion(suggestion: InsertProfileUpdateSuggestion): Promise<ProfileUpdateSuggestion>;
   getProfileUpdateSuggestionsByParent(parentId: number, status?: string): Promise<ProfileUpdateSuggestion[]>;
   updateProfileUpdateSuggestionStatus(suggestionId: number, status: string, parentResponse?: any): Promise<ProfileUpdateSuggestion>;
-  
+
   // Conversation analysis
   getUnanalyzedConversations(): Promise<Conversation[]>;
   getConversationsWithoutSummary(): Promise<Conversation[]>;
@@ -217,10 +217,10 @@ export class DatabaseStorage implements IStorage {
     // Convert parentId to string for consistent handling
     const parentIdStr = String(parentId);
     console.log('Getting dashboard data for parent:', parentIdStr);
-    
+
     // Get all children for this parent
     const childrenData = await this.getChildrenByParent(parentIdStr);
-    
+
     if (childrenData.length === 0) {
       return {
         children: [],
@@ -231,7 +231,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     const childIds = childrenData.map(child => child.id);
-    
+
     // Get recent conversations with child info and summaries
     const recentConversationsQuery = await db
       .select({
@@ -345,7 +345,7 @@ export class DatabaseStorage implements IStorage {
         ))
         .orderBy(desc(notifications.createdAt));
     }
-    
+
     return await db
       .select()
       .from(notifications)
@@ -439,6 +439,23 @@ export class DatabaseStorage implements IStorage {
       .where(eq(profileUpdateSuggestions.id, suggestionId))
       .returning();
     return suggestion;
+  }
+
+   async getChild(childId: number) {
+    const result = await db.select().from(children).where(eq(children.id, childId)).limit(1);
+    return result[0] || null;
+  }
+
+  async getChildrenByParent(parentId: number) {
+    try {
+      console.log("Storage: Fetching children for parent:", parentId);
+      const result = await db.select().from(children).where(eq(children.parentId, parentId));
+      console.log("Storage: Found children:", result.length);
+      return result;
+    } catch (error) {
+      console.error("Storage error in getChildrenByParent:", error);
+      throw error;
+    }
   }
 
   // Conversation analysis - get conversations from past hour only

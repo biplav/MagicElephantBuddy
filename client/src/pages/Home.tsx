@@ -84,9 +84,19 @@ export default function Home() {
       if (currentParent) {
         try {
           const parent = JSON.parse(currentParent);
+          console.log("Loading children for parent:", parent.id);
+          
+          if (!parent.id) {
+            console.error("Parent ID is missing");
+            return;
+          }
+          
           const response = await fetch(`/api/parents/${parent.id}/children`);
+          console.log("Children API response status:", response.status);
+          
           if (response.ok) {
             const children = await response.json();
+            console.log("Loaded children:", children);
             setAvailableChildren(children);
             
             // Auto-select first child if none selected
@@ -94,10 +104,16 @@ export default function Home() {
               const firstChildId = children[0].id;
               setSelectedChildId(firstChildId);
               localStorage.setItem("selectedChildId", firstChildId.toString());
+              console.log("Auto-selected child:", firstChildId);
             }
+          } else {
+            const errorText = await response.text();
+            console.error("Failed to load children:", response.status, errorText);
           }
         } catch (error) {
           console.error("Error loading children:", error);
+          // Reset children array on error
+          setAvailableChildren([]);
         }
       }
     };
@@ -105,7 +121,7 @@ export default function Home() {
     if (isParentLoggedIn) {
       loadChildren();
     }
-  }, [isParentLoggedIn, selectedChildId]);
+  }, [isParentLoggedIn]); // Removed selectedChildId dependency to prevent infinite loop
 
   // Fullscreen utility functions
   const enterFullscreen = async () => {

@@ -152,7 +152,15 @@ CURRENT DATE AND TIME INFORMATION:
   app.get("/api/parents/:parentId/children", async (req: Request, res: Response) => {
     try {
       const parentId = parseInt(req.params.parentId);
+      
+      if (isNaN(parentId)) {
+        return res.status(400).json({ error: "Invalid parent ID" });
+      }
+      
+      console.log("Fetching children for parent ID:", parentId);
       const children = await storage.getChildrenByParent(parentId);
+      console.log("Found children:", children.length);
+      
       res.json(children);
     } catch (error) {
       console.error("Error fetching children by parent:", error);
