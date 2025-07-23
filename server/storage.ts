@@ -24,7 +24,7 @@ export interface IStorage {
   
   // Child management
   createChild(child: InsertChild): Promise<Child>;
-  getChildrenByParent(parentId: number): Promise<Child[]>;
+  getChildrenByParent(parentId: string | number): Promise<Child[]>;
   getChild(id: number): Promise<Child | undefined>;
   updateChildProfile(childId: number, profile: any): Promise<Child>;
   
@@ -43,7 +43,7 @@ export interface IStorage {
   // Analytics and insights
   createConversationInsight(insight: InsertConversationInsight): Promise<ConversationInsight>;
   getConversationInsights(conversationId: number): Promise<ConversationInsight[]>;
-  getParentDashboardData(parentId: number): Promise<{
+  getParentDashboardData(parentId: string | number): Promise<{
     children: Child[];
     recentConversations: (Conversation & { child: Child; messages: Message[] })[];
     totalConversations: number;
@@ -117,8 +117,12 @@ export class DatabaseStorage implements IStorage {
     return child;
   }
 
-  async getChildrenByParent(parentId: number): Promise<Child[]> {
-    return await db.select().from(children).where(eq(children.parentId, parentId));
+  async getChildrenByParent(parentId: string | number): Promise<Child[]> {
+    const parentIdStr = String(parentId);
+    console.log('Querying children for parent ID:', parentIdStr);
+    const result = await db.select().from(children).where(eq(children.parentId, parentIdStr));
+    console.log('Found children:', result.length);
+    return result;
   }
 
   async getChild(id: number): Promise<Child | undefined> {
@@ -204,14 +208,18 @@ export class DatabaseStorage implements IStorage {
       .where(eq(conversationInsights.conversationId, conversationId));
   }
 
-  async getParentDashboardData(parentId: number): Promise<{
+  async getParentDashboardData(parentId: string | number): Promise<{
     children: Child[];
     recentConversations: (Conversation & { child: Child; messages: Message[]; summary?: string })[];
     totalConversations: number;
     totalMessages: number;
   }> {
+    // Convert parentId to string for consistent handling
+    const parentIdStr = String(parentId);
+    console.log('Getting dashboard data for parent:', parentIdStr);
+    
     // Get all children for this parent
-    const childrenData = await this.getChildrenByParent(parentId);
+    const childrenData = await this.getChildrenByParent(parentIdStr);
     
     if (childrenData.length === 0) {
       return {

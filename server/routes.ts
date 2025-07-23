@@ -454,7 +454,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get parent dashboard data
   app.get('/api/parents/:parentId/dashboard', async (req: Request, res: Response) => {
     try {
-      const parentId = parseInt(req.params.parentId);
+      const parentId = req.params.parentId;
+      console.log('Fetching dashboard data for parent ID:', parentId, 'Type:', typeof parentId);
+      
+      // Handle both string and numeric parent IDs
       const dashboardData = await storage.getParentDashboardData(parentId);
       console.log('Dashboard data being returned:', JSON.stringify(dashboardData, null, 2));
       res.json(dashboardData);
