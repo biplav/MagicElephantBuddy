@@ -52,26 +52,6 @@ const WorkflowVisualizer: React.FC = () => {
         throw new Error('Invalid workflow data structure received');
       }
       
-      // Add missing videoAnalysisWorkflow if not present
-      if (!data.workflows.videoAnalysisWorkflow) {
-        data.workflows.videoAnalysisWorkflow = {
-          nodes: [
-            { id: '__start__', type: 'start', label: 'Start' },
-            { id: 'receiveVideoFrame', type: 'process', label: 'Receive Video Frame' },
-            { id: 'analyzeFrame', type: 'process', label: 'Analyze Frame with OpenAI Vision' },
-            { id: 'returnAnalysis', type: 'process', label: 'Return Analysis' },
-            { id: '__end__', type: 'end', label: 'End' }
-          ],
-          edges: [
-            { source: '__start__', target: 'receiveVideoFrame', label: 'start' },
-            { source: 'receiveVideoFrame', target: 'analyzeFrame', label: 'frame received' },
-            { source: 'analyzeFrame', target: 'returnAnalysis', label: 'analysis complete' },
-            { source: 'returnAnalysis', target: '__end__', label: 'complete' }
-          ],
-          entryPoint: '__start__'
-        };
-      }
-      
       setWorkflowData(data);
     } catch (err) {
       console.error('Error fetching workflow graph:', err);
