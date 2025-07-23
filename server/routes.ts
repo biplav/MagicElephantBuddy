@@ -411,6 +411,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Test endpoint for manual tool invocation
+  app.post('/api/test-tool', async (req: Request, res: Response) => {
+    try {
+      const { testGetEyesTool, testCompleteToolFlow } = await import('./test-tool-invocation');
+      
+      const { frameData, testType = 'simple' } = req.body;
+      
+      let result;
+      if (testType === 'complete') {
+        result = await testCompleteToolFlow();
+      } else {
+        result = await testGetEyesTool(frameData);
+      }
+      
+      res.json({
+        success: true,
+        testType,
+        result,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Tool test error:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
   // Handle audio processing with OpenAI
   // Endpoint to create ephemeral token for OpenAI Realtime API
   // Parent Dashboard API Routes

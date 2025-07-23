@@ -220,10 +220,28 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
               case 'response.function_call_arguments.done':
                 // Handle function call (getEyesTool)
                 if (message.name === 'getEyesTool') {
-                  console.log('🔧 getEyesTool invoked:', message);
+                  console.log('🔧 getEyesTool invoked:', {
+                    name: message.name,
+                    call_id: message.call_id,
+                    arguments: message.arguments,
+                    timestamp: new Date().toISOString()
+                  });
+
+                  // Test: Check if video elements are available
+                  console.log('🔧 Video setup check:', {
+                    hasVideo: !!videoRef.current,
+                    hasCanvas: !!canvasRef.current,
+                    videoReady: videoRef.current?.readyState >= 2,
+                    dataChannelOpen: dataChannelRef.current?.readyState === 'open'
+                  });
 
                   // Capture current frame and send to analyze-frame endpoint
                   const frameData = captureCurrentFrame();
+                  console.log('🔧 Frame capture result:', {
+                    frameDataLength: frameData?.length || 0,
+                    hasFrameData: !!frameData
+                  });
+
                   if (frameData) {
                     try {
                       const analysisResponse = await fetch('/api/analyze-frame', {
