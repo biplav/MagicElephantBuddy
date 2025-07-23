@@ -736,7 +736,7 @@ export default function Home() {
               <div className="w-full px-3 py-2 sm:px-4 sm:py-3 bg-white bg-opacity-80 rounded-t-3xl shadow-lg flex-shrink-0 max-h-40">
                 <div className="flex flex-col items-center space-y-2 sm:space-y-3">
                   <p className="text-primary font-medium text-base sm:text-lg text-center px-2">
-                    {isProcessing 
+                    {currentRecorder.isProcessing 
                       ? "Appu is thinking..." 
                       : elephantState === "speaking" 
                         ? "Appu is speaking..." 
@@ -745,7 +745,7 @@ export default function Home() {
                           : "Appu is getting ready to listen..."}
                   </p>
 
-                  {isProcessing ? (
+                  {currentRecorder.isProcessing ? (
                     <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full shadow-lg bg-yellow-400 flex items-center justify-center animate-pulse">
                       <svg className="w-6 h-6 sm:w-8 sm:h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -788,7 +788,7 @@ export default function Home() {
                   )}
 
                   <p className="text-neutral text-xs sm:text-sm text-center px-2">
-                    {isProcessing 
+                    {currentRecorder.isProcessing 
                       ? "Please wait while Appu thinks..." 
                       : isRecording 
                         ? "Appu is listening to you now! Tap when you're done talking" 
