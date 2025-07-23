@@ -579,7 +579,7 @@ export function setupRealtimeWebSocket(server: any) {
     realtimeLogger.info(`Realtime session connected: ${sessionId}`);
 
     // Setup keepalive mechanism
-    const pingInterval = setupWebSocketKeepalive(ws, sessionId);
+    //const pingInterval = setupWebSocketKeepalive(ws, sessionId);
 
     // Create and initialize session
     const session = createRealtimeSession(ws, sessionId);
