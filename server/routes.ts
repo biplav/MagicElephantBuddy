@@ -657,7 +657,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
             prefix_padding_ms: 300,
             silence_duration_ms: 500
           },
-          modalities: ['text', 'audio']
+          modalities: ['text', 'audio'],
+          tools: [
+            {
+              type: 'function',
+              name: 'getEyesTool',
+              description: 'Use this tool when the child is showing, pointing to, or talking about something visual that you should look at. This tool analyzes what the child is showing through their camera.',
+              parameters: {
+                type: 'object',
+                properties: {
+                  reason: {
+                    type: 'string',
+                    description: 'Why you want to look at what the child is showing'
+                  }
+                },
+                required: ['reason']
+              }
+            }
+          ]
         }),
       });
 
@@ -797,6 +814,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: 'Failed to fetch notification preferences' });
     }
   });
+
+
+// Video frame analysis endpoint for OpenAI Realtime API
+app.post('/api/analyze-frame', async (req, res) => {
+  try {
+    const { frameData, reason } = req.body;
+
+    if (!frameData) {
+      return res.status(400).json({ error: 'No frame data provided' });
+    }
+
+    console.log('🔍 Analyzing video frame for OpenAI Realtime API:', { reason });
+
+    // Use OpenAI's vision model to analyze the frame
+    const OpenAI = (await import('openai')).default;
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "A child is showing something to their AI companion Appu. Please describe what you see in this image in a child-friendly way. Focus on objects, toys, drawings, books, or anything the child might be proudly showing off. Be specific about colors, shapes, and details that would help Appu respond enthusiastically to what the child is showing."
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/jpeg;base64,${frameData}`
+              }
+            }
+          ],
+        },
+      ],
+      max_tokens: 200,
+      temperature: 0.7
+    });
+
+    const analysis = response.choices[0]?.message?.content || "I can see something interesting!";
+    
+    console.log('✅ Frame analysis completed:', analysis.slice(0, 100));
+    
+    res.json({ 
+      analysis,
+      success: true 
+    });
+
+  } catch (error: any) {
+    console.error('❌ Frame analysis error:', error);
+    res.status(500).json({ 
+      error: 'Failed to analyze frame',
+      analysis: "I can see you're showing me something special!" 
+    });
+  }
+});
+
 
   app.post('/api/notification-preferences', async (req: Request, res: Response) => {
     try {

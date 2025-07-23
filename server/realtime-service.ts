@@ -830,6 +830,96 @@ async function startRealtimeSession(session: RealtimeSession) {
       }
     });
 
+      // Handle tool calls from OpenAI
+      session.openaiWs.on("message", async (data) => {
+        try {
+          const message = JSON.parse(data.toString());
+
+          if (message.type === 'response.function_call_arguments.done') {
+            realtimeLogger.info("🔧 OpenAI function call received:", { 
+              name: message.name,
+              call_id: message.call_id 
+            });
+
+            if (message.name === 'getEyesTool') {
+              try {
+                const args = JSON.parse(message.arguments);
+                realtimeLogger.info("👁️ getEyesTool invoked by OpenAI:", { reason: args.reason });
+
+                // Get the latest video frame from storage
+                const frameStorage = global.videoFrameStorage || new Map();
+                const storedFrame = frameStorage.get(`session_${session.conversationId}`);
+
+                let toolResult = "I don't see anything right now. Make sure your camera is on and try showing me again!";
+
+                if (storedFrame && storedFrame.frameData) {
+                  // Check if frame is recent (within last 30 seconds)
+                  const frameAge = Date.now() - storedFrame.timestamp.getTime();
+                  if (frameAge <= 30000) {
+                    // Call the frame analysis API
+                    const analysisResponse = await fetch(`http://localhost:${process.env.PORT || 5000}/api/analyze-frame`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        frameData: storedFrame.frameData,
+                        reason: args.reason
+                      })
+                    });
+
+                    if (analysisResponse.ok) {
+                      const result = await analysisResponse.json();
+                      toolResult = `I can see: ${result.analysis}`;
+                    } else {
+                      toolResult = "I'm having trouble seeing what you're showing me right now. Can you try again?";
+                    }
+                  } else {
+                    toolResult = "That was a while ago! Can you show me again?";
+                  }
+                }
+
+                // Send tool result back to OpenAI
+                session.openaiWs.send(JSON.stringify({
+                  type: 'conversation.item.create',
+                  item: {
+                    type: 'function_call_output',
+                    call_id: message.call_id,
+                    output: toolResult
+                  }
+                }));
+
+                // Also store this interaction for memory
+                if (session.conversationId) {
+                  await storage.createMessage({
+                    conversationId: session.conversationId,
+                    type: 'vision_analysis',
+                    content: `Child showed something: ${toolResult}`
+                  });
+                }
+
+                realtimeLogger.info("✅ getEyesTool result sent to OpenAI:", { result: toolResult.slice(0, 100) });
+
+              } catch (toolError) {
+                realtimeLogger.error("❌ getEyesTool execution failed:", { error: toolError.message });
+
+                // Send error result back to OpenAI
+                session.openaiWs.send(JSON.stringify({
+                  type: 'conversation.item.create',
+                  item: {
+                    type: 'function_call_output',
+                    call_id: message.call_id,
+                    output: "I'm having trouble using my eyes right now, but I'm here to help!"
+                  }
+                }));
+              }
+            }
+          }
+        } catch (parseError) {
+          realtimeLogger.error("Error parsing OpenAI tool call message:", { error: parseError.message });
+        }
+      });
+
     session.openaiWs.on("error", (error) => {
       realtimeLogger.error("OpenAI Realtime API error:", {
         error: error.message,
