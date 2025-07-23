@@ -489,14 +489,197 @@ export function setupRealtimeWebSocket(server: any) {
       openaiWs: null,
       isConnected: false,
       conversationId: null,
-      childId: 1, // Using the seeded child ID
+      childId: 1085268853542289410, // Using the seeded child ID, this needs to be dynamic in production
       sessionStartTime: new Date(),
       messageCount: 0,
     };
+    // Log session details before setting session
+    realtimeLogger.info(`Initializing session for child ID: ${session.childId}, Session Start Time: ${session.sessionStartTime}`);
+    
+    // Set the session
     sessions.set(sessionId, session);
+
+    // Log that the session was set
+    realtimeLogger.info(`Session set with ID: ${sessionId}`);
 
     // Handle messages from client
     ws.on("message", async (data: Buffer) => {
+async function handleIncomingMessage(data: Buffer, session: RealtimeSession, sessionId: string) {
+
+    try {
+        let message;
+        try {
+            // Handle both string and buffer data
+            const messageStr =
+            data instanceof Buffer ? data.toString("utf8") : data.toString();
+            message = JSON.parse(messageStr);
+        } catch (parseError) {
+            realtimeLogger.info("📹 SERVER: Error parsing WebSocket message:", {
+                error: parseError.message,
+                sessionId,
+            });
+            realtimeLogger.info(
+                "Raw message data:",
+                data.toString("utf8").substring(0, 100) + "...",
+            );
+            session.ws.send(
+                JSON.stringify({
+                    type: "error",
+                    message: "Invalid message format - expected JSON",
+                }),
+            );
+            return;
+        }
+
+        switch (message.type) {
+            case "start_session":
+                // Create a new conversation in the database
+                realtimeLogger.info("Starting realtime session...");
+                try {
+                    const conversation = await storage.createConversation({
+                        childId: session.childId,
+                    });
+                    session.conversationId = conversation.id;
+                    realtimeLogger.info(
+                        `Created conversation ${conversation.id} for child ${session.childId}`,
+                    );
+
+                    // Send confirmation that session is ready
+                    session.ws.send(
+                        JSON.stringify({
+                            type: "session_started",
+                            conversationId: conversation.id,
+                            message: "Video session ready for frames",
+                        }),
+                    );
+                } catch (error) {
+                    realtimeLogger.error("Error creating conversation:", {
+                        error: error.message,
+                    });
+                    session.ws.send(
+                        JSON.stringify({
+                            type: "error",
+                            message: "Failed to start session",
+                        }),
+                    );
+                }
+                break;
+            case "audio_chunk":
+                if (session.openaiWs && session.isConnected) {
+                    // Forward audio chunk to OpenAI
+                    session.openaiWs.send(
+                        JSON.stringify({
+                            type: "input_audio_buffer.append",
+                            audio: message.audio,
+                        }),
+                    );
+                }
+                break;
+            case "video_frame":
+                // Validate frame size before processing
+                const frameSize = message.frameData?.length || 0;
+                const frameSizeKB = Math.round(frameSize / 1024);
+                const messageSizeBytes = JSON.stringify(message).length;
+                const messageSizeKB = Math.round(messageSizeBytes / 1024);
+
+                realtimeLogger.info(
+                    `📹 REALTIME: Received video frame - Frame: ${frameSizeKB}KB, Message: ${messageSizeKB}KB, Total bytes: ${messageSizeBytes}`,
+                );
+
+                // Check if frame is too large (over 1MB for base64 data)
+                if (frameSize > 1024 * 1024) {
+                    realtimeLogger.warn(`📹 REALTIME: Video frame too large: ${frameSizeKB}KB, skipping`);
+                    session.ws.send(JSON.stringify({
+                        type: "error",
+                        message: `Video frame too large (${frameSizeKB}KB). Please reduce video quality.`
+                    }));
+                    break;
+                }
+
+                // Check if total message is too large (over 2MB)
+                if (messageSizeBytes > 2 * 1024 * 1024) {
+                    realtimeLogger.warn(`📹 REALTIME: Message too large: ${messageSizeKB}KB, skipping`);
+                    session.ws.send(JSON.stringify({
+                        type: "error",
+                        message: `Message too large (${messageSizeKB}KB). Please reduce video quality.`
+                    }));
+                    break;
+                }
+
+                // Store the actual video frame data in the session for getEyesTool access
+                if (session.conversationId && message.frameData && frameSize > 0) {
+                    try {
+                        // Store the latest video frame in a session store for getEyesTool to access
+                        const frameStorage = global.videoFrameStorage || new Map();
+                        global.videoFrameStorage = frameStorage;
+
+                        // Store frame with session identifier
+                        frameStorage.set(`session_${session.conversationId}`, {
+                            frameData: message.frameData,
+                            timestamp: new Date(),
+                            sessionId: session.conversationId,
+                        });
+
+                        realtimeLogger.debug(
+                            `📹 REALTIME: Video frame stored in memory for getEyesTool access - Session: ${session.conversationId}`,
+                        );
+
+                        // Also store availability in database for conversation context
+                        await storage.createMessage({
+                            conversationId: session.conversationId,
+                            type: "video_frame_available",
+                            content: `Video frame available for getEyesTool analysis (${message.frameData?.length || 0} bytes)`,
+                            metadata: {
+                                hasVideoFrame: true,
+                                frameTimestamp: new Date().toISOString(),
+                            },
+                        });
+
+                        realtimeLogger.info(
+                            `📹 REALTIME: Video frame availability logged in database`,
+                        );
+                    } catch (error) {
+                        realtimeLogger.error(
+                            "Error storing video frame for getEyesTool:",
+                            { error: error.message },
+                        );
+                    }
+                }
+                break;
+            case "commit_audio":
+                if (session.openaiWs && session.isConnected) {
+                    // Commit the audio buffer for transcription
+                    session.openaiWs.send(
+                        JSON.stringify({
+                            type: "input_audio_buffer.commit",
+                        }),
+                    );
+                }
+                break;
+            case "end_session":
+                await endRealtimeSession(session);
+                break;
+        }
+    } catch (error) {
+        realtimeLogger.error("Error handling realtime message:", {
+            error: error.message,
+        });
+        session.ws.send(
+            JSON.stringify({
+                type: "error",
+                message: "Failed to process message",
+            }),
+        );
+    }
+}
+
+
+// Use the new handler function
+handleIncomingMessage(data, session, sessionId);
+      // Log message received
+      if (message.type) {
+        realtimeLogger.info(`Received message of type: ${message.type}`, { sessionId });
+      }
       
       try {
         let message;
@@ -526,6 +709,8 @@ export function setupRealtimeWebSocket(server: any) {
         switch (message.type) {
           case "start_session":
             // Create a new conversation in the database
+            
+              realtimeLogger.info("Starting realtime session...");
             try {
               const conversation = await storage.createConversation({
                 childId: session.childId,
@@ -663,7 +848,7 @@ export function setupRealtimeWebSocket(server: any) {
         );
       }
     });
-
+    
     ws.on("close", (code, reason) => {
       realtimeLogger.info(`Realtime Video session closed: ${sessionId}`, {
         code,
@@ -675,7 +860,7 @@ export function setupRealtimeWebSocket(server: any) {
     });
 
     ws.on("error", (error) => {
-      realtimeLogger.error(`📹 SERVER: Realtime Video session error: ${sessionId}`, {
+      realtimeLogger.info(`📹 SERVER: Realtime Video session error: ${sessionId}`, {
         error: error.message,
         errorCode: error.code || 'unknown',
         errorType: error.constructor.name
@@ -717,7 +902,7 @@ export function setupRealtimeWebSocket(server: any) {
         }
       } else {
         // For other errors, try graceful close
-        realtimeLogger.warn(`📹 SERVER: Unhandled error type: ${error.message}`);
+        realtimeLogger.info(`📹 SERVER: Unhandled error type: ${error.message}`);
         try {
           ws.send(JSON.stringify({
             type: "error",
