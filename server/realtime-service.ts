@@ -824,51 +824,8 @@ async function startRealtimeSession(session: RealtimeSession) {
         // Forward all messages from OpenAI to client
         session.ws.send(data.toString());
 
-         // Tool call handling - moved inside the main message handler
-        if (message.type === 'response.function_call_arguments.done') {
-            realtimeLogger.info("🔧 OpenAI function call received:", { 
-              name: message.name,
-              call_id: message.call_id 
-            });
-
-            // Check for getEyesTool invocation
-            if (message.name === 'getEyesTool') {
-                realtimeLogger.info("🔧 getEyesTool invoked by OpenAI:", { args: message.arguments });
-
-                let toolResult = "I don't see anything right now. Make sure your camera is on and try showing me again!";
-
-                try {
-                  // The tool will be handled by the client-side frame capture
-                  // For now, send a message indicating the tool was invoked
-                  toolResult = "Let me look at what you're showing me...";
-
-                  // Send tool result back to OpenAI
-                  session.openaiWs.send(JSON.stringify({
-                    type: 'conversation.item.create',
-                    item: {
-                      type: 'function_call_output',
-                      call_id: message.call_id,
-                      output: toolResult
-                    }
-                  }));
-
-                  realtimeLogger.info("✅ getEyesTool result sent to OpenAI:", { result: toolResult });
-
-                } catch (toolError) {
-                  realtimeLogger.error("❌ getEyesTool execution failed:", { error: toolError.message });
-
-                  // Send error response to OpenAI
-                  session.openaiWs.send(JSON.stringify({
-                    type: 'conversation.item.create',
-                    item: {
-                      type: 'function_call_output',
-                      call_id: message.call_id,
-                      output: "I'm having trouble using my eyes right now. Can you try again?"
-                    }
-                  }));
-                }
-            }
-        }
+         // Tool calls are handled client-side via WebRTC data channel
+        // Server only logs the messages that pass through
       } catch (error) {
         realtimeLogger.error("Error processing OpenAI message:", {
           error: error.message,

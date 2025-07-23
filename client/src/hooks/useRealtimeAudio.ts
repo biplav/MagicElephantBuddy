@@ -146,6 +146,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
           canvas.width = 320;
           canvas.height = 240;
           canvas.style.display = 'none';
+          canvas.id = 'realtime-frame-canvas'; // Add ID for easier cleanup
           canvasRef.current = canvas;
           document.body.appendChild(canvas);
         }
@@ -216,7 +217,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
               case 'response.text.delta':
                 options.onResponseReceived?.(message.delta);
                 break;
-              case 'response.function_call.delta':
+              case 'response.function_call_arguments.done':
                 // Handle function call (getEyesTool)
                 if (message.name === 'getEyesTool') {
                   console.log('🔧 getEyesTool invoked:', message);
@@ -247,7 +248,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
                             item: {
                               type: 'function_call_output',
                               call_id: message.call_id,
-                              output: `I can see: ${result.analysis}`
+                              output: result.analysis
                             }
                           }));
                         }
