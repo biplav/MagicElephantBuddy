@@ -181,15 +181,20 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
         channel.onopen = async () => {
           console.log('Data channel opened');
 
-          // Initialize conversation in database when realtime session starts
+          // Send start_session message with child ID to WebSocket
           try {
-            await fetch('/api/start-realtime-conversation', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ childId: 1 }) // Default child ID
-            });
+            const selectedChildId = localStorage.getItem("selectedChildId");
+            const childId = selectedChildId ? parseInt(selectedChildId) : 1;
+            
+            // Start conversation via WebSocket instead of HTTP
+            channel.send(JSON.stringify({
+              type: 'start_session',
+              childId: childId
+            }));
+            
+            console.log(`Started realtime session for child ${childId}`);
           } catch (error) {
-            console.error('Error starting realtime conversation:', error);
+            console.error('Error starting realtime session:', error);
           }
         };
 

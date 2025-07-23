@@ -148,6 +148,20 @@ CURRENT DATE AND TIME INFORMATION:
 
     const profileInfo = `
 
+  // Get children by parent ID
+  app.get("/api/parents/:parentId/children", async (req: Request, res: Response) => {
+    try {
+      const parentId = parseInt(req.params.parentId);
+      const children = await storage.getChildrenByParent(parentId);
+      res.json(children);
+    } catch (error) {
+      console.error("Error fetching children by parent:", error);
+      res.status(500).json({ error: "Failed to fetch children" });
+    }
+  });
+
+
+
 CHILD PROFILE INFORMATION:
 ${generateProfileSection(childProfile)}
 Use this information to personalize your responses and make them more engaging for ${(childProfile as any).name || "the child"}.`;

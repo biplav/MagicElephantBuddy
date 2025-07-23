@@ -42,17 +42,27 @@ export default function Home() {
     voicePreference: "nova",
   });
 
-  // Check parent login status
+  // Check parent login status and selected child
   const [isParentLoggedIn, setIsParentLoggedIn] = useState<boolean>(() => {
     const currentParent = localStorage.getItem("currentParent");
     return !!currentParent;
   });
+
+  const [selectedChildId, setSelectedChildId] = useState<number | null>(() => {
+    const stored = localStorage.getItem("selectedChildId");
+    return stored ? parseInt(stored) : null;
+  });
+
+  const [availableChildren, setAvailableChildren] = useState<any[]>([]);
 
   // Listen for localStorage changes to update parent login status
   useEffect(() => {
     const handleStorageChange = () => {
       const currentParent = localStorage.getItem("currentParent");
       setIsParentLoggedIn(!!currentParent);
+      
+      const selectedChild = localStorage.getItem("selectedChildId");
+      setSelectedChildId(selectedChild ? parseInt(selectedChild) : null);
     };
 
     // Listen for storage changes
@@ -66,6 +76,36 @@ export default function Home() {
       clearInterval(interval);
     };
   }, []);
+
+  // Load available children when parent logs in
+  useEffect(() => {
+    const loadChildren = async () => {
+      const currentParent = localStorage.getItem("currentParent");
+      if (currentParent) {
+        try {
+          const parent = JSON.parse(currentParent);
+          const response = await fetch(`/api/parents/${parent.id}/children`);
+          if (response.ok) {
+            const children = await response.json();
+            setAvailableChildren(children);
+            
+            // Auto-select first child if none selected
+            if (children.length > 0 && !selectedChildId) {
+              const firstChildId = children[0].id;
+              setSelectedChildId(firstChildId);
+              localStorage.setItem("selectedChildId", firstChildId.toString());
+            }
+          }
+        } catch (error) {
+          console.error("Error loading children:", error);
+        }
+      }
+    };
+
+    if (isParentLoggedIn) {
+      loadChildren();
+    }
+  }, [isParentLoggedIn, selectedChildId]);
 
   // Fullscreen utility functions
   const enterFullscreen = async () => {
@@ -856,12 +896,45 @@ export default function Home() {
               </motion.div>
 
               {isParentLoggedIn ? (
-                <Button
-                  className="bg-secondary hover:bg-yellow-400 text-black font-bold py-3 px-6 sm:py-4 sm:px-8 rounded-full text-lg sm:text-xl shadow-lg transition transform hover:scale-105 active:scale-95 mt-2 sm:mt-4"
-                  onClick={handleStartButton}
-                >
-                  Let's Talk to Appu!
-                </Button>
+                selectedChildId ? (
+                  <div className="flex flex-col items-center space-y-4">
+                    {/* Child selection dropdown */}
+                    <div className="flex flex-col items-center space-y-2">
+                      <p className="text-sm text-neutral">
+                        Select a child to talk with Appu:
+                      </p>
+                      <select
+                        value={selectedChildId || ""}
+                        onChange={(e) => {
+                          const childId = parseInt(e.target.value);
+                          setSelectedChildId(childId);
+                          localStorage.setItem("selectedChildId", childId.toString());
+                        }}
+                        className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-neutral"
+                      >
+                        {availableChildren.map((child) => (
+                          <option key={child.id} value={child.id}>
+                            {child.name} (Age {child.age})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    <Button
+                      className="bg-secondary hover:bg-yellow-400 text-black font-bold py-3 px-6 sm:py-4 sm:px-8 rounded-full text-lg sm:text-xl shadow-lg transition transform hover:scale-105 active:scale-95"
+                      onClick={handleStartButton}
+                    >
+                      Let's Talk to Appu!
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center space-y-2">
+                    <p className="text-sm text-neutral text-center">
+                      Loading children...
+                    </p>
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                  </div>
+                )
               ) : (
                 <Link href="/dashboard">
                   <Button className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 sm:py-4 sm:px-8 rounded-full text-lg sm:text-xl shadow-lg transition transform hover:scale-105 active:scale-95 mt-2 sm:mt-4">

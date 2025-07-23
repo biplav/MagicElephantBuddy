@@ -489,7 +489,7 @@ function createRealtimeSession(
     openaiWs: null,
     isConnected: false,
     conversationId: null,
-    childId: 1085268853542289410, // TODO: Make dynamic based on authentication
+    childId: 1, // Will be set dynamically when session starts
     sessionStartTime: new Date(),
     messageCount: 0,
   };
@@ -923,6 +923,12 @@ async function handleIncomingMessage(
 
     switch (message.type) {
       case "start_session":
+        // Set child ID from message if provided
+        if (message.childId) {
+          session.childId = message.childId;
+          realtimeLogger.info(`Session child ID set to: ${session.childId}`);
+        }
+        
         // Create a new conversation in the database
         realtimeLogger.info("Starting realtime session...");
         try {
