@@ -118,9 +118,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getChildrenByParent(parentId: string | number): Promise<Child[]> {
-    const parentIdStr = String(parentId);
-    console.log('Querying children for parent ID:', parentIdStr);
-    const result = await db.select().from(children).where(eq(children.parentId, parentIdStr));
+    const parentIdNum = typeof parentId === 'string' ? parseInt(parentId) : parentId;
+    console.log('Querying children for parent ID:', parentIdNum);
+    const result = await db.select().from(children).where(eq(children.parentId, parentIdNum));
     console.log('Found children:', result.length);
     return result;
   }
@@ -214,12 +214,12 @@ export class DatabaseStorage implements IStorage {
     totalConversations: number;
     totalMessages: number;
   }> {
-    // Convert parentId to string for consistent handling
-    const parentIdStr = String(parentId);
-    console.log('Getting dashboard data for parent:', parentIdStr);
+    // Convert parentId to number for consistent handling
+    const parentIdNum = typeof parentId === 'string' ? parseInt(parentId) : parentId;
+    console.log('Getting dashboard data for parent:', parentIdNum);
 
     // Get all children for this parent
-    const childrenData = await this.getChildrenByParent(parentIdStr);
+    const childrenData = await this.getChildrenByParent(parentIdNum);
 
     if (childrenData.length === 0) {
       return {
@@ -446,17 +446,7 @@ export class DatabaseStorage implements IStorage {
     return result[0] || null;
   }
 
-  async getChildrenByParent(parentId: number) {
-    try {
-      console.log("Storage: Fetching children for parent:", parentId);
-      const result = await db.select().from(children).where(eq(children.parentId, parentId));
-      console.log("Storage: Found children:", result.length);
-      return result;
-    } catch (error) {
-      console.error("Storage error in getChildrenByParent:", error);
-      throw error;
-    }
-  }
+  
 
   // Conversation analysis - get conversations from past hour only
   async getUnanalyzedConversations(): Promise<Conversation[]> {
