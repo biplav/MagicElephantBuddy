@@ -842,7 +842,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             input_audio_transcription: {
               model: "whisper-1",
             },
-            input_audio_noise_reduction: "far_field",
+            input_audio_noise_reduction:  {
+              type: "far_field"
+            },
             turn_detection: {
               type: "server_vad",
               threshold: 0.5,
