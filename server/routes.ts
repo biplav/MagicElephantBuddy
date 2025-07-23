@@ -837,8 +837,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let audioUrl = null;
       if (result.audioResponse) {
         const audioFileName = `appu-speech-${Date.now()}.wav`;
-        const audioPath = path.join(process.cwd(), 'public', 'public', audio```text
-FileName);
+        const audioPath = path.join(process.cwd(), 'public', 'public', audioFileName);
         fs.writeFileSync(audioPath, result.audioResponse);
         audioUrl = `/${audioFileName}`;
       }
