@@ -1,304 +1,276 @@
-
-import { StateGraph, MemorySaver, Annotation } from "@langchain/langgraph";
-import { OpenAI } from "@langchain/openai";
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { StateGraph, MemorySaver, Annotation, END } from "@langchain/langgraph";
+import { ChatOpenAI } from "@langchain/openai";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
+import { HumanMessage, AIMessage, SystemMessage } from "@langchain/core/messages";
 import { storage } from "./storage";
 import { memoryService } from "./memory-service";
 import { defaultAIService } from "./ai-service";
+import { createServiceLogger } from "./logger";
 
-// Define the state structure for our conversation workflow
+const workflowLogger = createServiceLogger("langgraph-workflow");
+
+// Simplified state structure following LangGraph best practices
 const ConversationState = Annotation.Root({
-  // Input data
+  // Core input
   childId: Annotation<number>,
   conversationId: Annotation<number | null>,
-  audioData: Annotation<Buffer | null>,
-  textInput: Annotation<string | null>,
-  videoFrame: Annotation<string | null>,
-  
-  // Processing state
-  transcription: Annotation<string | null>,
+  textInput: Annotation<string>,
+
+  // Messages array (standard LangGraph pattern)
+  messages: Annotation<any[]>,
+
+  // Context and configuration
   childContext: Annotation<any>,
-  enhancedPrompt: Annotation<string>,
-  
-  // Output data
-  aiResponse: Annotation<string>,
+  systemPrompt: Annotation<string>,
+
+  // Processing results
   audioResponse: Annotation<Buffer | null>,
-  
-  // Tools and decisions
-  toolCalls: Annotation<any[]>,
+
+  // Tool results
   visualAnalysis: Annotation<string | null>,
-  
-  // Metadata
-  processingSteps: Annotation<string[]>,
-  errors: Annotation<string[]>
+
+  // Workflow metadata
+  nextStep: Annotation<string | null>
 });
 
 type ConversationStateType = typeof ConversationState.State;
 
-// Individual workflow nodes
-async function transcribeAudio(state: ConversationStateType): Promise<Partial<ConversationStateType>> {
-  console.log("🎤 Transcribing audio...");
-  
-  if (!state.audioData) {
-    return { 
-      transcription: state.textInput || "",
-      processingSteps: [...state.processingSteps, "Skipped transcription - using text input"]
-    };
+// Define the getEyesTool outside of workflow (standard practice)
+const getEyesTool = new DynamicStructuredTool({
+  name: "getEyesTool",
+  description: "Use this tool when the child is showing, pointing to, or talking about something visual that you should look at. This tool analyzes what the child is showing through their camera.",
+  schema: z.object({
+    reason: z.string().describe("Why you want to look at what the child is showing")
+  }),
+  func: async ({ reason }, config) => {
+    workflowLogger.info("👁️ getEyesTool invoked:", { reason });
+
+    // Extract conversationId from config runnable
+    const conversationId = config?.configurable?.conversationId;
+
+    if (!conversationId) {
+      workflowLogger.warn("No conversationId available for getEyesTool");
+      return "No video session available to analyze what you're showing.";
+    }
+
+    // Access the global video frame storage
+    const frameStorage = global.videoFrameStorage || new Map();
+    const storedFrame = frameStorage.get(`session_${conversationId}`);
+
+    if (!storedFrame || !storedFrame.frameData) {
+      workflowLogger.info("No video frame available in session storage");
+      return "I don't see anything right now. Make sure your camera is on and try showing me again!";
+    }
+
+    // Check if frame is recent (within last 30 seconds)
+    const frameAge = Date.now() - storedFrame.timestamp.getTime();
+    if (frameAge > 30000) {
+      workflowLogger.warn("Video frame is older than 30 seconds");
+      return "That was a while ago! Can you show me again?";
+    }
+
+    try {
+      workflowLogger.debug(`Analyzing video frame - Size: ${storedFrame.frameData.length} bytes`);
+      const analysis = await analyzeVideoFrame(storedFrame.frameData);
+
+      workflowLogger.info("Video analysis completed:", { analysis: analysis.slice(0, 100) });
+      return `I can see: ${analysis}`;
+    } catch (error) {
+      workflowLogger.error("getEyesTool analysis failed:", { error: error.message });
+      return "I'm having trouble seeing what you're showing me right now. Can you try again?";
+    }
   }
+});
+
+// Initialize the LLM with tools (standard LangGraph pattern)
+const createLLMWithTools = () => {
+  const llm = new ChatOpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+    modelName: "gpt-4o",
+    temperature: 0.7,
+    maxTokens: 200
+  });
+
+  return llm.bindTools([getEyesTool]);
+};
+
+// Workflow nodes following LangGraph patterns
+async function loadContext(state: ConversationStateType): Promise<Partial<ConversationStateType>> {
+  workflowLogger.info("Loading child context and creating system prompt");
 
   try {
-    const transcription = await defaultAIService.transcribeAudio(state.audioData, "input.wav");
-    return {
-      transcription,
-      processingSteps: [...state.processingSteps, `Audio transcribed: "${transcription.slice(0, 50)}..."`]
-    };
-  } catch (error) {
-    return {
-      transcription: "",
-      errors: [...state.errors, `Transcription failed: ${error}`],
-      processingSteps: [...state.processingSteps, "Transcription failed"]
-    };
-  }
-}
-
-async function loadChildContext(state: ConversationStateType): Promise<Partial<ConversationStateType>> {
-  console.log("👶 Loading child context and memories...");
-  
-  try {
-    // Get child profile and milestones
+    // Load child data
     const child = await storage.getChild(state.childId);
     const milestones = await storage.getMilestonesByChild(state.childId);
     const childContext = await memoryService.getChildContext(state.childId);
-    
-    // Create enhanced prompt with all context
-    const enhancedPrompt = await createEnhancedPrompt(state.childId, child, milestones, childContext);
-    
+
+    // Create enhanced system prompt
+    const systemPrompt = await createEnhancedPrompt(state.childId, child, milestones, childContext);
+
+    // Initialize messages with system prompt
+    const messages = [
+      new SystemMessage(systemPrompt)
+    ];
+
     return {
       childContext,
-      enhancedPrompt,
-      processingSteps: [...state.processingSteps, "Child context loaded with memories and milestones"]
+      systemPrompt,
+      messages,
+      nextStep: "callModel"
     };
   } catch (error) {
+    workflowLogger.error("Context loading failed:", { error: error.message });
+
+    const fallbackPrompt = "You are Appu, a friendly elephant AI assistant for children.";
     return {
-      enhancedPrompt: "You are Appu, a friendly elephant AI assistant for children.",
-      errors: [...state.errors, `Context loading failed: ${error}`],
-      processingSteps: [...state.processingSteps, "Using fallback prompt due to context error"]
+      systemPrompt: fallbackPrompt,
+      messages: [new SystemMessage(fallbackPrompt)],
+      nextStep: "callModel"
     };
   }
 }
 
-// Create the getEyesTool as a LangChain tool
-const createGetEyesTool = (state: ConversationStateType) => {
-  return new DynamicStructuredTool({
-    name: "getEyesTool",
-    description: "Use this tool when the child is showing, pointing to, or talking about something visual that you should look at. This tool analyzes what the child is showing through their camera.",
-    schema: z.object({
-      reason: z.string().describe("Why you want to look at what the child is showing")
-    }),
-    func: async ({ reason }) => {
-      console.log("👁️ LLM decided to use getEyesTool:", reason);
-      
-      // Try to get video frame from session storage first
-      let frameData = state.videoFrame;
-      
-      if (!frameData && state.conversationId) {
-        // Access the global video frame storage
-        const frameStorage = global.videoFrameStorage || new Map();
-        const storedFrame = frameStorage.get(`session_${state.conversationId}`);
-        
-        if (storedFrame && storedFrame.frameData) {
-          frameData = storedFrame.frameData;
-          console.log("👁️ getEyesTool: Retrieved video frame from session storage");
-          
-          // Check if frame is recent (within last 30 seconds)
-          const frameAge = Date.now() - storedFrame.timestamp.getTime();
-          if (frameAge > 30000) {
-            console.log("👁️ getEyesTool: Warning - video frame is older than 30 seconds");
-          }
-        }
-      }
-      
-      if (!frameData) {
-        console.log("👁️ getEyesTool: No video frame available in state or session storage");
-        return "No video frame available to analyze what the child is showing.";
-      }
+async function callModel(state: ConversationStateType): Promise<Partial<ConversationStateType>> {
+  workflowLogger.info("Calling LLM with tools");
 
-      try {
-        console.log(`👁️ getEyesTool: Analyzing video frame - Size: ${frameData.length} bytes`);
-        const analysis = await analyzeVideoFrame(frameData);
-        
-        // Store as vision memory
-        await memoryService.createMemory(
-          state.childId,
-          `Child showed something: ${analysis}`,
-          'visual',
-          { conversationId: state.conversationId, importance_score: 0.8 }
-        );
+  const llm = createLLMWithTools();
 
-        return `I can see: ${analysis}`;
-      } catch (error) {
-        console.error("getEyesTool error:", error);
-        return "I'm having trouble seeing what you're showing me right now.";
-      }
-    }
-  });
-};
-
-async function generateResponseWithTools(state: ConversationStateType): Promise<Partial<ConversationStateType>> {
-  console.log("🤖 Generating AI response with LangChain tools...");
-  
-  if (!state.transcription) {
-    return {
-      aiResponse: "I didn't understand that. Could you try again?",
-      errors: [...state.errors, "No transcription available for response generation"]
-    };
-  }
+  // Add user message to conversation
+  const messagesWithInput = [
+    ...state.messages,
+    new HumanMessage(state.textInput)
+  ];
 
   try {
-    // Create LangChain OpenAI model
-    const llm = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-      modelName: "gpt-4o",
-      maxTokens: 150,
-      temperature: 0.7
-    });
+    const response = await llm.invoke(messagesWithInput);
 
-    // Create enhanced prompt with visual context
-    let enhancedPrompt = state.enhancedPrompt;
-    if (state.videoFrame || global.videoFrameStorage?.has(`session_${state.conversationId}`)) {
-      enhancedPrompt += "\n\nNOTE: The child has their camera on and may be showing you something. If they mention showing, pointing to, or talking about something visual, use the getEyesTool to see what they're showing you.";
-    }
-
-    // Create the getEyesTool for this state
-    const getEyesTool = createGetEyesTool(state);
-    
-    // Bind the tool to the model
-    const modelWithTools = llm.bind({
-      tools: [getEyesTool],
-    });
-
-    let toolCalls: any[] = [];
-    let visualAnalysis: string | null = null;
-
-    // First, let the LLM decide if it needs tools
-    const response = await modelWithTools.invoke([
-      {
-        role: "system",
-        content: enhancedPrompt
-      },
-      {
-        role: "user", 
-        content: state.transcription
-      }
-    ]);
-
-    let finalResponse = response.content as string || "I'm here to help!";
+    // Update messages with AI response
+    const updatedMessages = [
+      ...messagesWithInput,
+      response
+    ];
 
     // Check if the model wants to use tools
     if (response.tool_calls && response.tool_calls.length > 0) {
-      console.log("🔧 LLM requested LangChain tool calls:", response.tool_calls.length);
-      
-      for (const toolCall of response.tool_calls) {
-        if (toolCall.name === "getEyesTool") {
-          console.log("👁️ LLM wants to see:", toolCall.args.reason);
-          
-          try {
-            const toolResult = await getEyesTool.invoke(toolCall.args);
-            visualAnalysis = toolResult;
-            
-            toolCalls.push({
-              tool: "getEyesTool",
-              reason: toolCall.args.reason,
-              result: toolResult
-            });
-          } catch (error) {
-            console.error("LangChain tool execution failed:", error);
-            toolCalls.push({
-              tool: "getEyesToool",
-              reason: toolCall.args.reason,
-              result: "I'm having trouble seeing what you're showing me."
-            });
-          }
-        }
-      }
+      workflowLogger.info("Model requested tool calls:", { toolCount: response.tool_calls.length });
+      return {
+        messages: updatedMessages,
+        nextStep: "useTool"
+      };
+    } else {
+      // No tools needed, proceed to synthesis
+      return {
+        messages: updatedMessages,
+        nextStep: "synthesizeSpeech"
+      };
+    }
+  } catch (error) {
+    workflowLogger.error("Model call failed:", { error: error.message });
 
-      // Generate final response with tool results if tools were used
-      if (toolCalls.length > 0) {
-        const toolResults = toolCalls.map(tc => `${tc.tool}: ${tc.result}`).join('\n\n');
-        
-        const finalResponseCall = await llm.invoke([
-          {
-            role: "system",
-            content: enhancedPrompt
-          },
-          {
-            role: "user",
-            content: state.transcription
-          },
-          {
-            role: "assistant",
-            content: `I used these tools: ${toolResults}`
-          },
-          {
-            role: "user",
-            content: "Based on what you observed, please respond to the child in a natural, encouraging way."
-          }
-        ]);
+    // Fallback response
+    const fallbackResponse = new AIMessage("Sorry, I'm having trouble right now. Let's try again!");
+    return {
+      messages: [...messagesWithInput, fallbackResponse],
+      nextStep: "synthesizeSpeech"
+    };
+  }
+}
 
-        finalResponse = finalResponseCall.content as string || finalResponse;
+async function useTool(state: ConversationStateType): Promise<Partial<ConversationStateType>> {
+  workflowLogger.info("Executing tool calls");
+
+  const lastMessage = state.messages[state.messages.length - 1];
+
+  if (!lastMessage.tool_calls || lastMessage.tool_calls.length === 0) {
+    workflowLogger.warn("No tool calls found in last message");
+    return { nextStep: "synthesizeSpeech" };
+  }
+
+  const llm = createLLMWithTools();
+  let updatedMessages = [...state.messages];
+  let visualAnalysis: string | null = null;
+
+  try {
+    // Execute each tool call
+    for (const toolCall of lastMessage.tool_calls) {
+      if (toolCall.name === "getEyesTool") {
+        const config = {
+          configurable: {
+            conversationId: state.conversationId
+          }
+        };
+
+        const toolResult = await getEyesTool.invoke(toolCall.args, config);
+        visualAnalysis = toolResult;
+
+        // Add tool result to messages
+        updatedMessages.push({
+          role: "tool",
+          content: toolResult,
+          tool_call_id: toolCall.id
+        });
       }
     }
 
+    // Get final response from model with tool results
+    const finalResponse = await llm.invoke(updatedMessages);
+    updatedMessages.push(finalResponse);
+
     return {
-      aiResponse: finalResponse,
-      toolCalls,
+      messages: updatedMessages,
       visualAnalysis,
-      processingSteps: [...state.processingSteps, 
-        `AI response generated with LangChain: "${finalResponse.slice(0, 50)}..."`,
-        ...(toolCalls.length > 0 ? [`Used LangChain tools: ${toolCalls.map(tc => tc.tool).join(', ')}`] : [])
-      ]
+      nextStep: "synthesizeSpeech"
     };
   } catch (error) {
-    console.error("LangChain tool workflow error:", error);
+    workflowLogger.error("Tool execution failed:", { error: error.message });
+
+    // Add error response
+    const errorResponse = new AIMessage("I had trouble using my tools, but I'm here to help!");
+    updatedMessages.push(errorResponse);
+
     return {
-      aiResponse: "Sorry, I'm having trouble right now. Let's try again!",
-      errors: [...state.errors, `LangChain tool workflow failed: ${error}`],
-      processingSteps: [...state.processingSteps, "Using fallback response due to LangChain error"]
+      messages: updatedMessages,
+      nextStep: "synthesizeSpeech"
     };
   }
 }
 
 async function synthesizeSpeech(state: ConversationStateType): Promise<Partial<ConversationStateType>> {
-  console.log("🔊 Synthesizing speech...");
-  
-  if (!state.aiResponse) {
-    return {
-      audioResponse: null,
-      errors: [...state.errors, "No AI response to synthesize"]
-    };
+  workflowLogger.info("Synthesizing speech from AI response");
+
+  // Get the last AI message
+  const lastAIMessage = [...state.messages].reverse().find(msg => 
+    msg.constructor.name === 'AIMessage' || msg.role === 'assistant'
+  );
+
+  if (!lastAIMessage) {
+    workflowLogger.warn("No AI message found for speech synthesis");
+    return { nextStep: "storeConversation" };
   }
 
+  const textContent = lastAIMessage.content || "I'm here to help!";
+
   try {
-    const audioBuffer = await defaultAIService.generateSpeech(state.aiResponse);
-    
+    const audioBuffer = await defaultAIService.generateSpeech(textContent);
+
     return {
       audioResponse: audioBuffer,
-      processingSteps: [...state.processingSteps, "Speech synthesized successfully"]
+      nextStep: "storeConversation"
     };
   } catch (error) {
+    workflowLogger.error("Speech synthesis failed:", { error: error.message });
+
     return {
       audioResponse: null,
-      errors: [...state.errors, `Speech synthesis failed: ${error}`],
-      processingSteps: [...state.processingSteps, "Speech synthesis failed - text response only"]
+      nextStep: "storeConversation"
     };
   }
 }
 
 async function storeConversation(state: ConversationStateType): Promise<Partial<ConversationStateType>> {
-  console.log("💾 Storing conversation data...");
-  
+  workflowLogger.info("Storing conversation and creating memories");
+
   try {
     // Create conversation if needed
     let conversationId = state.conversationId;
@@ -307,227 +279,119 @@ async function storeConversation(state: ConversationStateType): Promise<Partial<
       conversationId = conversation.id;
     }
 
+    // Get human and AI messages from the current interaction
+    const recentMessages = state.messages.slice(-2); // Last 2 messages (human + AI)
+
     // Store child's message
-    if (state.transcription) {
+    const humanMessage = recentMessages.find(msg => 
+      msg.constructor.name === 'HumanMessage' || msg.role === 'user'
+    );
+
+    if (humanMessage) {
       await storage.createMessage({
         conversationId,
         type: 'child_input',
-        content: state.transcription,
-        transcription: state.transcription
+        content: humanMessage.content,
+        transcription: humanMessage.content
       });
 
       // Create memory from child's input
       await memoryService.createMemory(
         state.childId,
-        `Child said: "${state.transcription}"`,
+        `Child said: "${humanMessage.content}"`,
         'conversational',
         { conversationId, emotionalTone: 'neutral' }
       );
     }
 
     // Store AI response
-    if (state.aiResponse) {
+    const aiMessage = recentMessages.find(msg => 
+      msg.constructor.name === 'AIMessage' || msg.role === 'assistant'
+    );
+
+    if (aiMessage) {
       await storage.createMessage({
         conversationId,
         type: 'appu_response',
-        content: state.aiResponse
+        content: aiMessage.content
       });
 
       // Create memory from AI response
       await memoryService.createMemory(
         state.childId,
-        `Appu responded: "${state.aiResponse}"`,
+        `Appu responded: "${aiMessage.content}"`,
         'conversational',
         { conversationId, emotionalTone: 'positive' }
       );
     }
 
+    // Store visual analysis if present
+    if (state.visualAnalysis) {
+      await memoryService.createMemory(
+        state.childId,
+        `Child showed something: ${state.visualAnalysis}`,
+        'visual',
+        { conversationId, importance_score: 0.8 }
+      );
+    }
+
     return {
       conversationId,
-      processingSteps: [...state.processingSteps, "Conversation stored and memories created"]
+      nextStep: null // End of workflow
     };
   } catch (error) {
-    return {
-      errors: [...state.errors, `Storage failed: ${error}`],
-      processingSteps: [...state.processingSteps, "Failed to store conversation"]
-    };
+    workflowLogger.error("Storage failed:", { error: error.message });
+    return { nextStep: null };
   }
 }
 
-// Helper function to create enhanced prompt
-async function createEnhancedPrompt(childId: number, child: any, milestones: any[], childContext: any): Promise<string> {
-  try {
-    const { APPU_SYSTEM_PROMPT } = await import('../shared/appuPrompts');
-    const { DEFAULT_PROFILE } = await import('../shared/childProfile');
-    const { memoryService } = await import('./memory-service');
-    
-    const childProfile = child?.profile || DEFAULT_PROFILE;
-    
-    // Get recent memories for context
-    const recentMemories = await memoryService.retrieveMemories({
-      query: '',
-      childId,
-      limit: 5,
-      timeframe: 'week'
-    });
-    
-    // Generate current date and time information
-    const now = new Date();
-    const options: Intl.DateTimeFormatOptions = {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZoneName: 'short'
-    };
-    const currentDateTime = now.toLocaleDateString('en-US', options);
-    const timeOfDay = now.getHours() < 12 ? 'morning' : now.getHours() < 17 ? 'afternoon' : now.getHours() < 20 ? 'evening' : 'night';
-    
-    // Generate profile information
-    const generateProfileSection = (obj: any): string => {
-      let result = '';
-      for (const [key, value] of Object.entries(obj)) {
-        const displayKey = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
-        
-        if (Array.isArray(value)) {
-          result += `- ${displayKey}: ${value.join(', ')}\n`;
-        } else if (typeof value === 'object' && value !== null) {
-          result += `- ${displayKey}:\n`;
-          const subItems = generateProfileSection(value);
-          result += subItems.split('\n').map(line => line ? `  ${line}` : '').join('\n') + '\n';
-        } else {
-          result += `- ${displayKey}: ${value}\n`;
-        }
-      }
-      return result;
-    };
-
-    // Generate learning milestones section
-    const generateMilestonesSection = (): string => {
-      if (!milestones || milestones.length === 0) {
-        return '\nLEARNING MILESTONES:\n- No specific milestones tracked yet. Focus on general age-appropriate learning activities.\n';
-      }
-
-      let result = '\nLEARNING MILESTONES AND PROGRESS:\n';
-      
-      const activeMilestones = milestones.filter((m: any) => !m.isCompleted);
-      const completedMilestones = milestones.filter((m: any) => m.isCompleted);
-      
-      if (activeMilestones.length > 0) {
-        result += '\nCurrent Learning Goals:\n';
-        activeMilestones.forEach((milestone: any) => {
-          const progressPercent = milestone.targetValue ? Math.round((milestone.currentProgress / milestone.targetValue) * 100) : 0;
-          result += `- ${milestone.milestoneDescription} (${progressPercent}% complete - ${milestone.currentProgress}/${milestone.targetValue})\n`;
-        });
-      }
-      
-      if (completedMilestones.length > 0) {
-        result += '\nCompleted Achievements:\n';
-        completedMilestones.forEach((milestone: any) => {
-          const completedDate = milestone.completedAt ? new Date(milestone.completedAt).toLocaleDateString() : 'Recently';
-          result += `- ✅ ${milestone.milestoneDescription} (Completed: ${completedDate})\n`;
-        });
-      }
-      
-      result += '\nMILESTONE GUIDANCE:\n';
-      result += '- Reference these milestones during conversations to encourage progress\n';
-      result += '- Celebrate achievements and progress made\n';
-      result += '- Incorporate learning activities that support current goals\n';
-      result += '- Use age-appropriate language to discuss progress\n';
-      
-      return result;
-    };
-
-    // Generate memory context section
-    const generateMemorySection = (): string => {
-      if (!recentMemories || recentMemories.length === 0) {
-        return '\nMEMORY CONTEXT:\n- No recent conversation memories available. Start building rapport with the child.\n';
-      }
-      
-      let result = '\nMEMORY CONTEXT AND PERSONALIZATION:\n';
-      result += 'Recent conversation memories to reference for personalized interactions:\n';
-      
-      recentMemories.forEach((memory, index) => {
-        const typeIndicator = memory.type === 'conversational' ? '💬' : 
-                             memory.type === 'learning' ? '📚' : 
-                             memory.type === 'emotional' ? '😊' : 
-                             memory.type === 'relationship' ? '🤝' : '💭';
-        result += `- ${typeIndicator} ${memory.content}\n`;
-      });
-      
-      result += '\nCHILD CONTEXT INSIGHTS:\n';
-      result += `- Active interests: ${childContext.activeInterests?.join(', ') || 'Not identified yet'}\n`;
-      result += `- Communication style: ${childContext.personalityProfile?.communication_style || 'Observing'}\n`;
-      result += `- Relationship level: ${childContext.relationshipLevel || 1}/10\n`;
-      if (childContext.emotionalState) {
-        result += `- Current emotional state: ${childContext.emotionalState}\n`;
-      }
-      
-      result += '\nMEMORY USAGE GUIDANCE:\n';
-      result += '- Reference past conversations naturally to show you remember the child\n';
-      result += '- Build on previous interests and topics the child has shown enthusiasm for\n';
-      result += '- Acknowledge emotional states and continue building positive relationships\n';
-      result += '- Use memories to make conversations feel continuous and personalized\n';
-      
-      return result;
-    };
-
-    const dateTimeInfo = `
-CURRENT DATE AND TIME INFORMATION:
-- Current Date & Time: ${currentDateTime}
-- Time of Day: ${timeOfDay}
-- Use this information to provide contextually appropriate responses based on the time of day and current date.`;
-
-    const profileInfo = `
-CHILD PROFILE INFORMATION:
-${generateProfileSection(childProfile)}
-Use this information to personalize your responses and make them more engaging for ${(childProfile as any).name || 'the child'}.`;
-
-    const milestonesInfo = generateMilestonesSection();
-    const memoryInfo = generateMemorySection();
-
-    return APPU_SYSTEM_PROMPT + dateTimeInfo + profileInfo + milestonesInfo + memoryInfo;
-    
-  } catch (error) {
-    console.error('Error creating enhanced prompt in workflow:', error);
-    return "You are Appu, a friendly elephant AI assistant who speaks in simple Hinglish and helps children learn.";
-  }
+// Conditional routing function (standard LangGraph pattern)
+function routeAfterModel(state: ConversationStateType): string {
+  return state.nextStep || END;
 }
 
-// Create the main conversation workflow
+function routeAfterTool(state: ConversationStateType): string {
+  return state.nextStep || END;
+}
+
+function routeAfterSpeech(state: ConversationStateType): string {
+  return state.nextStep || END;
+}
+
+// Create the workflow with proper conditional routing
 function createConversationWorkflow() {
   const workflow = new StateGraph(ConversationState)
-    .addNode("transcribe", transcribeAudio)
-    .addNode("loadContext", loadChildContext)
-    .addNode("generateResponse", generateResponseWithTools)
+    .addNode("loadContext", loadContext)
+    .addNode("callModel", callModel)
+    .addNode("useTool", useTool)
     .addNode("synthesizeSpeech", synthesizeSpeech)
     .addNode("storeConversation", storeConversation)
-    .addEdge("transcribe", "loadContext")
-    .addEdge("loadContext", "generateResponse")
-    .addEdge("generateResponse", "synthesizeSpeech")
-    .addEdge("synthesizeSpeech", "storeConversation")
-    .setEntryPoint("transcribe");
+    .setEntryPoint("loadContext")
+    .addEdge("loadContext", "callModel")
+    .addConditionalEdges("callModel", routeAfterModel, {
+      "useTool": "useTool",
+      "synthesizeSpeech": "synthesizeSpeech"
+    })
+    .addConditionalEdges("useTool", routeAfterTool, {
+      "synthesizeSpeech": "synthesizeSpeech"
+    })
+    .addConditionalEdges("synthesizeSpeech", routeAfterSpeech, {
+      "storeConversation": "storeConversation"
+    })
+    .addEdge("storeConversation", END);
 
   // Use memory to persist state between calls
   const memory = new MemorySaver();
   return workflow.compile({ checkpointer: memory });
 }
 
-
-
-// Video analysis is now handled by the getEyesTool in the main conversation workflow
-
+// Helper function for video frame analysis
 async function analyzeVideoFrame(frameData: string): Promise<string> {
   try {
-    console.log(`👁️ LANGGRAPH: Analyzing video frame - Size: ${frameData?.length || 0} bytes`);
-    const { defaultAIService } = await import('./ai-service');
-    
-    // Use OpenAI's vision model to analyze what the child is showing
-    const openai = new (await import('openai')).default({ 
-      apiKey: process.env.OPENAI_API_KEY 
-    });
+    workflowLogger.debug(`Analyzing video frame - Size: ${frameData?.length || 0} bytes`);
+
+    const OpenAI = (await import('openai')).default;
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
@@ -553,11 +417,57 @@ async function analyzeVideoFrame(frameData: string): Promise<string> {
     });
 
     const analysis = response.choices[0]?.message?.content || "I can see something interesting!";
-    console.log("🎯 Video frame analysis:", analysis);
+    workflowLogger.debug("Video frame analysis completed:", { analysis: analysis.slice(0, 100) });
     return analysis;
   } catch (error) {
-    console.error("Video analysis error:", error);
+    workflowLogger.error("Video analysis error:", { error: error.message });
     return "I can see you're showing me something special!";
+  }
+}
+
+// Helper function to create enhanced prompt (simplified)
+async function createEnhancedPrompt(childId: number, child: any, milestones: any[], childContext: any): Promise<string> {
+  try {
+    const { APPU_SYSTEM_PROMPT } = await import('../shared/appuPrompts');
+    const { DEFAULT_PROFILE } = await import('../shared/childProfile');
+
+    const childProfile = child?.profile || DEFAULT_PROFILE;
+
+    // Get recent memories for context
+    const recentMemories = await memoryService.retrieveMemories({
+      query: '',
+      childId,
+      limit: 3,
+      timeframe: 'week'
+    });
+
+    // Generate current time context
+    const now = new Date();
+    const timeOfDay = now.getHours() < 12 ? 'morning' : now.getHours() < 17 ? 'afternoon' : 'evening';
+
+    let enhancedPrompt = APPU_SYSTEM_PROMPT;
+
+    enhancedPrompt += `\n\nCURRENT CONTEXT:`;
+    enhancedPrompt += `\n- Time of day: ${timeOfDay}`;
+    enhancedPrompt += `\n- Child's name: ${(childProfile as any).name || 'friend'}`;
+    enhancedPrompt += `\n- Child's age: ${(childProfile as any).age || 'young'}`;
+
+    if (recentMemories && recentMemories.length > 0) {
+      enhancedPrompt += `\n\nRECENT MEMORIES:`;
+      recentMemories.forEach((memory, index) => {
+        enhancedPrompt += `\n- ${memory.content}`;
+      });
+    }
+
+    enhancedPrompt += `\n\nINSTRUCTIONS:`;
+    enhancedPrompt += `\n- If the child mentions showing, pointing to, or talking about something visual, use the getEyesTool to see what they're showing`;
+    enhancedPrompt += `\n- Be enthusiastic and encouraging in your responses`;
+    enhancedPrompt += `\n- Keep responses concise and age-appropriate`;
+
+    return enhancedPrompt;
+  } catch (error) {
+    workflowLogger.error("Error creating enhanced prompt:", { error: error.message });
+    return "You are Appu, a friendly elephant AI assistant who helps children learn and have fun.";
   }
 }
 
@@ -568,45 +478,72 @@ export const conversationWorkflow = createConversationWorkflow();
 export async function processConversation(input: {
   childId: number;
   conversationId?: number;
-  audioData?: Buffer;
   textInput?: string;
-  videoFrame?: string;
+  audioData?: Buffer;
 }) {
   const { workflowMonitor } = await import('./workflow-monitor');
   const workflowId = `conversation-${input.childId}-${Date.now()}`;
   const { startTime } = workflowMonitor.startWorkflow(workflowId);
 
+  // Handle audio transcription if needed
+  let textInput = input.textInput;
+  if (!textInput && input.audioData) {
+    try {
+      textInput = await defaultAIService.transcribeAudio(input.audioData, "input.wav");
+      workflowLogger.info("Audio transcribed for workflow:", { text: textInput?.slice(0, 50) });
+    } catch (error) {
+      workflowLogger.error("Audio transcription failed:", { error: error.message });
+      textInput = "I couldn't understand that audio.";
+    }
+  }
+
+  if (!textInput) {
+    const error = "No text input or audio provided";
+    workflowMonitor.completeWorkflow(workflowId, startTime, false, [error]);
+    throw new Error(error);
+  }
+
   const initialState: Partial<ConversationStateType> = {
     childId: input.childId,
     conversationId: input.conversationId || null,
-    audioData: input.audioData || null,
-    textInput: input.textInput || null,
-    videoFrame: input.videoFrame || null,
-    toolCalls: [],
-    visualAnalysis: null,
-    processingSteps: [],
-    errors: []
+    textInput,
+    messages: []
   };
 
-  const config = { configurable: { thread_id: `child-${input.childId}` } };
-  
+  const config = { 
+    configurable: { 
+      thread_id: `child-${input.childId}`,
+      conversationId: input.conversationId
+    } 
+  };
+
   try {
     const result = await conversationWorkflow.invoke(initialState, config);
-    
-    console.log("🎯 Workflow completed:", {
-      steps: result.processingSteps,
-      errors: result.errors,
-      hasResponse: !!result.aiResponse,
+
+    workflowLogger.info("Workflow completed successfully:", {
+      hasResponse: !!result.messages?.length,
       hasAudio: !!result.audioResponse,
-      hasVideoAnalysis: !!input.videoFrame
+      hasVisualAnalysis: !!result.visualAnalysis
     });
 
-    const success = result.errors.length === 0;
-    workflowMonitor.completeWorkflow(workflowId, startTime, success, result.errors);
+    workflowMonitor.completeWorkflow(workflowId, startTime, true, []);
 
-    return result;
+    // Extract final AI response
+    const lastAIMessage = [...(result.messages || [])].reverse().find(msg => 
+      msg.constructor.name === 'AIMessage' || msg.role === 'assistant'
+    );
+
+    return {
+      transcription: textInput,
+      aiResponse: lastAIMessage?.content || "I'm here to help!",
+      audioResponse: result.audioResponse,
+      visualAnalysis: result.visualAnalysis,
+      conversationId: result.conversationId,
+      processingSteps: ["Context loaded", "Model called", "Response generated"],
+      errors: []
+    };
   } catch (error) {
-    console.error("❌ Workflow failed:", error);
+    workflowLogger.error("Workflow failed:", { error: error.message });
     workflowMonitor.completeWorkflow(workflowId, startTime, false, [String(error)]);
     throw error;
   }
