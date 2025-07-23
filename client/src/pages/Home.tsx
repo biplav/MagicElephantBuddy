@@ -216,7 +216,7 @@ export default function Home() {
   };
 
   // Destructure for backward compatibility
-  const { isReady, isRecording, startRecording, stopRecording, requestMicrophonePermission, isProcessing, recorderState } = currentRecorder;
+  const { isReady, startRecording, stopRecording, requestMicrophonePermission, isProcessing, recorderState } = currentRecorder;
 
   const handleStopSession = async () => {
     console.log("Stopping session and returning to welcome screen");
