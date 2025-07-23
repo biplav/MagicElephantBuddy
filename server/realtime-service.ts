@@ -841,79 +841,41 @@ async function startRealtimeSession(session: RealtimeSession) {
               call_id: message.call_id 
             });
 
-            if (message.name === 'getEyesTool') {
-              try {
-                const args = JSON.parse(message.arguments);
-                realtimeLogger.info("👁️ getEyesTool invoked by OpenAI:", { reason: args.reason });
-
-                // Get the latest video frame from storage
-                const frameStorage = global.videoFrameStorage || new Map();
-                const storedFrame = frameStorage.get(`session_${session.conversationId}`);
+            // Check for getEyesTool invocation
+              if (message.type === 'response.function_call_output' && message.name === 'getEyesTool') {
+                realtimeLogger.info("🔧 getEyesTool invoked by OpenAI:", { args: message.arguments });
 
                 let toolResult = "I don't see anything right now. Make sure your camera is on and try showing me again!";
 
-                if (storedFrame && storedFrame.frameData) {
-                  // Check if frame is recent (within last 30 seconds)
-                  const frameAge = Date.now() - storedFrame.timestamp.getTime();
-                  if (frameAge <= 30000) {
-                    // Call the frame analysis API
-                    const analysisResponse = await fetch(`http://localhost:${process.env.PORT || 5000}/api/analyze-frame`, {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                      },
-                      body: JSON.stringify({
-                        frameData: storedFrame.frameData,
-                        reason: args.reason
-                      })
-                    });
+                try {
+                  // The tool will be handled by the client-side frame capture
+                  // For now, send a message indicating the tool was invoked
+                  toolResult = "Let me look at what you're showing me...";
 
-                    if (analysisResponse.ok) {
-                      const result = await analysisResponse.json();
-                      toolResult = `I can see: ${result.analysis}`;
-                    } else {
-                      toolResult = "I'm having trouble seeing what you're showing me right now. Can you try again?";
+                  // Send tool result back to OpenAI
+                  session.openaiWs.send(JSON.stringify({
+                    type: 'conversation.item.create',
+                    item: {
+                      type: 'function_call_output',
+                      call_id: message.call_id,
+                      output: toolResult
                     }
-                  } else {
-                    toolResult = "That was a while ago! Can you show me again?";
-                  }
-                }
+                  }));
 
-                // Send tool result back to OpenAI
-                session.openaiWs.send(JSON.stringify({
-                  type: 'conversation.item.create',
-                  item: {
-                    type: 'function_call_output',
-                    call_id: message.call_id,
-                    output: toolResult
-                  }
-                }));
+                  realtimeLogger.info("✅ getEyesTool result sent to OpenAI:", { result: toolResult });
 
-                // Also store this interaction for memory
-                if (session.conversationId) {
-                  await storage.createMessage({
-                    conversationId: session.conversationId,
-                    type: 'vision_analysis',
-                    content: `Child showed something: ${toolResult}`
-                  });
-                }
+                } catch (toolError) {
+                  realtimeLogger.error("❌ getEyesTool execution failed:", { error: toolError.message });
 
-                realtimeLogger.info("✅ getEyesTool result sent to OpenAI:", { result: toolResult.slice(0, 100) });
-
-              } catch (toolError) {
-                realtimeLogger.error("❌ getEyesTool execution failed:", { error: toolError.message });
-
-                // Send error result back to OpenAI
-                session.openaiWs.send(JSON.stringify({
-                  type: 'conversation.item.create',
-                  item: {
-                    type: 'function_call_output',
-                    call_id: message.call_id,
-                    output: "I'm having trouble using my eyes right now, but I'm here to help!"
-                  }
-                }));
-              }
-            }
+                  // Send error response to OpenAI
+                  session.openaiWs.send(JSON.stringify({
+                    type: 'conversation.item.create',
+                    item: {
+                      type: 'function_call_output',
+                      call_id: message.call_id,
+                      output: "I'm having trouble using my eyes right now. Can you try again?"
+                    }
+                  }));
           }
         } catch (parseError) {
           realtimeLogger.error("Error parsing OpenAI tool call message:", { error: parseError.message });
@@ -1052,84 +1014,10 @@ async function handleIncomingMessage(
           );
         }
         break;
-      case "video_frame":
-        // Validate frame size before processing
-        const frameSize = message.frameData?.length || 0;
-        const frameSizeKB = Math.round(frameSize / 1024);
-        const messageSizeBytes = JSON.stringify(message).length;
-        const messageSizeKB = Math.round(messageSizeBytes / 1024);
-
-        realtimeLogger.info(
-          `📹 REALTIME: Received video frame - Frame: ${frameSizeKB}KB, Message: ${messageSizeKB}KB, Total bytes: ${messageSizeBytes}`,
-        );
-
-        // Check if frame is too large (over 1MB for base64 data)
-        if (frameSize > 1024 * 1024) {
-          realtimeLogger.warn(
-            `📹 REALTIME: Video frame too large: ${frameSizeKB}KB, skipping`,
-          );
-          session.ws.send(
-            JSON.stringify({
-              type: "error",
-              message: `Video frame too large (${frameSizeKB}KB). Please reduce video quality.`,
-            }),
-          );
+      // Video frames are now handled directly by client-side getEyesTool
+        case "video_frame":
+          realtimeLogger.debug("📹 REALTIME: Video frame received but handled client-side now");
           break;
-        }
-
-        // Check if total message is too large (over 2MB)
-        if (messageSizeBytes > 2 * 1024 * 1024) {
-          realtimeLogger.warn(
-            `📹 REALTIME: Message too large: ${messageSizeKB}KB, skipping`,
-          );
-          session.ws.send(
-            JSON.stringify({
-              type: "error",
-              message: `Message too large (${messageSizeKB}KB). Please reduce video quality.`,
-            }),
-          );
-          break;
-        }
-
-        // Store the actual video frame data in the session for getEyesTool access
-        if (session.conversationId && message.frameData && frameSize > 0) {
-          try {
-            // Store the latest video frame in a session store for getEyesTool to access
-            const frameStorage = global.videoFrameStorage || new Map();
-            global.videoFrameStorage = frameStorage;
-
-            // Store frame with session identifier
-            frameStorage.set(`session_${session.conversationId}`, {
-              frameData: message.frameData,
-              timestamp: new Date(),
-              sessionId: session.conversationId,
-            });
-
-            realtimeLogger.debug(
-              `📹 REALTIME: Video frame stored in memory for getEyesTool access - Session: ${session.conversationId}`,
-            );
-
-            // Also store availability in database for conversation context
-            await storage.createMessage({
-              conversationId: session.conversationId,
-              type: "video_frame_available",
-              content: `Video frame available for getEyesTool analysis (${message.frameData?.length || 0} bytes)`,
-              metadata: {
-                hasVideoFrame: true,
-                frameTimestamp: new Date().toISOString(),
-              },
-            });
-
-            realtimeLogger.info(
-              `📹 REALTIME: Video frame availability logged in database`,
-            );
-          } catch (error) {
-            realtimeLogger.error("Error storing video frame for getEyesTool:", {
-              error: error.message,
-            });
-          }
-        }
-        break;
       case "commit_audio":
         if (session.openaiWs && session.isConnected) {
           // Commit the audio buffer for transcription

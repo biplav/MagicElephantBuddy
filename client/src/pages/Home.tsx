@@ -45,7 +45,7 @@ export default function Home() {
 
     // Listen for storage changes
     window.addEventListener('storage', handleStorageChange);
-    
+
     // Check on component mount and periodically
     const interval = setInterval(handleStorageChange, 1000);
 
@@ -85,14 +85,26 @@ export default function Home() {
   };
 
   // Initialize realtime audio hook
-  const realtimeAudio = useRealtimeAudio({
+  const {
+    isConnected,
+    isRecording,
+    error: audioError,
+    connect,
+    disconnect,
+    startRecording,
+    stopRecording,
+    requestMicrophonePermission,
+    captureCurrentFrame,
+    videoEnabled,
+    hasVideoPermission
+  } = useRealtimeAudio({
     onTranscriptionReceived: (transcription) => {
       setTranscribedText(transcription);
     },
     onResponseReceived: (text) => {
       setElephantState("speaking");
       setSpeechText(text);
-      
+
       // Return to idle state after speaking
       setTimeout(() => {
         setElephantState("idle");
@@ -108,11 +120,11 @@ export default function Home() {
           const audioBlob = base64ToBlob(audioData, 'audio/pcm');
           const audioUrl = URL.createObjectURL(audioBlob);
           const audio = new Audio(audioUrl);
-          
+
           audio.onended = () => {
             URL.revokeObjectURL(audioUrl);
           };
-          
+
           audio.play();
           console.log("Playing realtime audio response");
         } catch (audioError) {
@@ -120,21 +132,17 @@ export default function Home() {
         }
       }
     },
-    enableVideo: enableVideo,
-    onVideoFrame: enableVideo ? (frameData) => {
-      console.log("Video frame captured:", frameData.slice(0, 50) + "...");
-      // Video frames are automatically sent to the AI - no additional handling needed
-    } : undefined,
     onError: (error) => {
       console.error("Realtime API error:", error);
       setElephantState("error");
       setSpeechText("Something went wrong with the connection. Let's try again.");
-      
+
       setTimeout(() => {
         setElephantState("idle");
         setSpeechText(undefined);
       }, 3000);
-    }
+    },
+    enableVideo: enableVideo
   });
 
   const traditionalRecorder = useAudioRecorder({
@@ -149,12 +157,12 @@ export default function Home() {
     onResponseReceived: (textOrData) => {
       let text: string;
       let errorType: string | undefined;
-      
+
       // Check if the response is an object with error information
       if (typeof textOrData === 'object' && textOrData !== null && 'text' in textOrData) {
         text = textOrData.text;
         errorType = textOrData.errorType;
-        
+
         // Set the proper elephant state based on error type
         if (errorType === 'rateLimit') {
           setElephantState('rateLimit');
@@ -172,14 +180,14 @@ export default function Home() {
         text = String(textOrData);
         setElephantState("speaking");
       }
-      
+
       // Set the speech text
       setSpeechText(text);
-      
+
       // Return to idle state after speaking
       setTimeout(() => {
         setElephantState("idle");
-        
+
         // Small delay to allow state to update and animations to complete
         setTimeout(() => {
           setSpeechText(undefined);
@@ -212,18 +220,18 @@ export default function Home() {
 
   const handleStopSession = async () => {
     console.log("Stopping session and returning to welcome screen");
-    
+
     // Stop any ongoing recording
     if (currentRecorder.isRecording) {
       currentRecorder.stopRecording();
     }
-    
+
     // Disconnect from realtime API if connected
     if (useRealtimeAPI && realtimeAudio.isConnected) {
       console.log("Disconnecting from realtime API");
       realtimeAudio.disconnect();
     }
-    
+
     // Close conversation in database
     try {
       console.log("Closing conversation in database");
@@ -233,7 +241,7 @@ export default function Home() {
           'Content-Type': 'application/json',
         },
       });
-      
+
       if (response.ok) {
         const result = await response.json();
         console.log("Conversation closed:", result);
@@ -243,10 +251,10 @@ export default function Home() {
     } catch (error) {
       console.error("Error closing conversation:", error);
     }
-    
+
     // Exit fullscreen mode
     await exitFullscreen();
-    
+
     // Reset all states
     setElephantState("idle");
     setSpeechText(undefined);
@@ -297,12 +305,12 @@ export default function Home() {
       setTimeout(() => {
         setElephantState("speaking");
         setSpeechText("Hi there! I'm Appu. What would you like to talk about?");
-        
+
         setTimeout(() => {
           setElephantState("idle");
           setTimeout(() => {
             setSpeechText(undefined);
-            
+
             // Auto-restart recording after initial greeting
             if (realtimeAudio.isConnected && appState === "interaction" && !currentRecorder.isRecording && !currentRecorder.isProcessing) {
               console.log("Auto-restarting recording after initial greeting");
@@ -329,7 +337,7 @@ export default function Home() {
         console.log("Microphone permission already granted");
         await enterFullscreen();
         setAppState("interaction");
-        
+
         if (useRealtimeAPI && !realtimeAudio.isConnected) {
           console.log("Connecting to realtime API");
           realtimeAudio.connect();
@@ -348,15 +356,15 @@ export default function Home() {
   const handleAllowPermission = async () => {
     setPermissionModalOpen(false);
     const granted = await currentRecorder.requestMicrophonePermission();
-    
+
     if (granted) {
       console.log("Microphone permission granted, starting interaction");
-      
+
       // Enter fullscreen mode
       await enterFullscreen();
-      
+
       setAppState("interaction");
-      
+
       // Connect to realtime API only after permission is granted
       if (useRealtimeAPI && !realtimeAudio.isConnected) {
         console.log("Connecting to realtime API after permission granted");
@@ -367,13 +375,13 @@ export default function Home() {
       // Show error state for microphone permission issues
       setElephantState("error");
       setSpeechText("I can't hear you! Please allow microphone access and try again.");
-      
+
       // Reset state after showing error
       setTimeout(() => {
         setElephantState("idle");
         setSpeechText(undefined);
       }, 4000);
-      
+
       // You might want to show another dialog or message here
       // explaining how to enable microphone permissions
     }
@@ -386,7 +394,7 @@ export default function Home() {
       currentRecorder.startRecording();
     }
   }, [useRealtimeAPI, realtimeAudio.isConnected, appState, currentRecorder.isRecording, currentRecorder.isProcessing, currentRecorder.startRecording]);
-  
+
   // Restart recording after processing is complete
   useEffect(() => {
     // Only trigger when processing changes from true to false
@@ -398,7 +406,7 @@ export default function Home() {
           currentRecorder.startRecording();
         }
       }, 1000);
-      
+
       return () => clearTimeout(timer);
     }
   }, [currentRecorder.isProcessing, currentRecorder.isReady, appState, elephantState, currentRecorder.isRecording, currentRecorder.startRecording]);
@@ -408,7 +416,7 @@ export default function Home() {
     if (currentRecorder.isRecording) {
       console.log("Stopping recording manually via microphone button");
       currentRecorder.stopRecording();
-      
+
       // Add a small delay before processing
       setTimeout(() => {
         // Log current state after stopping
@@ -420,16 +428,16 @@ export default function Home() {
       }, 100);
     } else {
       console.log("Starting recording manually via microphone button");
-      
+
       // Reset state if needed
       if (elephantState !== "idle" && elephantState !== "listening") {
         console.log("Resetting elephant state before starting recording");
         setElephantState("idle");
       }
-      
+
       // Start recording
       currentRecorder.startRecording();
-      
+
       // Log current state after starting
       setTimeout(() => {
         console.log("Current state after starting recording:", { 
@@ -440,7 +448,7 @@ export default function Home() {
       }, 100);
     }
   };
-  
+
   // Helper function to convert base64 to blob
   const base64ToBlob = (base64: string, contentType: string): Blob => {
     const byteCharacters = atob(base64);
@@ -455,15 +463,15 @@ export default function Home() {
   // Process direct text input (for debugging)
   const processDirectTextInput = async () => {
     if (!directTextInput.trim() || isProcessingText) return;
-    
+
     try {
       setIsProcessingText(true);
       setElephantState("thinking");
       setSpeechText(undefined);
-      
+
       // Set the transcribed text immediately since we're bypassing Whisper
       setTranscribedText(directTextInput);
-      
+
       // Send the text to the backend for processing using user's AI settings
       const response = await fetch('/api/process-with-config', {
         method: 'POST',
@@ -476,7 +484,7 @@ export default function Home() {
           useCreative: aiSettings.creativeMode
         }),
       });
-      
+
       if (!response.ok) {
         // Parse the error response
         const errorData = await response.json();
@@ -485,51 +493,51 @@ export default function Home() {
         error.response = { data: errorData };
         throw error;
       }
-      
+
       const responseData = await response.json();
-      
+
       // Process the response
       const responseText = responseData.text;
       const audioData = responseData.audioData;
 
       console.log(responseData);
-      
+
       // Play the audio if available
       setElephantState("speaking");
       setSpeechText(responseText);
 
       console.log("Setting it up!!!");
       console.log(audioData);
-      
+
       if (audioData && enableLocalPlayback) {
         try {
           // Convert base64 to blob and play
           const audioBlob = base64ToBlob(audioData, 'audio/wav');
           const audioUrl = URL.createObjectURL(audioBlob);
           const audio = new Audio(audioUrl);
-          
+
           audio.onended = () => {
             URL.revokeObjectURL(audioUrl);
           };
-          
+
           await audio.play();
           console.log("Playing generated audio from direct text input");
         } catch (audioError) {
           console.error("Error playing audio:", audioError);
         }
       }
-      
+
       // Clear the input
       setDirectTextInput("");
-      
+
       // Return to idle state after speaking and restart recording
       setTimeout(() => {
         setElephantState("idle");
-        
+
         // Small delay to allow state to update and animations to complete
         setTimeout(() => {
           setSpeechText(undefined);
-          
+
           // Auto-restart recording after Appu finishes speaking
           if (currentRecorder.isReady && appState === "interaction" && !currentRecorder.isRecording && !currentRecorder.isProcessing) {
             console.log("Auto-restarting recording after processing text input response");
@@ -537,10 +545,10 @@ export default function Home() {
           }
         }, 1000);
       }, 4000);
-      
+
     } catch (error: any) {
       console.error('Error processing text:', error);
-      
+
       // Check if it's an API error response with an error type
       if (error.response && error.response.data && error.response.data.errorType) {
         // Set the elephant state based on the error type
@@ -566,15 +574,15 @@ export default function Home() {
         setElephantState('error');
         setSpeechText("Oops! Something went wrong. Let's try again.");
       }
-      
+
       // Reset to idle state after showing the error message
       setTimeout(() => {
         setElephantState("idle");
-        
+
         // Small delay to allow state to update and animations to complete
         setTimeout(() => {
           setSpeechText(undefined);
-          
+
           // Auto-restart recording after error message
           if (currentRecorder.isReady && appState === "interaction" && !currentRecorder.isRecording && !currentRecorder.isProcessing) {
             console.log("Auto-restarting recording after error message");
@@ -675,7 +683,7 @@ export default function Home() {
             >
               <h2 className="font-bold text-xl sm:text-2xl text-primary">Meet Appu!</h2>
               <p className="text-neutral text-base sm:text-lg px-4">Your magical elephant friend who loves to talk and play with you!</p>
-              
+
               <motion.div 
                 className="w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 my-2 sm:my-4"
                 animate={{ y: [0, -10, 0] }}
@@ -694,7 +702,7 @@ export default function Home() {
                   <path d="M243 370H269" stroke="black" strokeWidth="4" strokeLinecap="round"/>
                 </svg>
               </motion.div>
-              
+
               {isParentLoggedIn ? (
                 <Button 
                   className="bg-secondary hover:bg-yellow-400 text-black font-bold py-3 px-6 sm:py-4 sm:px-8 rounded-full text-lg sm:text-xl shadow-lg transition transform hover:scale-105 active:scale-95 mt-2 sm:mt-4"
@@ -724,7 +732,7 @@ export default function Home() {
               <div className="flex-1 flex items-center justify-center w-full min-h-0">
                 <Elephant state={elephantState} speechText={speechText} />
               </div>
-              
+
               <div className="w-full px-3 py-2 sm:px-4 sm:py-3 bg-white bg-opacity-80 rounded-t-3xl shadow-lg flex-shrink-0 max-h-40">
                 <div className="flex flex-col items-center space-y-2 sm:space-y-3">
                   <p className="text-primary font-medium text-base sm:text-lg text-center px-2">
@@ -736,7 +744,7 @@ export default function Home() {
                           ? "Appu is listening..." 
                           : "Appu is getting ready to listen..."}
                   </p>
-                  
+
                   {isProcessing ? (
                     <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full shadow-lg bg-yellow-400 flex items-center justify-center animate-pulse">
                       <svg className="w-6 h-6 sm:w-8 sm:h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -752,7 +760,7 @@ export default function Home() {
                           <div className="absolute inset-0 w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-green-300 opacity-10 animate-ping"></div>
                         </>
                       )}
-                      
+
                       <Button 
                         className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full shadow-lg transition transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-pink-300 flex items-center justify-center relative z-10 ${
                           isRecording 
@@ -760,7 +768,8 @@ export default function Home() {
                             : "bg-accent hover:bg-pink-400"
                         }`}
                         onClick={handleMicrophoneButton}
-                        disabled={!isReady || isProcessing}
+                        disabled```python
+={!isReady || isProcessing}
                       >
                         {isRecording ? (
                           <div className="relative">
@@ -778,7 +787,7 @@ export default function Home() {
                       </Button>
                     </div>
                   )}
-                  
+
                   <p className="text-neutral text-xs sm:text-sm text-center px-2">
                     {isProcessing 
                       ? "Please wait while Appu thinks..." 
@@ -786,7 +795,7 @@ export default function Home() {
                         ? "Appu is listening to you now! Tap when you're done talking" 
                         : "Tap to start talking with Appu!"}
                   </p>
-                  
+
                   {/* Stop/Cancel Button */}
                   <Button 
                     className="mt-1 sm:mt-2 bg-red-500 hover:bg-red-600 text-white font-medium py-1.5 px-3 sm:py-2 sm:px-4 rounded-full text-xs sm:text-sm shadow-md transition transform hover:scale-105 active:scale-95"
@@ -807,7 +816,7 @@ export default function Home() {
         onClose={() => setPermissionModalOpen(false)} 
         onAllow={handleAllowPermission} 
       />
-      
+
       {/* Debug Panel - only visible when debug mode is enabled */}
       {showDebug && (
         <div className="fixed bottom-0 left-0 right-0 bg-gray-800 text-white p-4 z-50 max-h-80 overflow-auto">
@@ -817,7 +826,7 @@ export default function Home() {
               <p><span className="font-semibold">State:</span> {elephantState}</p>
               <p><span className="font-semibold">Recording:</span> {currentRecorder.isRecording ? 'Yes' : 'No'}</p>
               <p><span className="font-semibold">Processing:</span> {currentRecorder.isProcessing || isProcessingText ? 'Yes' : 'No'}</p>
-              
+
               <div className="mt-3">
                 <p><span className="font-semibold">Direct Text Input:</span></p>
                 <div className="flex items-center mt-1">
@@ -842,7 +851,7 @@ export default function Home() {
                     {isProcessingText ? 'Processing...' : 'Send'}
                   </Button>
                 </div>
-                
+
                 <div className="mt-3">
                   <p><span className="font-semibold">Recording Method:</span></p>
                   <div className="flex items-center mt-1 gap-3">
@@ -869,13 +878,13 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            
+
             <div>
               <p><span className="font-semibold">Transcribed:</span></p>
               <p className="bg-gray-700 p-2 rounded">{transcribedText || '(Nothing yet)'}</p>
               <p className="mt-2"><span className="font-semibold">Response:</span></p>
               <p className="bg-gray-700 p-2 rounded">{speechText || '(Nothing yet)'}</p>
-              
+
               <div className="mt-3">
                 <p><span className="font-semibold">Audio Debug:</span></p>
                 <div className="mt-1 flex flex-col gap-2">
@@ -889,7 +898,7 @@ export default function Home() {
                       {currentRecorder.isRecording ? 'Recording' : 'Not Recording'}
                     </div>
                   </div>
-                  
+
                   <div className="flex gap-2 items-center">
                     <span className="text-xs">Recorder:</span>
                     <div className={`px-2 py-0.5 rounded-full text-xs ${
@@ -904,7 +913,7 @@ export default function Home() {
                       {currentRecorder.recorderState}
                     </div>
                   </div>
-                  
+
                   <div className="flex gap-2 items-center">
                     <span className="text-xs">Processing:</span>
                     <div className={`px-2 py-0.5 rounded-full text-xs ${
@@ -913,7 +922,7 @@ export default function Home() {
                       {currentRecorder.isProcessing ? 'Processing' : 'Not Processing'}
                     </div>
                   </div>
-                  
+
                   <div className="flex gap-2 items-center">
                     <span className="text-xs">Elephant:</span>
                     <div className={`px-2 py-0.5 rounded-full text-xs ${
@@ -930,7 +939,7 @@ export default function Home() {
                       {elephantState}
                     </div>
                   </div>
-                  
+
                   <div className="flex gap-2 items-center">
                     <span className="text-xs">Local Playback:</span>
                     <div className={`px-2 py-0.5 rounded-full text-xs ${
@@ -939,7 +948,7 @@ export default function Home() {
                       {enableLocalPlayback ? 'Enabled' : 'Disabled'}
                     </div>
                   </div>
-                  
+
                   <div className="flex flex-row gap-2 mt-2">
                     <Button
                       onClick={() => currentRecorder.startRecording()}
@@ -948,7 +957,7 @@ export default function Home() {
                     >
                       Force Start Mic
                     </Button>
-                    
+
                     <Button
                       onClick={() => currentRecorder.stopRecording()}
                       disabled={!currentRecorder.isRecording || currentRecorder.isProcessing}
@@ -957,7 +966,7 @@ export default function Home() {
                       Force Stop Mic
                     </Button>
                   </div>
-                  
+
                   <div className="flex flex-row gap-2 mt-2">
                     <Button
                       onClick={() => {
@@ -968,7 +977,7 @@ export default function Home() {
                     >
                       Reset Elephant
                     </Button>
-                    
+
                     <Button
                       onClick={() => {
                         fetch('/api/process-text', {
@@ -991,7 +1000,7 @@ export default function Home() {
                       Test API
                     </Button>
                   </div>
-                  
+
                   <div className="flex flex-row gap-2 mt-4 items-center justify-between bg-gray-700 p-2 rounded">
                     <div className="flex items-center gap-2">
                       <div className={`w-3 h-3 rounded-full ${enableLocalPlayback ? 'bg-green-500' : 'bg-red-500'}`}></div>
@@ -1009,7 +1018,7 @@ export default function Home() {
                       </Button>
                     </div>
                   </div>
-                  
+
                   <div className="flex flex-row gap-2 mt-2 items-center justify-between bg-gray-700 p-2 rounded">
                     <div className="flex items-center gap-2">
                       <div className={`w-3 h-3 rounded-full ${enableVideo ? 'bg-blue-500' : 'bg-red-500'}`}></div>

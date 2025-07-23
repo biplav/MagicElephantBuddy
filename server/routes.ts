@@ -456,7 +456,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const parentId = req.params.parentId;
       console.log('Fetching dashboard data for parent ID:', parentId, 'Type:', typeof parentId);
-      
+
       // Handle both string and numeric parent IDs
       const dashboardData = await storage.getParentDashboardData(parentId);
       console.log('Dashboard data being returned:', JSON.stringify(dashboardData, null, 2));
@@ -636,47 +636,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: 'Failed to generate enhanced prompt', details: errorMessage });
       }
 
-      const response = await fetch('https://api.openai.com/v1/realtime/sessions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-realtime-preview-2024-12-17',
-          voice: 'alloy',
-          instructions: enhancedInstructions,
-          input_audio_format: 'pcm16',
-          output_audio_format: 'pcm16',
-          input_audio_transcription: {
-            model: 'whisper-1'
+    // Define the getEyesTool for OpenAI Realtime API
+    const tools = [
+      {
+        type: "function",
+        name: "getEyesTool",
+        description: "Use this tool when the child is showing, pointing to, or talking about something visual that you should look at. This tool analyzes what the child is showing through their camera.",
+        parameters: {
+          type: "object",
+          properties: {
+            reason: {
+              type: "string",
+              description: "Why you want to look at what the child is showing"
+            }
           },
+          required: ["reason"]
+        }
+      }
+    ];
+
+      const response = await fetch('https://api.openai.com/v1/realtime/sessions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-realtime-preview-2024-12-17',
+        voice: 'alloy',
+        instructions: enhancedInstructions,
+        tools,
+        input_audio_format: 'pcm16',
+        output_audio_format: 'pcm16',
+        input_audio_transcription: {
+          model: 'whisper-1'
+        },
           turn_detection: {
             type: 'server_vad',
             threshold: 0.5,
             prefix_padding_ms: 300,
             silence_duration_ms: 500
           },
-          modalities: ['text', 'audio'],
-          tools: [
-            {
-              type: 'function',
-              name: 'getEyesTool',
-              description: 'Use this tool when the child is showing, pointing to, or talking about something visual that you should look at. This tool analyzes what the child is showing through their camera.',
-              parameters: {
-                type: 'object',
-                properties: {
-                  reason: {
-                    type: 'string',
-                    description: 'Why you want to look at what the child is showing'
-                  }
-                },
-                required: ['reason']
-              }
-            }
-          ]
-        }),
-      });
+        modalities: ['text', 'audio'],
+      }),
+    });
 
       if (!response.ok) {
         const errorData = await response.text();
@@ -839,7 +842,7 @@ app.post('/api/analyze-frame', async (req, res) => {
           content: [
             {
               type: "text",
-              text: "A child is showing something to their AI companion Appu. Please describe what you see in this image in a child-friendly way. Focus on objects, toys, drawings, books, or anything the child might be proudly showing off. Be specific about colors, shapes, and details that would help Appu respond enthusiastically to what the child is showing."
+              text: "A child is showing something to their AI companion Appu. Please describe what you see in this image in a child-friendly way. Focus on objects, toys, drawings, books, or anything the child mightbe proudly showing off. Be specific about colors, shapes, and details that would help Appu respond enthusiastically to what the child is showing."
             },
             {
               type: "image_url",
@@ -855,9 +858,9 @@ app.post('/api/analyze-frame', async (req, res) => {
     });
 
     const analysis = response.choices[0]?.message?.content || "I can see something interesting!";
-    
+
     console.log('✅ Frame analysis completed:', analysis.slice(0, 100));
-    
+
     res.json({ 
       analysis,
       success: true 

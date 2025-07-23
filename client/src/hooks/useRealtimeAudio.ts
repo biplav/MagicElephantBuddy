@@ -35,35 +35,34 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const videoWsRef = useRef<WebSocket | null>(null);
-  const videoWsReadyRef = useRef<boolean>(false);
+  // Direct frame capture function for getEyesTool
+  const captureCurrentFrame = useCallback((): string | null => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
 
-  // Video frame capture function
-  const startVideoCapture = useCallback(() => {
-    if (!videoRef.current || !canvasRef.current || !options.onVideoFrame) return;
-
-    videoIntervalRef.current = setInterval(() => {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-
-      if (video && canvas && video.readyState >= 2) {
-        const context = canvas.getContext('2d');
-        if (context) {
-          context.drawImage(video, 0, 0, canvas.width, canvas.height);
-          const frameData = canvas.toDataURL('image/jpeg', 0.7);
-          const base64Data = frameData.split(',')[1];
-          options.onVideoFrame?.(base64Data);
-        }
+    if (video && canvas && video.readyState >= 2) {
+      const context = canvas.getContext('2d');
+      if (context) {
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const frameData = canvas.toDataURL('image/jpeg', 0.7);
+        return frameData.split(',')[1]; // Return base64 data without prefix
       }
-    }, 500); // 2 FPS
-  }, [options]);
-
-  const stopVideoCapture = useCallback(() => {
-    if (videoIntervalRef.current) {
-      clearInterval(videoIntervalRef.current);
-      videoIntervalRef.current = null;
     }
+    return null;
   }, []);
+
+  // Expose frame capture function globally for getEyesTool
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).captureCurrentFrame = captureCurrentFrame;
+    }
+    
+    return () => {
+      if (typeof window !== 'undefined') {
+        delete (window as any).captureCurrentFrame;
+      }
+    };
+  }, [captureCurrentFrame]);
 
   // Connect to OpenAI Realtime API using WebRTC
   const connect = useCallback(async () => {
@@ -147,170 +146,6 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
           canvasRef.current = canvas;
           document.body.appendChild(canvas);
         }
-
-        // Initialize video WebSocket connection
-        if (options.onVideoFrame) {
-          const videoWsUrl = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-          const wsUrl = `${videoWsUrl}//${window.location.host}/ws/realtime`;
-
-          try {
-            videoWsRef.current = new WebSocket(wsUrl);
-
-            videoWsRef.current.onopen = () => {
-              console.log('📹 CLIENT: Video WebSocket connected');
-              
-              // Add a small delay to ensure connection is fully established
-              setTimeout(() => {
-                if (videoWsRef.current && videoWsRef.current.readyState === WebSocket.OPEN) {
-                  console.log('📹 CLIENT: Sending start_session message');
-                  try {
-                    videoWsRef.current.send(JSON.stringify({
-                      type: 'start_session',
-                      childId: 1
-                    }));
-                  } catch (sendError) {
-                    console.error('📹 CLIENT: Error sending start_session:', sendError);
-                    videoWsReadyRef.current = false;
-                  }
-                }
-              }, 100);
-            };
-
-            videoWsRef.current.onmessage = (event) => {
-              try {
-                // Ensure we're dealing with text data
-                const data = typeof event.data === 'string' ? event.data : event.data.toString();
-                const message = JSON.parse(data);
-                console.log('📹 CLIENT: Received WebSocket message:', message.type);
-                
-                // Mark as ready only after session is started
-                if (message.type === 'session_started') {
-                  console.log('📹 CLIENT: Video session ready for frames');
-                  videoWsReadyRef.current = true;
-                }
-              } catch (error) {
-                console.error('📹 CLIENT: Error parsing WebSocket message:', error);
-                console.error('📹 CLIENT: Raw message data:', event.data);
-              }
-            };
-
-            videoWsRef.current.onerror = (error) => {
-              console.error('📹 CLIENT: Video WebSocket error:', error);
-              videoWsReadyRef.current = false;
-            };
-
-            videoWsRef.current.onclose = (event) => {
-              console.log('📹 CLIENT: Video WebSocket disconnected. Code:', event.code, 'Reason:', event.reason);
-              videoWsReadyRef.current = false;
-              
-              // Handle specific close codes
-              if (event.code === 1006) {
-                console.warn('📹 CLIENT: Abnormal closure detected - possible network or data issue');
-              } else if (event.code === 1009) {
-                console.warn('📹 CLIENT: Message too big - video frames may be too large');
-              }
-              
-              // Clean up the connection reference
-              if (videoWsRef.current) {
-                videoWsRef.current = null;
-              }
-            };
-
-            videoWsRef.current.onerror = (error) => {
-              console.error('📹 CLIENT: Video WebSocket error:', error);
-              videoWsReadyRef.current = false;
-              
-              // Clean up the connection reference on error
-              if (videoWsRef.current) {
-                videoWsRef.current = null;
-              }
-            };
-          } catch (error) {
-            console.error('📹 CLIENT: Failed to create video WebSocket:', error);
-            videoWsReadyRef.current = false;
-          }
-        }
-
-        // Start capturing video frames and send them to server
-        if (options.onVideoFrame) {
-          const onVideoFrameCallback = options.onVideoFrame;
-          videoIntervalRef.current = setInterval(() => {
-            const video = videoRef.current;
-            const canvas = canvasRef.current;
-
-            if (video && canvas && video.readyState >= 2) {
-              const context = canvas.getContext('2d');
-              if (context) {
-                context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                
-                // Start with higher compression and smaller size to prevent frame size issues
-                let frameData = canvas.toDataURL('image/jpeg', 0.5); // Reduced quality from 0.7 to 0.5
-                let base64Data = frameData.split(',')[1];
-                
-                // Log frame size details
-                const frameSizeKB = Math.round(base64Data.length / 1024);
-                const messageSizeKB = Math.round(JSON.stringify({
-                  type: 'video_frame',
-                  frameData: base64Data
-                }).length / 1024);
-                
-                console.log(`📹 CLIENT: Frame captured - Base64: ${frameSizeKB}KB, Message: ${messageSizeKB}KB`);
-                
-                // If frame is too large (over 500KB), reduce quality further
-                if (base64Data.length > 500 * 1024) {
-                  console.warn(`📹 CLIENT: Frame too large (${frameSizeKB}KB), reducing quality`);
-                  frameData = canvas.toDataURL('image/jpeg', 0.3);
-                  base64Data = frameData.split(',')[1];
-                  const newSizeKB = Math.round(base64Data.length / 1024);
-                  console.log(`📹 CLIENT: Frame compressed to ${newSizeKB}KB`);
-                }
-                
-                // If still too large, skip this frame
-                if (base64Data.length > 1024 * 1024) { // 1MB limit
-                  console.warn(`📹 CLIENT: Frame still too large (${Math.round(base64Data.length / 1024)}KB), skipping`);
-                  return;
-                }
-
-                // Send frame to server via separate WebSocket (not to WebRTC/OpenAI)
-                if (videoWsRef.current && videoWsReadyRef.current && videoWsRef.current.readyState === WebSocket.OPEN) {
-                  try {
-                    const message = JSON.stringify({
-                      type: 'video_frame',
-                      frameData: base64Data
-                    });
-                    console.log(`📹 CLIENT: Sending video frame to server - Message size: ${Math.round(message.length / 1024)}KB`);
-                    videoWsRef.current.send(message);
-                  } catch (error) {
-                    console.error('📹 CLIENT: Error sending video frame:', error);
-                    console.error('📹 CLIENT: Frame size was:', Math.round(base64Data.length / 1024), 'KB');
-                    
-                    // Check if it's a connection error
-                    if (error.message && error.message.includes('Invalid frame header')) {
-                      console.error('📹 CLIENT: Frame header error - resetting connection');
-                      videoWsReadyRef.current = false;
-                      // Try to reconnect after a short delay
-                      setTimeout(() => {
-                        if (videoWsRef.current && videoWsRef.current.readyState !== WebSocket.OPEN) {
-                          console.log('📹 CLIENT: Attempting to reconnect video WebSocket');
-                          videoWsRef.current = null;
-                          // Reconnection logic would go here if needed
-                        }
-                      }, 1000);
-                    } else if (error.message && (error.message.includes('too big') || error.message.includes('size'))) {
-                      console.error('📹 CLIENT: Message size error - frame was too large');
-                      videoWsReadyRef.current = false;
-                    } else {
-                      videoWsReadyRef.current = false;
-                    }
-                  }
-                } else {
-                  console.log('📹 CLIENT: WebSocket not ready for video frame. State:', 
-                    videoWsRef.current?.readyState, 'Ready:', videoWsReadyRef.current);
-                }
-              }
-            }
-          }, 500); // 2 FPS
-        }
       }
 
       // Handle incoming audio from OpenAI
@@ -377,6 +212,72 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
                 break;
               case 'response.text.delta':
                 options.onResponseReceived?.(message.delta);
+                break;
+              case 'response.function_call.delta':
+                // Handle function call (getEyesTool)
+                if (message.name === 'getEyesTool') {
+                  console.log('🔧 getEyesTool invoked:', message);
+                  
+                  // Capture current frame and send to analyze-frame endpoint
+                  const frameData = captureCurrentFrame();
+                  if (frameData) {
+                    try {
+                      const analysisResponse = await fetch('/api/analyze-frame', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                          frameData,
+                          reason: message.arguments?.reason || 'Child is showing something'
+                        })
+                      });
+
+                      if (analysisResponse.ok) {
+                        const result = await analysisResponse.json();
+                        console.log('🔧 Frame analysis result:', result.analysis);
+                        
+                        // Send the result back through data channel
+                        if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
+                          dataChannelRef.current.send(JSON.stringify({
+                            type: 'conversation.item.create',
+                            item: {
+                              type: 'function_call_output',
+                              call_id: message.call_id,
+                              output: `I can see: ${result.analysis}`
+                            }
+                          }));
+                        }
+                      } else {
+                        console.error('Frame analysis failed');
+                        if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
+                          dataChannelRef.current.send(JSON.stringify({
+                            type: 'conversation.item.create',
+                            item: {
+                              type: 'function_call_output',
+                              call_id: message.call_id,
+                              output: "I'm having trouble seeing what you're showing me right now. Can you try again?"
+                            }
+                          }));
+                        }
+                      }
+                    } catch (error) {
+                      console.error('Error in getEyesTool:', error);
+                    }
+                  } else {
+                    console.log('No frame available for analysis');
+                    if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
+                      dataChannelRef.current.send(JSON.stringify({
+                        type: 'conversation.item.create',
+                        item: {
+                          type: 'function_call_output',
+                          call_id: message.call_id,
+                          output: "I don't see anything right now. Make sure your camera is on and try showing me again!"
+                        }
+                      }));
+                    }
+                  }
+                }
                 break;
               case 'response.done':
                 // Store Appu's response message in database
@@ -484,9 +385,6 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
   const disconnect = useCallback(() => {
     isConnectingRef.current = false;
 
-    // Stop video capture
-    stopVideoCapture();
-
     if (pcRef.current) {
       pcRef.current.close();
       pcRef.current = null;
@@ -496,26 +394,6 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       dataChannelRef.current.close();
       dataChannelRef.current = null;
     }
-
-    if (videoWsRef.current) {
-      try {
-        // Close the WebSocket connection properly with a normal closure code
-        if (videoWsRef.current.readyState === WebSocket.OPEN) {
-          videoWsRef.current.close(1000, 'Normal closure');
-        } else if (videoWsRef.current.readyState === WebSocket.CONNECTING) {
-          // If still connecting, wait a moment then close
-          setTimeout(() => {
-            if (videoWsRef.current && videoWsRef.current.readyState === WebSocket.OPEN) {
-              videoWsRef.current.close(1000, 'Normal closure');
-            }
-          }, 100);
-        }
-      } catch (error) {
-        console.error('📹 CLIENT: Error closing video WebSocket:', error);
-      }
-      videoWsRef.current = null;
-    }
-    videoWsReadyRef.current = false;
 
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
@@ -588,8 +466,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     startRecording,
     stopRecording,
     requestMicrophonePermission,
-    startVideoCapture,
-    stopVideoCapture,
+    captureCurrentFrame,
     isReady: state.isConnected
   };
 }
