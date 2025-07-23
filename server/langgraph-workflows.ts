@@ -147,7 +147,7 @@ const createGetEyesTool = (state: ConversationStateType) => {
 };
 
 async function generateResponseWithTools(state: ConversationStateType): Promise<Partial<ConversationStateType>> {
-  console.log("🤖 Generating AI response with tools...");
+  console.log("🤖 Generating AI response with LangChain tools...");
   
   if (!state.transcription) {
     return {
@@ -157,110 +157,78 @@ async function generateResponseWithTools(state: ConversationStateType): Promise<
   }
 
   try {
-    const OpenAI = (await import('openai')).default;
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-    // Create enhanced prompt with visual context
-    let enhancedPrompt = state.enhancedPrompt;
-    if (state.videoFrame) {
-      enhancedPrompt += "\n\nNOTE: The child has their camera on and may be showing you something. If they mention showing, pointing to, or talking about something visual, use the getEyesTool to see what they're showing you.";
-    }
-
-    // Define available tools
-    const tools = [
-      {
-        type: "function",
-        function: {
-          name: "getEyesTool",
-          description: "Use this tool when the child is showing, pointing to, or talking about something visual that you should look at. This tool analyzes what the child is showing through their camera.",
-          parameters: {
-            type: "object",
-            properties: {
-              reason: {
-                type: "string",
-                description: "Why you want to look at what the child is showing"
-              }
-            },
-            required: ["reason"]
-          }
-        }
-      }
-    ];
-
-    // First, let the LLM decide if it needs tools
-    const initialResponse = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content: enhancedPrompt
-        },
-        {
-          role: "user",
-          content: state.transcription
-        }
-      ],
-      tools: state.videoFrame ? tools : undefined,
-      tool_choice: "auto",
-      max_tokens: 150,
+    // Create LangChain OpenAI model
+    const llm = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+      modelName: "gpt-4o",
+      maxTokens: 150,
       temperature: 0.7
     });
 
-    const message = initialResponse.choices[0]?.message;
-    let finalResponse = message?.content || "I'm here to help!";
+    // Create enhanced prompt with visual context
+    let enhancedPrompt = state.enhancedPrompt;
+    if (state.videoFrame || global.videoFrameStorage?.has(`session_${state.conversationId}`)) {
+      enhancedPrompt += "\n\nNOTE: The child has their camera on and may be showing you something. If they mention showing, pointing to, or talking about something visual, use the getEyesTool to see what they're showing you.";
+    }
+
+    // Create the getEyesTool for this state
+    const getEyesTool = createGetEyesTool(state);
+    
+    // Bind the tool to the model
+    const modelWithTools = llm.bind({
+      tools: [getEyesTool],
+    });
+
     let toolCalls: any[] = [];
     let visualAnalysis: string | null = null;
 
-    // Handle tool calls if any
-    if (message?.tool_calls && message.tool_calls.length > 0) {
-      console.log("🔧 LLM requested tool calls:", message.tool_calls.length);
-      
-      for (const toolCall of message.tool_calls) {
-        if (toolCall.function.name === "getEyesTool") {
-          const args = JSON.parse(toolCall.function.arguments);
-          console.log("👁️ LLM wants to see:", args.reason);
-          
-          if (state.videoFrame) {
-            try {
-              visualAnalysis = await analyzeVideoFrame(state.videoFrame);
-              
-              // Store as vision memory
-              await memoryService.createMemory(
-                state.childId,
-                `Child showed something: ${visualAnalysis}`,
-                'visual',
-                { conversationId: state.conversationId, importance_score: 0.8 }
-              );
+    // First, let the LLM decide if it needs tools
+    const response = await modelWithTools.invoke([
+      {
+        role: "system",
+        content: enhancedPrompt
+      },
+      {
+        role: "user", 
+        content: state.transcription
+      }
+    ]);
 
-              toolCalls.push({
-                tool: "getEyesTool",
-                reason: args.reason,
-                result: visualAnalysis
-              });
-            } catch (error) {
-              console.error("Vision analysis failed:", error);
-              toolCalls.push({
-                tool: "getEyesTool",
-                reason: args.reason,
-                result: "I'm having trouble seeing what you're showing me."
-              });
-            }
-          } else {
+    let finalResponse = response.content as string || "I'm here to help!";
+
+    // Check if the model wants to use tools
+    if (response.tool_calls && response.tool_calls.length > 0) {
+      console.log("🔧 LLM requested LangChain tool calls:", response.tool_calls.length);
+      
+      for (const toolCall of response.tool_calls) {
+        if (toolCall.name === "getEyesTool") {
+          console.log("👁️ LLM wants to see:", toolCall.args.reason);
+          
+          try {
+            const toolResult = await getEyesTool.invoke(toolCall.args);
+            visualAnalysis = toolResult;
+            
             toolCalls.push({
               tool: "getEyesTool",
-              reason: args.reason,
-              result: "No video available to see what you're showing."
+              reason: toolCall.args.reason,
+              result: toolResult
+            });
+          } catch (error) {
+            console.error("LangChain tool execution failed:", error);
+            toolCalls.push({
+              tool: "getEyesToool",
+              reason: toolCall.args.reason,
+              result: "I'm having trouble seeing what you're showing me."
             });
           }
         }
       }
 
-      // Generate final response with tool results
-      const toolResults = toolCalls.map(tc => `Tool: ${tc.tool}, Result: ${tc.result}`).join('\n');
-      
-      const finalResponseCall = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
+      // Generate final response with tool results if tools were used
+      if (toolCalls.length > 0) {
+        const toolResults = toolCalls.map(tc => `${tc.tool}: ${tc.result}`).join('\n\n');
+        
+        const finalResponseCall = await llm.invoke([
           {
             role: "system",
             content: enhancedPrompt
@@ -271,20 +239,16 @@ async function generateResponseWithTools(state: ConversationStateType): Promise<
           },
           {
             role: "assistant",
-            content: message.content,
-            tool_calls: message.tool_calls
+            content: `I used these tools: ${toolResults}`
           },
-          ...message.tool_calls.map((tc, i) => ({
-            role: "tool" as const,
-            tool_call_id: tc.id,
-            content: toolCalls[i]?.result || "Tool execution failed"
-          }))
-        ],
-        max_tokens: 150,
-        temperature: 0.7
-      });
+          {
+            role: "user",
+            content: "Based on what you observed, please respond to the child in a natural, encouraging way."
+          }
+        ]);
 
-      finalResponse = finalResponseCall.choices[0]?.message?.content || finalResponse;
+        finalResponse = finalResponseCall.content as string || finalResponse;
+      }
     }
 
     return {
@@ -292,15 +256,16 @@ async function generateResponseWithTools(state: ConversationStateType): Promise<
       toolCalls,
       visualAnalysis,
       processingSteps: [...state.processingSteps, 
-        `AI response generated: "${finalResponse.slice(0, 50)}..."`,
-        ...(toolCalls.length > 0 ? [`Used tools: ${toolCalls.map(tc => tc.tool).join(', ')}`] : [])
+        `AI response generated with LangChain: "${finalResponse.slice(0, 50)}..."`,
+        ...(toolCalls.length > 0 ? [`Used LangChain tools: ${toolCalls.map(tc => tc.tool).join(', ')}`] : [])
       ]
     };
   } catch (error) {
+    console.error("LangChain tool workflow error:", error);
     return {
       aiResponse: "Sorry, I'm having trouble right now. Let's try again!",
-      errors: [...state.errors, `Response generation failed: ${error}`],
-      processingSteps: [...state.processingSteps, "Using fallback response due to AI error"]
+      errors: [...state.errors, `LangChain tool workflow failed: ${error}`],
+      processingSteps: [...state.processingSteps, "Using fallback response due to LangChain error"]
     };
   }
 }
