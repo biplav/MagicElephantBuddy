@@ -242,8 +242,34 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
               const context = canvas.getContext('2d');
               if (context) {
                 context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const frameData = canvas.toDataURL('image/jpeg', 0.7);
-                const base64Data = frameData.split(',')[1];
+                
+                // Start with higher compression and smaller size to prevent frame size issues
+                let frameData = canvas.toDataURL('image/jpeg', 0.5); // Reduced quality from 0.7 to 0.5
+                let base64Data = frameData.split(',')[1];
+                
+                // Log frame size details
+                const frameSizeKB = Math.round(base64Data.length / 1024);
+                const messageSizeKB = Math.round(JSON.stringify({
+                  type: 'video_frame',
+                  frameData: base64Data
+                }).length / 1024);
+                
+                console.log(`📹 CLIENT: Frame captured - Base64: ${frameSizeKB}KB, Message: ${messageSizeKB}KB`);
+                
+                // If frame is too large (over 500KB), reduce quality further
+                if (base64Data.length > 500 * 1024) {
+                  console.warn(`📹 CLIENT: Frame too large (${frameSizeKB}KB), reducing quality`);
+                  frameData = canvas.toDataURL('image/jpeg', 0.3);
+                  base64Data = frameData.split(',')[1];
+                  const newSizeKB = Math.round(base64Data.length / 1024);
+                  console.log(`📹 CLIENT: Frame compressed to ${newSizeKB}KB`);
+                }
+                
+                // If still too large, skip this frame
+                if (base64Data.length > 1024 * 1024) { // 1MB limit
+                  console.warn(`📹 CLIENT: Frame still too large (${Math.round(base64Data.length / 1024)}KB), skipping`);
+                  return;
+                }
 
                 // Send frame to server via separate WebSocket (not to WebRTC/OpenAI)
                 if (videoWsRef.current && videoWsReadyRef.current && videoWsRef.current.readyState === WebSocket.OPEN) {
@@ -252,10 +278,12 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
                       type: 'video_frame',
                       frameData: base64Data
                     });
-                    console.log('📹 CLIENT: Sending video frame to server via WebSocket, size:', message.length);
+                    console.log(`📹 CLIENT: Sending video frame to server - Message size: ${Math.round(message.length / 1024)}KB`);
                     videoWsRef.current.send(message);
                   } catch (error) {
                     console.error('📹 CLIENT: Error sending video frame:', error);
+                    console.error('📹 CLIENT: Frame size was:', Math.round(base64Data.length / 1024), 'KB');
+                    
                     // Check if it's a connection error
                     if (error.message && error.message.includes('Invalid frame header')) {
                       console.error('📹 CLIENT: Frame header error - resetting connection');
@@ -268,6 +296,9 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
                           // Reconnection logic would go here if needed
                         }
                       }, 1000);
+                    } else if (error.message && (error.message.includes('too big') || error.message.includes('size'))) {
+                      console.error('📹 CLIENT: Message size error - frame was too large');
+                      videoWsReadyRef.current = false;
                     } else {
                       videoWsReadyRef.current = false;
                     }

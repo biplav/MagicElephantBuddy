@@ -447,12 +447,13 @@ export function setupRealtimeWebSocket(server: any) {
     path: "/ws/realtime",
     // Add WebSocket server configuration to prevent frame header issues
     perMessageDeflate: false,
-    maxPayload: 1024 * 1024 * 5, // Reduce to 5MB limit for video frames
+    maxPayload: 1024 * 1024 * 3, // Reduce to 3MB limit for video frames
     // Increase timeout settings
     handshakeTimeout: 30000, // 30 seconds for handshake
     clientTracking: true,
     verifyClient: (info) => {
       // Basic verification - in production, add proper authentication
+      realtimeLogger.info("📹 SERVER: WebSocket connection request verified");
       return true;
     },
   });
@@ -568,13 +569,31 @@ export function setupRealtimeWebSocket(server: any) {
           case "video_frame":
             // Validate frame size before processing
             const frameSize = message.frameData?.length || 0;
+            const frameSizeKB = Math.round(frameSize / 1024);
+            const messageSizeBytes = JSON.stringify(message).length;
+            const messageSizeKB = Math.round(messageSizeBytes / 1024);
+            
             realtimeLogger.info(
-              `📹 REALTIME: Received video frame from client - Size: ${frameSize} bytes`,
+              `📹 REALTIME: Received video frame - Frame: ${frameSizeKB}KB, Message: ${messageSizeKB}KB, Total bytes: ${messageSizeBytes}`,
             );
 
-            // Check if frame is too large (over 4MB)
-            if (frameSize > 4 * 1024 * 1024) {
-              realtimeLogger.warn(`📹 REALTIME: Video frame too large: ${frameSize} bytes, skipping`);
+            // Check if frame is too large (over 1MB for base64 data)
+            if (frameSize > 1024 * 1024) {
+              realtimeLogger.warn(`📹 REALTIME: Video frame too large: ${frameSizeKB}KB, skipping`);
+              session.ws.send(JSON.stringify({
+                type: "error",
+                message: `Video frame too large (${frameSizeKB}KB). Please reduce video quality.`
+              }));
+              break;
+            }
+            
+            // Check if total message is too large (over 2MB)
+            if (messageSizeBytes > 2 * 1024 * 1024) {
+              realtimeLogger.warn(`📹 REALTIME: Message too large: ${messageSizeKB}KB, skipping`);
+              session.ws.send(JSON.stringify({
+                type: "error", 
+                message: `Message too large (${messageSizeKB}KB). Please reduce video quality.`
+              }));
               break;
             }
 
@@ -656,31 +675,57 @@ export function setupRealtimeWebSocket(server: any) {
     });
 
     ws.on("error", (error) => {
-      realtimeLogger.error(`Realtime Video session error: ${sessionId}`, {
+      realtimeLogger.error(`📹 SERVER: Realtime Video session error: ${sessionId}`, {
         error: error.message,
+        errorCode: error.code || 'unknown',
+        errorType: error.constructor.name
       });
       
       // Handle different types of WebSocket errors
       if (error.message && error.message.includes("Invalid frame header")) {
-        realtimeLogger.warn("Frame header error detected - closing connection gracefully");
+        realtimeLogger.warn("📹 SERVER: Frame header error detected - closing connection gracefully");
         try {
+          ws.send(JSON.stringify({
+            type: "error",
+            message: "Invalid frame header - please refresh and try again"
+          }));
           ws.close(1000, "Frame header error");
         } catch (closeError) {
-          realtimeLogger.error("Error closing WebSocket after frame header error:", { error: closeError.message });
+          realtimeLogger.error("📹 SERVER: Error closing WebSocket after frame header error:", { error: closeError.message });
         }
-      } else if (error.message && error.message.includes("too big")) {
-        realtimeLogger.warn("Message too large error - closing connection");
+      } else if (error.message && (error.message.includes("too big") || error.message.includes("size"))) {
+        realtimeLogger.warn("📹 SERVER: Message too large error - closing connection");
         try {
+          ws.send(JSON.stringify({
+            type: "error", 
+            message: "Video frames too large - please reduce video quality"
+          }));
           ws.close(1009, "Message too big");
         } catch (closeError) {
-          realtimeLogger.error("Error closing WebSocket after message size error:", { error: closeError.message });
+          realtimeLogger.error("📹 SERVER: Error closing WebSocket after message size error:", { error: closeError.message });
+        }
+      } else if (error.message && error.message.includes("payload")) {
+        realtimeLogger.warn("📹 SERVER: Payload size error - closing connection");
+        try {
+          ws.send(JSON.stringify({
+            type: "error",
+            message: "Payload too large - please reduce video frame size"
+          }));
+          ws.close(1009, "Payload too large");
+        } catch (closeError) {
+          realtimeLogger.error("📹 SERVER: Error closing WebSocket after payload error:", { error: closeError.message });
         }
       } else {
         // For other errors, try graceful close
+        realtimeLogger.warn(`📹 SERVER: Unhandled error type: ${error.message}`);
         try {
+          ws.send(JSON.stringify({
+            type: "error",
+            message: "Connection error - please refresh and try again"
+          }));
           ws.close(1011, "Server error");
         } catch (closeError) {
-          realtimeLogger.error("Error closing WebSocket:", { error: closeError.message });
+          realtimeLogger.error("📹 SERVER: Error closing WebSocket:", { error: closeError.message });
         }
       }
       
