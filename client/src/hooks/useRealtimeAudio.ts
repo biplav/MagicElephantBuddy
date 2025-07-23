@@ -79,12 +79,18 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       isConnectingRef.current = true;
       setState(prev => ({ ...prev, error: null }));
 
-      // Get ephemeral token from server
+      // Get ephemeral token from server with selected child ID
+      const selectedChildId = localStorage.getItem("selectedChildId");
+      const childId = selectedChildId ? parseInt(selectedChildId) : 1;
+      
       const response = await fetch('/api/session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          childId: childId
+        })
       });
 
       if (!response.ok) {

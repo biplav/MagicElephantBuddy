@@ -760,12 +760,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: "OpenAI API key not configured" });
       }
 
+      // Get childId from request body or use selected child from localStorage
+      const { childId } = req.body;
+      const selectedChildId = childId || 1; // Default to 1 if not provided
+
       // Generate enhanced prompt and ensure it's a string
-      console.log("Starting enhanced prompt generation...");
+      console.log(`Starting enhanced prompt generation for child ${selectedChildId}...`);
       let enhancedInstructions;
 
       try {
-        enhancedInstructions = await createEnhancedSystemPrompt(1);
+        enhancedInstructions = await createEnhancedSystemPrompt(selectedChildId);
         console.log("Enhanced instructions generated successfully");
         console.log("Type:", typeof enhancedInstructions);
         console.log("Length:", enhancedInstructions?.length || 0);
@@ -838,6 +842,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             input_audio_transcription: {
               model: "whisper-1",
             },
+            input_audio_noise_reduction: "far_field",
             turn_detection: {
               type: "server_vad",
               threshold: 0.5,
