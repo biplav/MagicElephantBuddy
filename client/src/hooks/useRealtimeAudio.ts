@@ -404,14 +404,25 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     }
 
     // Clean up video elements
-    if (videoRef.current) {
+    if (videoRef.current && document.body.contains(videoRef.current)) {
       document.body.removeChild(videoRef.current);
       videoRef.current = null;
     }
 
-    if (canvasRef.current) {
+    if (canvasRef.current && document.body.contains(canvasRef.current)) {
       document.body.removeChild(canvasRef.current);
       canvasRef.current = null;
+    }
+
+    // Clean up video stream
+    if (videoStreamRef.current) {
+      videoStreamRef.current.getTracks().forEach(track => track.stop());
+      videoStreamRef.current = null;
+    }
+
+    if (frameIntervalRef.current) {
+      clearInterval(frameIntervalRef.current);
+      frameIntervalRef.current = null;
     }
 
     setState(prev => ({ 
@@ -424,7 +435,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     }));
 
     console.log('Disconnected from realtime API');
-  }, [stopVideoCapture]);
+  }, []);
 
   // Start recording (WebRTC handles this automatically when connected)
   const startRecording = useCallback(async () => {

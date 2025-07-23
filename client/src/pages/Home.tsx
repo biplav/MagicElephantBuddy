@@ -85,19 +85,7 @@ export default function Home() {
   };
 
   // Initialize realtime audio hook
-  const {
-    isConnected,
-    isRecording,
-    error: audioError,
-    connect,
-    disconnect,
-    startRecording,
-    stopRecording,
-    requestMicrophonePermission,
-    captureCurrentFrame,
-    videoEnabled,
-    hasVideoPermission
-  } = useRealtimeAudio({
+  const realtimeAudio = useRealtimeAudio({
     onTranscriptionReceived: (transcription) => {
       setTranscribedText(transcription);
     },
@@ -144,6 +132,21 @@ export default function Home() {
     },
     enableVideo: enableVideo
   });
+
+  // Destructure realtime audio properties
+  const {
+    isConnected,
+    isRecording: realtimeIsRecording,
+    error: audioError,
+    connect,
+    disconnect,
+    startRecording: realtimeStartRecording,
+    stopRecording: realtimeStopRecording,
+    requestMicrophonePermission: realtimeRequestPermission,
+    captureCurrentFrame,
+    videoEnabled,
+    hasVideoPermission
+  } = realtimeAudio;
 
   const traditionalRecorder = useAudioRecorder({
     enableLocalPlayback,
@@ -198,13 +201,13 @@ export default function Home() {
 
   // Create unified recorder interface
   const currentRecorder = useRealtimeAPI ? {
-    isReady: realtimeAudio.isConnected,
-    isRecording: realtimeAudio.isRecording,
-    isProcessing: realtimeAudio.isProcessing,
-    startRecording: realtimeAudio.startRecording,
-    stopRecording: realtimeAudio.stopRecording,
-    requestMicrophonePermission: realtimeAudio.requestMicrophonePermission,
-    recorderState: realtimeAudio.isRecording ? 'recording' : 'inactive'
+    isReady: isConnected,
+    isRecording: realtimeIsRecording,
+    isProcessing: false, // Realtime API doesn't have isProcessing state
+    startRecording: realtimeStartRecording,
+    stopRecording: realtimeStopRecording,
+    requestMicrophonePermission: realtimeRequestPermission,
+    recorderState: realtimeIsRecording ? 'recording' : 'inactive'
   } : {
     isReady: traditionalRecorder.isReady,
     isRecording: traditionalRecorder.isRecording,
@@ -215,9 +218,6 @@ export default function Home() {
     recorderState: traditionalRecorder.recorderState
   };
 
-  // Destructure for backward compatibility
-  const { isReady, startRecording, stopRecording, requestMicrophonePermission, isProcessing, recorderState } = currentRecorder;
-
   const handleStopSession = async () => {
     console.log("Stopping session and returning to welcome screen");
 
@@ -227,9 +227,9 @@ export default function Home() {
     }
 
     // Disconnect from realtime API if connected
-    if (useRealtimeAPI && realtimeAudio.isConnected) {
+    if (useRealtimeAPI && isConnected) {
       console.log("Disconnecting from realtime API");
-      realtimeAudio.disconnect();
+      disconnect();
     }
 
     // Close conversation in database
@@ -301,7 +301,7 @@ export default function Home() {
   // Removed automatic connection on toggle
 
   useEffect(() => {
-    if (useRealtimeAPI && realtimeAudio.isConnected && appState === "interaction") {
+    if (useRealtimeAPI && isConnected && appState === "interaction") {
       setTimeout(() => {
         setElephantState("speaking");
         setSpeechText("Hi there! I'm Appu. What would you like to talk about?");
@@ -320,7 +320,7 @@ export default function Home() {
         }, 3000);
       }, 1000);
     }
-  }, [useRealtimeAPI, realtimeAudio.isConnected, appState, currentRecorder]);
+  }, [useRealtimeAPI, isConnected, appState]);
 
   useEffect(() => {
     if (currentRecorder.isRecording) {
@@ -338,9 +338,9 @@ export default function Home() {
         await enterFullscreen();
         setAppState("interaction");
 
-        if (useRealtimeAPI && !realtimeAudio.isConnected) {
+        if (useRealtimeAPI && !isConnected) {
           console.log("Connecting to realtime API");
-          realtimeAudio.connect();
+          connect();
         }
       } else {
         // Need to request permission
@@ -366,9 +366,9 @@ export default function Home() {
       setAppState("interaction");
 
       // Connect to realtime API only after permission is granted
-      if (useRealtimeAPI && !realtimeAudio.isConnected) {
+      if (useRealtimeAPI && !isConnected) {
         console.log("Connecting to realtime API after permission granted");
-        realtimeAudio.connect();
+        connect();
       }
     } else {
       console.error("Failed to get microphone permission");
@@ -389,11 +389,11 @@ export default function Home() {
 
   // Start recording automatically when ready (only for realtime API after connection is established)
   useEffect(() => {
-    if (useRealtimeAPI && realtimeAudio.isConnected && appState === "interaction" && !currentRecorder.isRecording && !currentRecorder.isProcessing) {
+    if (useRealtimeAPI && isConnected && appState === "interaction" && !currentRecorder.isRecording && !currentRecorder.isProcessing) {
       console.log("Auto-starting realtime recording because connection is established");
       currentRecorder.startRecording();
     }
-  }, [useRealtimeAPI, realtimeAudio.isConnected, appState, currentRecorder.isRecording, currentRecorder.isProcessing, currentRecorder.startRecording]);
+  }, [useRealtimeAPI, isConnected, appState, currentRecorder.isRecording, currentRecorder.isProcessing, currentRecorder.startRecording]);
 
   // Restart recording after processing is complete
   useEffect(() => {
