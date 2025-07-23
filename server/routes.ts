@@ -719,24 +719,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/store-realtime-message",
     async (req: Request, res: Response) => {
       try {
-        const { type, content, transcription } = req.body;
+        const { type, content, transcription, childId: requestChildId } = req.body;
+        
+        console.log('🎤 SERVER: Storing realtime message:', {
+          type,
+          contentLength: content?.length || 0,
+          hasTranscription: !!transcription,
+          childId: requestChildId
+        });
 
-        // Get the current active conversation for child ID 1 (default child)
-        const childId = 1;
+        // Use provided childId or default to 1
+        const childId = requestChildId || 1;
         let conversation = await storage.getCurrentConversation(childId);
 
         // If no active conversation, create one
         if (!conversation) {
+          console.log(`🎤 SERVER: Creating new conversation for child ${childId}`);
           conversation = await storage.createConversation({ childId });
         }
 
+        console.log(`🎤 SERVER: Using conversation ${conversation.id} for child ${childId}`);
+
         // Store the message
-        await storage.createMessage({
+        const message = await storage.createMessage({
           conversationId: conversation.id,
           type,
           content,
           transcription,
         });
+
+        console.log(`🎤 SERVER: Stored message ${message.id} in conversation ${conversation.id}`);
 
         // Update conversation message count
         const currentMessages = await storage.getMessagesByConversation(
@@ -746,10 +758,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalMessages: currentMessages.length,
         });
 
-        res.json({ success: true, conversationId: conversation.id });
+        console.log(`🎤 SERVER: Updated conversation ${conversation.id} message count to ${currentMessages.length}`);
+
+        res.json({ 
+          success: true, 
+          conversationId: conversation.id,
+          messageId: message.id,
+          totalMessages: currentMessages.length
+        });
       } catch (error) {
-        console.error("Error storing realtime message:", error);
-        res.status(500).json({ error: "Failed to store message" });
+        console.error("🎤 SERVER: Error storing realtime message:", error);
+        res.status(500).json({ 
+          error: "Failed to store message",
+          details: error.message 
+        });
       }
     },
   );

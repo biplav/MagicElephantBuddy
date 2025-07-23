@@ -221,16 +221,27 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       console.log('🎤 TRANSCRIPTION: Processing transcript:', message.transcript);
 
       try {
-        await fetch('/api/store-realtime-message', {
+        const childId = getSelectedChildId();
+        console.log('🎤 TRANSCRIPTION: Storing for child ID:', childId);
+        
+        const response = await fetch('/api/store-realtime-message', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             type: 'child_input',
             content: message.transcript,
-            transcription: message.transcript
+            transcription: message.transcript,
+            childId: childId
           })
         });
-        console.log('🎤 TRANSCRIPTION: Stored message in database');
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Storage failed: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+        console.log('🎤 TRANSCRIPTION: Stored message in database:', result);
       } catch (error) {
         console.error('🎤 TRANSCRIPTION: Error storing child input message:', error);
       }
@@ -239,7 +250,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     } else {
       console.warn('🎤 TRANSCRIPTION: No transcript in message');
     }
-  }, [options]);
+  }, [options, getSelectedChildId]);
 
   const handleGetEyesTool = useCallback(async (message: any) => {
     console.log('🔧 getEyesTool invoked:', {
@@ -305,38 +316,66 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
   }, [captureCurrentFrame]);
 
   const handleResponseDone = useCallback(async (message: any) => {
-    if (message.response && message.response.output) {
-      try {
-        const responseText = message.response.output.map((item: any) => 
-          item.type === 'message' ? item.message.content.map((content: any) => 
-            content.type === 'text' ? content.text : ''
-          ).join('') : ''
-        ).join('');
-
-        if (responseText) {
-          await fetch('/api/store-realtime-message', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              type: 'appu_response',
-              content: responseText
-            })
-          });
-        }
-      } catch (error) {
-        console.error('Error storing Appu response message:', error);
+    console.log('🎤 RESPONSE: Response done event received:', message);
+    
+    try {
+      let responseText = '';
+      
+      // Handle different response formats from OpenAI Realtime API
+      if (message.response && message.response.output) {
+        responseText = message.response.output.map((item: any) => {
+          if (item.type === 'message' && item.message && item.message.content) {
+            return item.message.content.map((content: any) => 
+              content.type === 'text' ? content.text : ''
+            ).join('');
+          }
+          return '';
+        }).join('');
+      } else if (message.text) {
+        responseText = message.text;
+      } else if (message.content) {
+        responseText = message.content;
       }
+
+      if (responseText && responseText.trim()) {
+        console.log('🎤 RESPONSE: Storing response text:', responseText.slice(0, 100) + '...');
+        const childId = getSelectedChildId();
+        
+        const response = await fetch('/api/store-realtime-message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'appu_response',
+            content: responseText,
+            childId: childId
+          })
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Storage failed: ${response.status} - ${errorText}`);
+        }
+
+        const result = await response.json();
+        console.log('🎤 RESPONSE: Stored response in database:', result);
+      } else {
+        console.warn('🎤 RESPONSE: No valid response text found to store');
+      }
+    } catch (error) {
+      console.error('🎤 RESPONSE: Error storing Appu response message:', error);
     }
+    
     setState(prev => ({ ...prev, isProcessing: false }));
-  }, []);
+  }, [getSelectedChildId]);
 
   const handleDataChannelMessage = useCallback(async (messageEvent: MessageEvent) => {
     try {
       const message = JSON.parse(messageEvent.data);
-      console.log('🎤 REALTIME: Received message type:', message.type);
+      console.log('🎤 REALTIME: Received message type:', message.type, 'at', new Date().toISOString());
 
       switch (message.type) {
         case 'conversation.item.input_audio_transcription.completed':
+          console.log('🎤 REALTIME: Processing transcription completion');
           await handleTranscriptionMessage(message);
           break;
         case 'conversation.item.input_audio_transcription.delta':
@@ -358,28 +397,43 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
           console.log('🎤 RESPONSE: Text delta received:', message.delta);
           options.onResponseReceived?.(message.delta);
           break;
+        case 'response.audio.delta':
+          console.log('🎤 RESPONSE: Audio delta received');
+          options.onAudioResponseReceived?.(message.delta);
+          break;
+        case 'response.audio_transcript.delta':
+          console.log('🎤 RESPONSE: Audio transcript delta:', message.delta);
+          break;
+        case 'response.audio_transcript.done':
+          console.log('🎤 RESPONSE: Audio transcript done:', message.transcript);
+          if (message.transcript) {
+            await handleResponseDone({ text: message.transcript });
+          }
+          break;
         case 'response.function_call_arguments.done':
           if (message.name === 'getEyesTool') {
+            console.log('🎤 TOOL: getEyesTool invoked');
             await handleGetEyesTool(message);
           }
           break;
         case 'response.done':
+          console.log('🎤 REALTIME: Processing response completion');
           await handleResponseDone(message);
           break;
         case 'error':
-          console.error('Realtime API error:', message);
+          console.error('🎤 REALTIME: API error:', message);
           setState(prev => ({ ...prev, error: message.error?.message || 'Unknown error' }));
           options.onError?.(message.error?.message || 'Unknown error');
           break;
         default:
-          console.log('🎤 REALTIME: Unhandled message type:', message.type);
+          console.log('🎤 REALTIME: Unhandled message type:', message.type, 'Full message:', message);
           if (message.type && message.type.includes('transcription')) {
             console.log('🎤 TRANSCRIPTION: Possible transcription message with unknown type');
           }
           break;
       }
     } catch (error) {
-      console.error('Error parsing data channel message:', error);
+      console.error('🎤 REALTIME: Error parsing data channel message:', error);
     }
   }, [options, handleTranscriptionMessage, handleGetEyesTool, handleResponseDone]);
 
