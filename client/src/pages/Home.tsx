@@ -91,6 +91,12 @@ export default function Home() {
             return;
           }
           
+          if (!parent.id) {
+            console.error("Parent ID is missing:", parent);
+            setAvailableChildren([]);
+            return;
+          }
+          
           const response = await fetch(`/api/parents/${parent.id}/children`);
           console.log("Children API response status:", response.status);
           
