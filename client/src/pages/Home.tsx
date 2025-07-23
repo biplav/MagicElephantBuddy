@@ -14,43 +14,54 @@ type AppState = "welcome" | "interaction";
 export default function Home() {
   const [appState, setAppState] = useState<AppState>("welcome");
   const [permissionModalOpen, setPermissionModalOpen] = useState(false);
-  const [elephantState, setElephantState] = useState<"idle" | "listening" | "thinking" | "speaking" | "error" | "rateLimit" | "network" | "auth" | "serviceUnavailable">("idle");
+  const [elephantState, setElephantState] = useState<
+    | "idle"
+    | "listening"
+    | "thinking"
+    | "speaking"
+    | "error"
+    | "rateLimit"
+    | "network"
+    | "auth"
+    | "serviceUnavailable"
+  >("idle");
   const [speechText, setSpeechText] = useState<string | undefined>(undefined);
   const [transcribedText, setTranscribedText] = useState<string>("");
   const [showDebug, setShowDebug] = useState<boolean>(false);
   const [directTextInput, setDirectTextInput] = useState<string>("");
   const [isProcessingText, setIsProcessingText] = useState<boolean>(false);
-  const [enableLocalPlayback, setEnableLocalPlayback] = useState<boolean>(false); // Default to false for server testing
+  const [enableLocalPlayback, setEnableLocalPlayback] =
+    useState<boolean>(false); // Default to false for server testing
   const [useRealtimeAPI, setUseRealtimeAPI] = useState<boolean>(true); // Toggle for OpenAI Realtime API
   const [enableVideo, setEnableVideo] = useState<boolean>(false); // Toggle for video capture
   const [aiSettings, setAiSettings] = useState({
-    defaultProvider: 'standard',
-    voiceMode: 'openai',
+    defaultProvider: "standard",
+    voiceMode: "openai",
     creativeMode: false,
-    voicePreference: 'nova'
+    voicePreference: "nova",
   });
 
   // Check parent login status
   const [isParentLoggedIn, setIsParentLoggedIn] = useState<boolean>(() => {
-    const currentParent = localStorage.getItem('currentParent');
+    const currentParent = localStorage.getItem("currentParent");
     return !!currentParent;
   });
 
   // Listen for localStorage changes to update parent login status
   useEffect(() => {
     const handleStorageChange = () => {
-      const currentParent = localStorage.getItem('currentParent');
+      const currentParent = localStorage.getItem("currentParent");
       setIsParentLoggedIn(!!currentParent);
     };
 
     // Listen for storage changes
-    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener("storage", handleStorageChange);
 
     // Check on component mount and periodically
     const interval = setInterval(handleStorageChange, 1000);
 
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener("storage", handleStorageChange);
       clearInterval(interval);
     };
   }, []);
@@ -66,7 +77,7 @@ export default function Home() {
         await (document.documentElement as any).msRequestFullscreen();
       }
     } catch (error) {
-      console.warn('Failed to enter fullscreen:', error);
+      console.warn("Failed to enter fullscreen:", error);
     }
   };
 
@@ -80,7 +91,7 @@ export default function Home() {
         await (document as any).msExitFullscreen();
       }
     } catch (error) {
-      console.warn('Failed to exit fullscreen:', error);
+      console.warn("Failed to exit fullscreen:", error);
     }
   };
 
@@ -105,7 +116,7 @@ export default function Home() {
       if (enableLocalPlayback) {
         try {
           // Convert base64 to blob and play
-          const audioBlob = base64ToBlob(audioData, 'audio/pcm');
+          const audioBlob = base64ToBlob(audioData, "audio/pcm");
           const audioUrl = URL.createObjectURL(audioBlob);
           const audio = new Audio(audioUrl);
 
@@ -123,14 +134,16 @@ export default function Home() {
     onError: (error) => {
       console.error("Realtime API error:", error);
       setElephantState("error");
-      setSpeechText("Something went wrong with the connection. Let's try again.");
+      setSpeechText(
+        "Something went wrong with the connection. Let's try again.",
+      );
 
       setTimeout(() => {
         setElephantState("idle");
         setSpeechText(undefined);
       }, 3000);
     },
-    enableVideo: enableVideo
+    enableVideo: enableVideo,
   });
 
   // Destructure realtime audio properties
@@ -145,7 +158,7 @@ export default function Home() {
     requestMicrophonePermission: realtimeRequestPermission,
     captureCurrentFrame,
     videoEnabled,
-    hasVideoPermission
+    hasVideoPermission,
   } = realtimeAudio;
 
   const traditionalRecorder = useAudioRecorder({
@@ -162,21 +175,25 @@ export default function Home() {
       let errorType: string | undefined;
 
       // Check if the response is an object with error information
-      if (typeof textOrData === 'object' && textOrData !== null && 'text' in textOrData) {
+      if (
+        typeof textOrData === "object" &&
+        textOrData !== null &&
+        "text" in textOrData
+      ) {
         text = textOrData.text;
         errorType = textOrData.errorType;
 
         // Set the proper elephant state based on error type
-        if (errorType === 'rateLimit') {
-          setElephantState('rateLimit');
-        } else if (errorType === 'network') {
-          setElephantState('network');
-        } else if (errorType === 'auth') {
-          setElephantState('auth');
-        } else if (errorType === 'serviceUnavailable') {
-          setElephantState('serviceUnavailable');
+        if (errorType === "rateLimit") {
+          setElephantState("rateLimit");
+        } else if (errorType === "network") {
+          setElephantState("network");
+        } else if (errorType === "auth") {
+          setElephantState("auth");
+        } else if (errorType === "serviceUnavailable") {
+          setElephantState("serviceUnavailable");
         } else {
-          setElephantState('error');
+          setElephantState("error");
         }
       } else {
         // It's a regular text response
@@ -196,27 +213,30 @@ export default function Home() {
           setSpeechText(undefined);
         }, 1000);
       }, 4000);
-    }
+    },
   });
 
   // Create unified recorder interface
-  const currentRecorder = useRealtimeAPI ? {
-    isReady: isConnected,
-    isRecording: realtimeIsRecording,
-    isProcessing: false, // Realtime API doesn't have isProcessing state
-    startRecording: realtimeStartRecording,
-    stopRecording: realtimeStopRecording,
-    requestMicrophonePermission: realtimeRequestPermission,
-    recorderState: realtimeIsRecording ? 'recording' : 'inactive'
-  } : {
-    isReady: traditionalRecorder.isReady,
-    isRecording: traditionalRecorder.isRecording,
-    isProcessing: traditionalRecorder.isProcessing,
-    startRecording: traditionalRecorder.startRecording,
-    stopRecording: traditionalRecorder.stopRecording,
-    requestMicrophonePermission: traditionalRecorder.requestMicrophonePermission,
-    recorderState: traditionalRecorder.recorderState
-  };
+  const currentRecorder = useRealtimeAPI
+    ? {
+        isReady: isConnected,
+        isRecording: realtimeIsRecording,
+        isProcessing: false, // Realtime API doesn't have isProcessing state
+        startRecording: realtimeStartRecording,
+        stopRecording: realtimeStopRecording,
+        requestMicrophonePermission: realtimeRequestPermission,
+        recorderState: realtimeIsRecording ? "recording" : "inactive",
+      }
+    : {
+        isReady: traditionalRecorder.isReady,
+        isRecording: traditionalRecorder.isRecording,
+        isProcessing: traditionalRecorder.isProcessing,
+        startRecording: traditionalRecorder.startRecording,
+        stopRecording: traditionalRecorder.stopRecording,
+        requestMicrophonePermission:
+          traditionalRecorder.requestMicrophonePermission,
+        recorderState: traditionalRecorder.recorderState,
+      };
 
   const handleStopSession = async () => {
     console.log("Stopping session and returning to welcome screen");
@@ -235,10 +255,10 @@ export default function Home() {
     // Close conversation in database
     try {
       console.log("Closing conversation in database");
-      const response = await fetch('/api/close-conversation', {
-        method: 'POST',
+      const response = await fetch("/api/close-conversation", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
       });
 
@@ -263,13 +283,13 @@ export default function Home() {
 
   // Load AI settings from localStorage
   useEffect(() => {
-    const savedSettings = localStorage.getItem('appuAISettings');
+    const savedSettings = localStorage.getItem("appuAISettings");
     if (savedSettings) {
       try {
         const parsed = JSON.parse(savedSettings);
         setAiSettings(parsed);
       } catch (error) {
-        console.error('Error loading AI settings:', error);
+        console.error("Error loading AI settings:", error);
       }
     }
   }, []);
@@ -284,16 +304,25 @@ export default function Home() {
       }
     };
 
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
-    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+    document.addEventListener("mozfullscreenchange", handleFullscreenChange);
+    document.addEventListener("MSFullscreenChange", handleFullscreenChange);
 
     return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
-      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
-      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener(
+        "webkitfullscreenchange",
+        handleFullscreenChange,
+      );
+      document.removeEventListener(
+        "mozfullscreenchange",
+        handleFullscreenChange,
+      );
+      document.removeEventListener(
+        "MSFullscreenChange",
+        handleFullscreenChange,
+      );
     };
   }, [appState, handleStopSession]);
 
@@ -312,7 +341,12 @@ export default function Home() {
             setSpeechText(undefined);
 
             // Auto-restart recording after initial greeting
-            if (realtimeAudio.isConnected && appState === "interaction" && !currentRecorder.isRecording && !currentRecorder.isProcessing) {
+            if (
+              realtimeAudio.isConnected &&
+              appState === "interaction" &&
+              !currentRecorder.isRecording &&
+              !currentRecorder.isProcessing
+            ) {
               console.log("Auto-restarting recording after initial greeting");
               currentRecorder.startRecording();
             }
@@ -331,11 +365,13 @@ export default function Home() {
   const handleStartButton = async () => {
     // Check if microphone permission is already granted
     try {
-      const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-      if (permission.state === 'granted') {
+      const permission = await navigator.permissions.query({
+        name: "microphone" as PermissionName,
+      });
+      if (permission.state === "granted") {
         // Permission already granted, proceed directly
         console.log("Microphone permission already granted");
-        await enterFullscreen();
+        //await enterFullscreen();
         setAppState("interaction");
 
         if (useRealtimeAPI && !isConnected) {
@@ -374,7 +410,9 @@ export default function Home() {
       console.error("Failed to get microphone permission");
       // Show error state for microphone permission issues
       setElephantState("error");
-      setSpeechText("I can't hear you! Please allow microphone access and try again.");
+      setSpeechText(
+        "I can't hear you! Please allow microphone access and try again.",
+      );
 
       // Reset state after showing error
       setTimeout(() => {
@@ -389,16 +427,36 @@ export default function Home() {
 
   // Start recording automatically when ready (only for realtime API after connection is established)
   useEffect(() => {
-    if (useRealtimeAPI && isConnected && appState === "interaction" && !currentRecorder.isRecording && !currentRecorder.isProcessing) {
-      console.log("Auto-starting realtime recording because connection is established");
+    if (
+      useRealtimeAPI &&
+      isConnected &&
+      appState === "interaction" &&
+      !currentRecorder.isRecording &&
+      !currentRecorder.isProcessing
+    ) {
+      console.log(
+        "Auto-starting realtime recording because connection is established",
+      );
       currentRecorder.startRecording();
     }
-  }, [useRealtimeAPI, isConnected, appState, currentRecorder.isRecording, currentRecorder.isProcessing, currentRecorder.startRecording]);
+  }, [
+    useRealtimeAPI,
+    isConnected,
+    appState,
+    currentRecorder.isRecording,
+    currentRecorder.isProcessing,
+    currentRecorder.startRecording,
+  ]);
 
   // Restart recording after processing is complete
   useEffect(() => {
     // Only trigger when processing changes from true to false
-    if (!currentRecorder.isProcessing && currentRecorder.isReady && appState === "interaction" && elephantState !== "speaking") {
+    if (
+      !currentRecorder.isProcessing &&
+      currentRecorder.isReady &&
+      appState === "interaction" &&
+      elephantState !== "speaking"
+    ) {
       // Small delay to ensure everything is reset properly
       const timer = setTimeout(() => {
         if (!currentRecorder.isRecording && !currentRecorder.isProcessing) {
@@ -409,7 +467,14 @@ export default function Home() {
 
       return () => clearTimeout(timer);
     }
-  }, [currentRecorder.isProcessing, currentRecorder.isReady, appState, elephantState, currentRecorder.isRecording, currentRecorder.startRecording]);
+  }, [
+    currentRecorder.isProcessing,
+    currentRecorder.isReady,
+    appState,
+    elephantState,
+    currentRecorder.isRecording,
+    currentRecorder.startRecording,
+  ]);
 
   // Handle microphone button to stop current recording and trigger processing
   const handleMicrophoneButton = () => {
@@ -420,10 +485,10 @@ export default function Home() {
       // Add a small delay before processing
       setTimeout(() => {
         // Log current state after stopping
-        console.log("Current state after stopping recording:", { 
-          isRecording: currentRecorder.isRecording, 
-          isProcessing: currentRecorder.isProcessing, 
-          elephantState
+        console.log("Current state after stopping recording:", {
+          isRecording: currentRecorder.isRecording,
+          isProcessing: currentRecorder.isProcessing,
+          elephantState,
         });
       }, 100);
     } else {
@@ -440,10 +505,10 @@ export default function Home() {
 
       // Log current state after starting
       setTimeout(() => {
-        console.log("Current state after starting recording:", { 
-          isRecording: currentRecorder.isRecording, 
-          isProcessing: currentRecorder.isProcessing, 
-          elephantState
+        console.log("Current state after starting recording:", {
+          isRecording: currentRecorder.isRecording,
+          isProcessing: currentRecorder.isProcessing,
+          elephantState,
         });
       }, 100);
     }
@@ -473,15 +538,15 @@ export default function Home() {
       setTranscribedText(directTextInput);
 
       // Send the text to the backend for processing using user's AI settings
-      const response = await fetch('/api/process-with-config', {
-        method: 'POST',
+      const response = await fetch("/api/process-with-config", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           text: directTextInput,
           aiConfig: aiSettings.defaultProvider,
-          useCreative: aiSettings.creativeMode
+          useCreative: aiSettings.creativeMode,
         }),
       });
 
@@ -489,7 +554,9 @@ export default function Home() {
         // Parse the error response
         const errorData = await response.json();
         // Create an error object with the response data
-        const error: any = new Error(errorData.error || 'Failed to process text');
+        const error: any = new Error(
+          errorData.error || "Failed to process text",
+        );
         error.response = { data: errorData };
         throw error;
       }
@@ -512,7 +579,7 @@ export default function Home() {
       if (audioData && enableLocalPlayback) {
         try {
           // Convert base64 to blob and play
-          const audioBlob = base64ToBlob(audioData, 'audio/wav');
+          const audioBlob = base64ToBlob(audioData, "audio/wav");
           const audioUrl = URL.createObjectURL(audioBlob);
           const audio = new Audio(audioUrl);
 
@@ -539,39 +606,57 @@ export default function Home() {
           setSpeechText(undefined);
 
           // Auto-restart recording after Appu finishes speaking
-          if (currentRecorder.isReady && appState === "interaction" && !currentRecorder.isRecording && !currentRecorder.isProcessing) {
-            console.log("Auto-restarting recording after processing text input response");
+          if (
+            currentRecorder.isReady &&
+            appState === "interaction" &&
+            !currentRecorder.isRecording &&
+            !currentRecorder.isProcessing
+          ) {
+            console.log(
+              "Auto-restarting recording after processing text input response",
+            );
             currentRecorder.startRecording();
           }
         }, 1000);
       }, 4000);
-
     } catch (error: any) {
-      console.error('Error processing text:', error);
+      console.error("Error processing text:", error);
 
       // Check if it's an API error response with an error type
-      if (error.response && error.response.data && error.response.data.errorType) {
+      if (
+        error.response &&
+        error.response.data &&
+        error.response.data.errorType
+      ) {
         // Set the elephant state based on the error type
         const errorType = error.response.data.errorType;
-        if (errorType === 'rateLimit') {
-          setElephantState('rateLimit');
-          setSpeechText("I'm feeling a bit tired right now. Can we talk again in a little bit?");
-        } else if (errorType === 'network') {
-          setElephantState('network');
-          setSpeechText("I can't hear you very well. Please check your internet connection and try again.");
-        } else if (errorType === 'auth') {
-          setElephantState('auth');
-          setSpeechText("I need to take a quick break. Please try again later.");
-        } else if (errorType === 'serviceUnavailable') {
-          setElephantState('serviceUnavailable');
-          setSpeechText("I'm having trouble thinking right now. Can we try again soon?");
+        if (errorType === "rateLimit") {
+          setElephantState("rateLimit");
+          setSpeechText(
+            "I'm feeling a bit tired right now. Can we talk again in a little bit?",
+          );
+        } else if (errorType === "network") {
+          setElephantState("network");
+          setSpeechText(
+            "I can't hear you very well. Please check your internet connection and try again.",
+          );
+        } else if (errorType === "auth") {
+          setElephantState("auth");
+          setSpeechText(
+            "I need to take a quick break. Please try again later.",
+          );
+        } else if (errorType === "serviceUnavailable") {
+          setElephantState("serviceUnavailable");
+          setSpeechText(
+            "I'm having trouble thinking right now. Can we try again soon?",
+          );
         } else {
-          setElephantState('error');
+          setElephantState("error");
           setSpeechText("Oops! Something went wrong. Let's try again.");
         }
       } else {
         // Generic error handling
-        setElephantState('error');
+        setElephantState("error");
         setSpeechText("Oops! Something went wrong. Let's try again.");
       }
 
@@ -584,7 +669,12 @@ export default function Home() {
           setSpeechText(undefined);
 
           // Auto-restart recording after error message
-          if (currentRecorder.isReady && appState === "interaction" && !currentRecorder.isRecording && !currentRecorder.isProcessing) {
+          if (
+            currentRecorder.isReady &&
+            appState === "interaction" &&
+            !currentRecorder.isRecording &&
+            !currentRecorder.isProcessing
+          ) {
             console.log("Auto-restarting recording after error message");
             currentRecorder.startRecording();
           }
@@ -601,62 +691,80 @@ export default function Home() {
       <header className="flex justify-between items-center p-2 sm:p-4 bg-white bg-opacity-70 shadow-sm flex-shrink-0">
         <div className="flex items-center">
           <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-primary flex items-center justify-center text-white mr-2">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="sm:w-6 sm:h-6">
-              <path d="M18 8C18 8 19 7 20 7C21 7 22 8 22 9C22 10 21 11 20 11C19 11 18 10 18 9" fill="white"/>
-              <path d="M6 8C6 8 5 7 4 7C3 7 2 8 2 9C2 10 3 11 4 11C5 11 6 10 6 9" fill="white"/>
-              <ellipse cx="12" cy="14" rx="8" ry="7" fill="white"/>
-              <circle cx="10" cy="12.5" r="0.75" fill="black"/>
-              <circle cx="14" cy="12.5" r="0.75" fill="black"/>
-              <path d="M11 15C11 15 12 16 13 15" stroke="black" strokeWidth="0.5" strokeLinecap="round"/>
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              className="sm:w-6 sm:h-6"
+            >
+              <path
+                d="M18 8C18 8 19 7 20 7C21 7 22 8 22 9C22 10 21 11 20 11C19 11 18 10 18 9"
+                fill="white"
+              />
+              <path
+                d="M6 8C6 8 5 7 4 7C3 7 2 8 2 9C2 10 3 11 4 11C5 11 6 10 6 9"
+                fill="white"
+              />
+              <ellipse cx="12" cy="14" rx="8" ry="7" fill="white" />
+              <circle cx="10" cy="12.5" r="0.75" fill="black" />
+              <circle cx="14" cy="12.5" r="0.75" fill="black" />
+              <path
+                d="M11 15C11 15 12 16 13 15"
+                stroke="black"
+                strokeWidth="0.5"
+                strokeLinecap="round"
+              />
             </svg>
           </div>
           <h1 className="font-bold text-lg sm:text-xl text-primary">Appu</h1>
         </div>
         <div className="flex gap-1 sm:gap-2">
           <Link href="/audio-test">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              aria-label="Audio Test" 
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Audio Test"
               className="p-1 sm:p-2"
             >
               <Speaker className="h-4 w-4 sm:h-5 sm:w-5 text-neutral" />
             </Button>
           </Link>
           <Link href="/dashboard">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              aria-label="Parent Dashboard" 
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Parent Dashboard"
               className="p-1 sm:p-2"
             >
               <User className="h-4 w-4 sm:h-5 sm:w-5 text-neutral" />
             </Button>
           </Link>
           <Link href="/memories">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              aria-label="Memory Console" 
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Memory Console"
               className="p-1 sm:p-2"
             >
               <Brain className="h-4 w-4 sm:h-5 sm:w-5 text-neutral" />
             </Button>
           </Link>
           <Link href="/settings">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              aria-label="Settings" 
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Settings"
               className="p-1 sm:p-2"
             >
               <Settings className="h-4 w-4 sm:h-5 sm:w-5 text-neutral" />
             </Button>
           </Link>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            aria-label="Debug" 
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="Debug"
             onClick={() => setShowDebug(!showDebug)}
             className="p-1 sm:p-2"
           >
@@ -673,7 +781,7 @@ export default function Home() {
 
         <AnimatePresence mode="wait">
           {appState === "welcome" ? (
-            <motion.div 
+            <motion.div
               key="welcome"
               className="flex flex-col items-center justify-center space-y-2 sm:space-y-4 text-center max-w-lg p-2 sm:p-4 z-10 flex-1"
               initial={{ opacity: 0, y: 20 }}
@@ -681,30 +789,60 @@ export default function Home() {
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.5 }}
             >
-              <h2 className="font-bold text-xl sm:text-2xl text-primary">Meet Appu!</h2>
-              <p className="text-neutral text-base sm:text-lg px-4">Your magical elephant friend who loves to talk and play with you!</p>
+              <h2 className="font-bold text-xl sm:text-2xl text-primary">
+                Meet Appu!
+              </h2>
+              <p className="text-neutral text-base sm:text-lg px-4">
+                Your magical elephant friend who loves to talk and play with
+                you!
+              </p>
 
-              <motion.div 
+              <motion.div
                 className="w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 my-2 sm:my-4"
                 animate={{ y: [0, -10, 0] }}
                 transition={{ repeat: Infinity, duration: 2 }}
               >
-                <svg viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M388 160C388 160 408 140 428 140C448 140 468 160 468 180C468 200 448 220 428 220C408 220 388 200 388 180" fill="#9D78C9"/>
-                  <path d="M124 160C124 160 104 140 84 140C64 140 44 160 44 180C44 200 64 220 84 220C104 220 124 200 124 180" fill="#9D78C9"/>
-                  <ellipse cx="256" cy="280" rx="160" ry="140" fill="#9D78C9"/>
-                  <circle cx="216" cy="250" r="15" fill="white"/>
-                  <circle cx="217" cy="250" r="5" fill="black"/>
-                  <circle cx="296" cy="250" r="15" fill="white"/>
-                  <circle cx="297" cy="250" r="5" fill="black"/>
-                  <path d="M236 300C236 300 256 320 276 300" stroke="black" strokeWidth="4" strokeLinecap="round"/>
-                  <path d="M256 330C256 330 256 380 216 400" stroke="#9D78C9" strokeWidth="20" strokeLinecap="round"/>
-                  <path d="M243 370H269" stroke="black" strokeWidth="4" strokeLinecap="round"/>
+                <svg
+                  viewBox="0 0 512 512"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M388 160C388 160 408 140 428 140C448 140 468 160 468 180C468 200 448 220 428 220C408 220 388 200 388 180"
+                    fill="#9D78C9"
+                  />
+                  <path
+                    d="M124 160C124 160 104 140 84 140C64 140 44 160 44 180C44 200 64 220 84 220C104 220 124 200 124 180"
+                    fill="#9D78C9"
+                  />
+                  <ellipse cx="256" cy="280" rx="160" ry="140" fill="#9D78C9" />
+                  <circle cx="216" cy="250" r="15" fill="white" />
+                  <circle cx="217" cy="250" r="5" fill="black" />
+                  <circle cx="296" cy="250" r="15" fill="white" />
+                  <circle cx="297" cy="250" r="5" fill="black" />
+                  <path
+                    d="M236 300C236 300 256 320 276 300"
+                    stroke="black"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    d="M256 330C256 330 256 380 216 400"
+                    stroke="#9D78C9"
+                    strokeWidth="20"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    d="M243 370H269"
+                    stroke="black"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                  />
                 </svg>
               </motion.div>
 
               {isParentLoggedIn ? (
-                <Button 
+                <Button
                   className="bg-secondary hover:bg-yellow-400 text-black font-bold py-3 px-6 sm:py-4 sm:px-8 rounded-full text-lg sm:text-xl shadow-lg transition transform hover:scale-105 active:scale-95 mt-2 sm:mt-4"
                   onClick={handleStartButton}
                 >
@@ -712,16 +850,14 @@ export default function Home() {
                 </Button>
               ) : (
                 <Link href="/dashboard">
-                  <Button 
-                    className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 sm:py-4 sm:px-8 rounded-full text-lg sm:text-xl shadow-lg transition transform hover:scale-105 active:scale-95 mt-2 sm:mt-4"
-                  >
+                  <Button className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 sm:py-4 sm:px-8 rounded-full text-lg sm:text-xl shadow-lg transition transform hover:scale-105 active:scale-95 mt-2 sm:mt-4">
                     Parent Login
                   </Button>
                 </Link>
               )}
             </motion.div>
           ) : (
-            <motion.div 
+            <motion.div
               key="interaction"
               className="w-full h-full flex flex-col items-center justify-center space-y-4 z-10 max-w-xl"
               initial={{ opacity: 0, y: 20 }}
@@ -736,19 +872,29 @@ export default function Home() {
               <div className="w-full px-3 py-2 sm:px-4 sm:py-3 bg-white bg-opacity-80 rounded-t-3xl shadow-lg flex-shrink-0 max-h-40">
                 <div className="flex flex-col items-center space-y-2 sm:space-y-3">
                   <p className="text-primary font-medium text-base sm:text-lg text-center px-2">
-                    {currentRecorder.isProcessing 
-                      ? "Appu is thinking..." 
-                      : elephantState === "speaking" 
-                        ? "Appu is speaking..." 
-                        : currentRecorder.isRecording 
-                          ? "Appu is listening..." 
+                    {currentRecorder.isProcessing
+                      ? "Appu is thinking..."
+                      : elephantState === "speaking"
+                        ? "Appu is speaking..."
+                        : currentRecorder.isRecording
+                          ? "Appu is listening..."
                           : "Appu is getting ready to listen..."}
                   </p>
 
                   {currentRecorder.isProcessing ? (
                     <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full shadow-lg bg-yellow-400 flex items-center justify-center animate-pulse">
-                      <svg className="w-6 h-6 sm:w-8 sm:h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      <svg
+                        className="w-6 h-6 sm:w-8 sm:h-8 text-white"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
                       </svg>
                     </div>
                   ) : (
@@ -761,26 +907,49 @@ export default function Home() {
                         </>
                       )}
 
-                      <Button 
+                      <Button
                         className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full shadow-lg transition transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-pink-300 flex items-center justify-center relative z-10 ${
-                          currentRecorder.isRecording 
-                            ? "bg-[hsl(var(--success))] hover:bg-green-600" 
+                          currentRecorder.isRecording
+                            ? "bg-[hsl(var(--success))] hover:bg-green-600"
                             : "bg-accent hover:bg-pink-400"
                         }`}
                         onClick={handleMicrophoneButton}
-                        disabled={!currentRecorder.isReady || currentRecorder.isProcessing}
+                        disabled={
+                          !currentRecorder.isReady ||
+                          currentRecorder.isProcessing
+                        }
                       >
                         {currentRecorder.isRecording ? (
                           <div className="relative">
-                            <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                            <svg
+                              className="w-8 h-8 text-white"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
+                              />
                             </svg>
                             {/* Recording indicator pulse */}
                             <div className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
                           </div>
                         ) : (
-                          <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                          <svg
+                            className="w-8 h-8 text-white"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                            />
                           </svg>
                         )}
                       </Button>
@@ -788,15 +957,15 @@ export default function Home() {
                   )}
 
                   <p className="text-neutral text-xs sm:text-sm text-center px-2">
-                    {currentRecorder.isProcessing 
-                      ? "Please wait while Appu thinks..." 
-                      : currentRecorder.isRecording 
-                        ? "Appu is listening to you now! Tap when you're done talking" 
+                    {currentRecorder.isProcessing
+                      ? "Please wait while Appu thinks..."
+                      : currentRecorder.isRecording
+                        ? "Appu is listening to you now! Tap when you're done talking"
                         : "Tap to start talking with Appu!"}
                   </p>
 
                   {/* Stop/Cancel Button */}
-                  <Button 
+                  <Button
                     className="mt-1 sm:mt-2 bg-red-500 hover:bg-red-600 text-white font-medium py-1.5 px-3 sm:py-2 sm:px-4 rounded-full text-xs sm:text-sm shadow-md transition transform hover:scale-105 active:scale-95"
                     onClick={handleStopSession}
                     variant="default"
@@ -810,10 +979,10 @@ export default function Home() {
         </AnimatePresence>
       </main>
 
-      <PermissionModal 
-        isOpen={permissionModalOpen} 
-        onClose={() => setPermissionModalOpen(false)} 
-        onAllow={handleAllowPermission} 
+      <PermissionModal
+        isOpen={permissionModalOpen}
+        onClose={() => setPermissionModalOpen(false)}
+        onAllow={handleAllowPermission}
       />
 
       {/* Debug Panel - only visible when debug mode is enabled */}
@@ -822,19 +991,31 @@ export default function Home() {
           <h3 className="font-bold mb-2">Debug Information</h3>
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <p><span className="font-semibold">State:</span> {elephantState}</p>
-              <p><span className="font-semibold">Recording:</span> {currentRecorder.isRecording ? 'Yes' : 'No'}</p>
-              <p><span className="font-semibold">Processing:</span> {currentRecorder.isProcessing || isProcessingText ? 'Yes' : 'No'}</p>
+              <p>
+                <span className="font-semibold">State:</span> {elephantState}
+              </p>
+              <p>
+                <span className="font-semibold">Recording:</span>{" "}
+                {currentRecorder.isRecording ? "Yes" : "No"}
+              </p>
+              <p>
+                <span className="font-semibold">Processing:</span>{" "}
+                {currentRecorder.isProcessing || isProcessingText
+                  ? "Yes"
+                  : "No"}
+              </p>
 
               <div className="mt-3">
-                <p><span className="font-semibold">Direct Text Input:</span></p>
+                <p>
+                  <span className="font-semibold">Direct Text Input:</span>
+                </p>
                 <div className="flex items-center mt-1">
                   <input
                     type="text"
                     value={directTextInput}
                     onChange={(e) => setDirectTextInput(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
+                      if (e.key === "Enter") {
                         processDirectTextInput();
                       }
                     }}
@@ -844,15 +1025,21 @@ export default function Home() {
                   />
                   <Button
                     onClick={processDirectTextInput}
-                    disabled={isProcessingText || currentRecorder.isProcessing || !directTextInput.trim()}
+                    disabled={
+                      isProcessingText ||
+                      currentRecorder.isProcessing ||
+                      !directTextInput.trim()
+                    }
                     className="bg-primary hover:bg-primary-dark px-3 py-1.5 rounded"
                   >
-                    {isProcessingText ? 'Processing...' : 'Send'}
+                    {isProcessingText ? "Processing..." : "Send"}
                   </Button>
                 </div>
 
                 <div className="mt-3">
-                  <p><span className="font-semibold">Recording Method:</span></p>
+                  <p>
+                    <span className="font-semibold">Recording Method:</span>
+                  </p>
                   <div className="flex items-center mt-1 gap-3">
                     <label className="flex items-center gap-2">
                       <input
@@ -862,7 +1049,9 @@ export default function Home() {
                         className="text-primary"
                         disabled
                       />
-                      <span className="text-sm text-gray-400">Traditional (Disabled)</span>
+                      <span className="text-sm text-gray-400">
+                        Traditional (Disabled)
+                      </span>
                     </label>
                     <label className="flex items-center gap-2">
                       <input
@@ -871,7 +1060,9 @@ export default function Home() {
                         onChange={() => setUseRealtimeAPI(true)}
                         className="text-primary"
                       />
-                      <span className="text-sm">Realtime API (WebRTC) - Default</span>
+                      <span className="text-sm">
+                        Realtime API (WebRTC) - Default
+                      </span>
                     </label>
                   </div>
                 </div>
@@ -879,79 +1070,108 @@ export default function Home() {
             </div>
 
             <div>
-              <p><span className="font-semibold">Transcribed:</span></p>
-              <p className="bg-gray-700 p-2 rounded">{transcribedText || '(Nothing yet)'}</p>
-              <p className="mt-2"><span className="font-semibold">Response:</span></p>
-              <p className="bg-gray-700 p-2 rounded">{speechText || '(Nothing yet)'}</p>
+              <p>
+                <span className="font-semibold">Transcribed:</span>
+              </p>
+              <p className="bg-gray-700 p-2 rounded">
+                {transcribedText || "(Nothing yet)"}
+              </p>
+              <p className="mt-2">
+                <span className="font-semibold">Response:</span>
+              </p>
+              <p className="bg-gray-700 p-2 rounded">
+                {speechText || "(Nothing yet)"}
+              </p>
 
               <div className="mt-3">
-                <p><span className="font-semibold">Audio Debug:</span></p>
+                <p>
+                  <span className="font-semibold">Audio Debug:</span>
+                </p>
                 <div className="mt-1 flex flex-col gap-2">
                   <div className="flex gap-2 items-center">
                     <span className="text-xs">Mic State:</span>
-                    <div className={`px-2 py-0.5 rounded-full text-xs ${
-                      currentRecorder.isRecording 
-                        ? 'bg-green-600' 
-                        : 'bg-gray-600'
-                    }`}>
-                      {currentRecorder.isRecording ? 'Recording' : 'Not Recording'}
+                    <div
+                      className={`px-2 py-0.5 rounded-full text-xs ${
+                        currentRecorder.isRecording
+                          ? "bg-green-600"
+                          : "bg-gray-600"
+                      }`}
+                    >
+                      {currentRecorder.isRecording
+                        ? "Recording"
+                        : "Not Recording"}
                     </div>
                   </div>
 
                   <div className="flex gap-2 items-center">
                     <span className="text-xs">Recorder:</span>
-                    <div className={`px-2 py-0.5 rounded-full text-xs ${
-                      currentRecorder.recorderState === 'recording' 
-                        ? 'bg-green-600' 
-                        : currentRecorder.recorderState === 'paused'
-                          ? 'bg-yellow-600'
-                          : currentRecorder.recorderState === 'error'
-                            ? 'bg-red-600'
-                            : 'bg-gray-600'
-                    }`}>
+                    <div
+                      className={`px-2 py-0.5 rounded-full text-xs ${
+                        currentRecorder.recorderState === "recording"
+                          ? "bg-green-600"
+                          : currentRecorder.recorderState === "paused"
+                            ? "bg-yellow-600"
+                            : currentRecorder.recorderState === "error"
+                              ? "bg-red-600"
+                              : "bg-gray-600"
+                      }`}
+                    >
                       {currentRecorder.recorderState}
                     </div>
                   </div>
 
                   <div className="flex gap-2 items-center">
                     <span className="text-xs">Processing:</span>
-                    <div className={`px-2 py-0.5 rounded-full text-xs ${
-                      currentRecorder.isProcessing ? 'bg-yellow-600' : 'bg-gray-600'
-                    }`}>
-                      {currentRecorder.isProcessing ? 'Processing' : 'Not Processing'}
+                    <div
+                      className={`px-2 py-0.5 rounded-full text-xs ${
+                        currentRecorder.isProcessing
+                          ? "bg-yellow-600"
+                          : "bg-gray-600"
+                      }`}
+                    >
+                      {currentRecorder.isProcessing
+                        ? "Processing"
+                        : "Not Processing"}
                     </div>
                   </div>
 
                   <div className="flex gap-2 items-center">
                     <span className="text-xs">Elephant:</span>
-                    <div className={`px-2 py-0.5 rounded-full text-xs ${
-                      elephantState === 'idle' 
-                        ? 'bg-blue-600' 
-                        : elephantState === 'listening'
-                          ? 'bg-green-600'
-                          : elephantState === 'thinking'
-                            ? 'bg-yellow-600'
-                            : elephantState === 'speaking'
-                              ? 'bg-purple-600'
-                              : 'bg-red-600'
-                    }`}>
+                    <div
+                      className={`px-2 py-0.5 rounded-full text-xs ${
+                        elephantState === "idle"
+                          ? "bg-blue-600"
+                          : elephantState === "listening"
+                            ? "bg-green-600"
+                            : elephantState === "thinking"
+                              ? "bg-yellow-600"
+                              : elephantState === "speaking"
+                                ? "bg-purple-600"
+                                : "bg-red-600"
+                      }`}
+                    >
                       {elephantState}
                     </div>
                   </div>
 
                   <div className="flex gap-2 items-center">
                     <span className="text-xs">Local Playback:</span>
-                    <div className={`px-2 py-0.5 rounded-full text-xs ${
-                      enableLocalPlayback ? 'bg-green-600' : 'bg-gray-600'
-                    }`}>
-                      {enableLocalPlayback ? 'Enabled' : 'Disabled'}
+                    <div
+                      className={`px-2 py-0.5 rounded-full text-xs ${
+                        enableLocalPlayback ? "bg-green-600" : "bg-gray-600"
+                      }`}
+                    >
+                      {enableLocalPlayback ? "Enabled" : "Disabled"}
                     </div>
                   </div>
 
                   <div className="flex flex-row gap-2 mt-2">
                     <Button
                       onClick={() => currentRecorder.startRecording()}
-                      disabled={currentRecorder.isRecording || currentRecorder.isProcessing}
+                      disabled={
+                        currentRecorder.isRecording ||
+                        currentRecorder.isProcessing
+                      }
                       className="bg-green-700 hover:bg-green-800 px-3 py-1.5 rounded text-sm"
                     >
                       Force Start Mic
@@ -959,7 +1179,10 @@ export default function Home() {
 
                     <Button
                       onClick={() => currentRecorder.stopRecording()}
-                      disabled={!currentRecorder.isRecording || currentRecorder.isProcessing}
+                      disabled={
+                        !currentRecorder.isRecording ||
+                        currentRecorder.isProcessing
+                      }
                       className="bg-red-700 hover:bg-red-800 px-3 py-1.5 rounded text-sm"
                     >
                       Force Stop Mic
@@ -979,20 +1202,20 @@ export default function Home() {
 
                     <Button
                       onClick={() => {
-                        fetch('/api/process-text', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ text: "test" })
+                        fetch("/api/process-text", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ text: "test" }),
                         })
-                        .then(res => res.json())
-                        .then(data => {
-                          console.log("Test API response:", data);
-                          alert("API test successful - check console");
-                        })
-                        .catch(err => {
-                          console.error("API test failed:", err);
-                          alert("API test failed - check console");
-                        });
+                          .then((res) => res.json())
+                          .then((data) => {
+                            console.log("Test API response:", data);
+                            alert("API test successful - check console");
+                          })
+                          .catch((err) => {
+                            console.error("API test failed:", err);
+                            alert("API test failed - check console");
+                          });
                       }}
                       className="bg-purple-700 hover:bg-purple-800 px-3 py-1.5 rounded text-sm"
                     >
@@ -1002,36 +1225,50 @@ export default function Home() {
 
                   <div className="flex flex-row gap-2 mt-4 items-center justify-between bg-gray-700 p-2 rounded">
                     <div className="flex items-center gap-2">
-                      <div className={`w-3 h-3 rounded-full ${enableLocalPlayback ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                      <div
+                        className={`w-3 h-3 rounded-full ${enableLocalPlayback ? "bg-green-500" : "bg-red-500"}`}
+                      ></div>
                       <span className="text-sm">Local Audio Playback:</span>
                     </div>
                     <div className="flex items-center">
-                      <span className="text-xs mr-2">{enableLocalPlayback ? 'Enabled' : 'Disabled'}</span>
-                      <Button 
-                        onClick={() => setEnableLocalPlayback(!enableLocalPlayback)}
-                        className={`px-3 py-1 rounded text-xs ${enableLocalPlayback 
-                          ? 'bg-green-700 hover:bg-green-800' 
-                          : 'bg-gray-500 hover:bg-gray-600'}`}
+                      <span className="text-xs mr-2">
+                        {enableLocalPlayback ? "Enabled" : "Disabled"}
+                      </span>
+                      <Button
+                        onClick={() =>
+                          setEnableLocalPlayback(!enableLocalPlayback)
+                        }
+                        className={`px-3 py-1 rounded text-xs ${
+                          enableLocalPlayback
+                            ? "bg-green-700 hover:bg-green-800"
+                            : "bg-gray-500 hover:bg-gray-600"
+                        }`}
                       >
-                        {enableLocalPlayback ? 'Disable' : 'Enable'}
+                        {enableLocalPlayback ? "Disable" : "Enable"}
                       </Button>
                     </div>
                   </div>
 
                   <div className="flex flex-row gap-2 mt-2 items-center justify-between bg-gray-700 p-2 rounded">
                     <div className="flex items-center gap-2">
-                      <div className={`w-3 h-3 rounded-full ${enableVideo ? 'bg-blue-500' : 'bg-red-500'}`}></div>
+                      <div
+                        className={`w-3 h-3 rounded-full ${enableVideo ? "bg-blue-500" : "bg-red-500"}`}
+                      ></div>
                       <span className="text-sm">Enable My Eyes (Video):</span>
                     </div>
                     <div className="flex items-center">
-                      <span className="text-xs mr-2">{enableVideo ? 'Enabled' : 'Disabled'}</span>
-                      <Button 
+                      <span className="text-xs mr-2">
+                        {enableVideo ? "Enabled" : "Disabled"}
+                      </span>
+                      <Button
                         onClick={() => setEnableVideo(!enableVideo)}
-                        className={`px-3 py-1 rounded text-xs ${enableVideo 
-                          ? 'bg-blue-700 hover:bg-blue-800' 
-                          : 'bg-gray-500 hover:bg-gray-600'}`}
+                        className={`px-3 py-1 rounded text-xs ${
+                          enableVideo
+                            ? "bg-blue-700 hover:bg-blue-800"
+                            : "bg-gray-500 hover:bg-gray-600"
+                        }`}
                       >
-                        {enableVideo ? 'Disable' : 'Enable'}
+                        {enableVideo ? "Disable" : "Enable"}
                       </Button>
                     </div>
                   </div>
