@@ -118,9 +118,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getChildrenByParent(parentId: string | number): Promise<Child[]> {
-    const parentIdNum = '1085268852798816258';//typeof parentId === 'string' ? parseInt(parentId) : parentId;
-    console.log('Querying children for parent ID:', '1085268852798816258');
-    const result = await db.select().from(children).where(eq(children.parentId, parentIdNum));
+    const parentIdStr = String(parentId);
+    console.log('Querying children for parent ID:', parentIdStr);
+    const result = await db.select().from(children).where(eq(children.parentId, parentIdStr));
     console.log('Found children:', result.length);
     return result;
   }
@@ -214,12 +214,12 @@ export class DatabaseStorage implements IStorage {
     totalConversations: number;
     totalMessages: number;
   }> {
-    // Convert parentId to number for consistent handling
-    const parentIdNum = typeof parentId === 'string' ? parseInt(parentId) : parentId;
-    console.log('Getting dashboard data for parent:', parentIdNum);
+    // Keep parentId as string to avoid precision loss with large numbers
+    const parentIdStr = String(parentId);
+    console.log('Getting dashboard data for parent:', parentIdStr);
 
     // Get all children for this parent
-    const childrenData = await this.getChildrenByParent(parentIdNum);
+    const childrenData = await this.getChildrenByParent(parentIdStr);
 
     if (childrenData.length === 0) {
       return {

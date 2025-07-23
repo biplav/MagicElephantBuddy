@@ -470,9 +470,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get children by parent ID
   app.get("/api/parents/:parentId/children", async (req: Request, res: Response) => {
     try {
-      const parentId = '1085268852798816258'; //parseInt(req.params.parentId);
+      const parentId = req.params.parentId;
 
-      if (isNaN(parentId)) {
+      if (!parentId) {
         return res.status(400).json({ error: "Invalid parent ID" });
       }
 
@@ -577,7 +577,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           typeof parentId,
         );
 
-        // Handle both string and numeric parent IDs
+        if (!parentId) {
+          return res.status(400).json({ error: "Invalid parent ID" });
+        }
+
+        // Keep as string to handle large numbers correctly
         const dashboardData = await storage.getParentDashboardData(parentId);
         console.log(
           "Dashboard data being returned:",
