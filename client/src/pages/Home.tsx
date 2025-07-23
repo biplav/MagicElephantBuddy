@@ -32,7 +32,8 @@ export default function Home() {
   const [isProcessingText, setIsProcessingText] = useState<boolean>(false);
   const [enableLocalPlayback, setEnableLocalPlayback] =
     useState<boolean>(false); // Default to false for server testing
-  const [useRealtimeAPI, setUseRealtimeAPI] = useState<boolean>(true); // Toggle for OpenAI Realtime API
+  const [useRealtimeAPI, setUseRealtimeAPI] = useState<boolean>(true);
+  const [aiProvider, setAiProvider] = useState<'openai' | 'gemini'>('openai'); // Toggle for OpenAI Realtime API
   const [enableVideo, setEnableVideo] = useState<boolean>(false); // Toggle for video capture
   const [aiSettings, setAiSettings] = useState({
     defaultProvider: "standard",
@@ -159,6 +160,8 @@ export default function Home() {
     captureCurrentFrame,
     videoEnabled,
     hasVideoPermission,
+    isConnecting,
+    isRecording
   } = realtimeAudio;
 
   const traditionalRecorder = useAudioRecorder({
@@ -685,6 +688,17 @@ export default function Home() {
     }
   };
 
+  const testBasicAPI = async () => {
+    try {
+      const response = await fetch('/api/hello');
+      const data = await response.json();
+      alert(`API Response: ${data.message}`);
+    } catch (error) {
+      console.error("API test failed:", error);
+      alert("API test failed - check console");
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col relative">
       {/* Header - Reduced padding for mobile */}
@@ -1035,6 +1049,46 @@ export default function Home() {
                     {isProcessingText ? "Processing..." : "Send"}
                   </Button>
                 </div>
+
+                {/* AI Provider Selection */}
+        <div className="flex flex-col items-center space-y-4 mb-6">
+          <div className="flex items-center space-x-6">
+            <label className="flex items-center space-x-2 text-sm text-gray-600">
+              <input
+                type="radio"
+                name="aiProvider"
+                value="openai"
+                checked={aiProvider === 'openai'}
+                onChange={(e) => setAiProvider('openai')}
+                className="rounded"
+              />
+              <span>OpenAI (GPT-4o)</span>
+            </label>
+            <label className="flex items-center space-x-2 text-sm text-gray-600">
+              <input
+                type="radio"
+                name="aiProvider"
+                value="gemini"
+                checked={aiProvider === 'gemini'}
+                onChange={(e) => setAiProvider('gemini')}
+                className="rounded"
+              />
+              <span>Google Gemini</span>
+            </label>
+          </div>
+
+          {aiProvider === 'openai' && (
+            <label className="flex items-center space-x-2 text-sm text-gray-600">
+              <input
+                type="checkbox"
+                checked={useRealtimeAPI}
+                onChange={(e) => setUseRealtimeAPI(e.target.checked)}
+                className="rounded"
+              />
+              <span>Use Realtime API (WebRTC)</span>
+            </label>
+          )}
+        </div>
 
                 <div className="mt-3">
                   <p>

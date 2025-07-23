@@ -808,7 +808,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             voice: "alloy",
             instructions: enhancedInstructions,
             tools,
-            tool_choice: "required",
+            tool_choice: "auto",
             input_audio_format: "pcm16",
             output_audio_format: "pcm16",
             input_audio_transcription: {

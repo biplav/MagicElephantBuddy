@@ -79,7 +79,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       isConnectingRef.current = true;
       setState(prev => ({ ...prev, error: null }));
 
-      // Create ephemeral token from server
+      // Get ephemeral token from server
       const response = await fetch('/api/session', {
         method: 'POST',
         headers: {
@@ -88,11 +88,15 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create session');
+        const errorText = await response.text();
+        throw new Error(`Failed to create session: ${response.status} - ${errorText}`);
       }
 
       const { client_secret } = await response.json();
+
+      if (!client_secret) {
+        throw new Error('No client secret received from server');
+      }
 
       // Create WebRTC peer connection
       const pc = new RTCPeerConnection();
@@ -218,87 +222,90 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
                 options.onResponseReceived?.(message.delta);
                 break;
               case 'response.function_call_arguments.done':
-                // Handle function call (getEyesTool)
-                if (message.name === 'getEyesTool') {
-                  console.log('🔧 getEyesTool invoked:', {
-                    name: message.name,
-                    call_id: message.call_id,
-                    arguments: message.arguments,
-                    timestamp: new Date().toISOString()
-                  });
+                try {
+                  if (message.name === 'getEyesTool') {
+                    console.log('🔧 getEyesTool invoked:', {
+                      name: message.name,
+                      call_id: message.call_id,
+                      arguments: message.arguments,
+                      timestamp: new Date().toISOString()
+                    });
 
-                  // Test: Check if video elements are available
-                  console.log('🔧 Video setup check:', {
-                    hasVideo: !!videoRef.current,
-                    hasCanvas: !!canvasRef.current,
-                    videoReady: videoRef.current?.readyState >= 2,
-                    dataChannelOpen: dataChannelRef.current?.readyState === 'open'
-                  });
+                    // Test: Check if video elements are available
+                    console.log('🔧 Video setup check:', {
+                      hasVideo: !!videoRef.current,
+                      hasCanvas: !!canvasRef.current,
+                      videoReady: videoRef.current?.readyState >= 2,
+                      dataChannelOpen: dataChannelRef.current?.readyState === 'open'
+                    });
 
-                  // Capture current frame and send to analyze-frame endpoint
-                  const frameData = captureCurrentFrame();
-                  console.log('🔧 Frame capture result:', {
-                    frameDataLength: frameData?.length || 0,
-                    hasFrameData: !!frameData
-                  });
+                    // Capture current frame and send to analyze-frame endpoint
+                    const frameData = captureCurrentFrame();
+                    console.log('🔧 Frame capture result:', {
+                      frameDataLength: frameData?.length || 0,
+                      hasFrameData: !!frameData
+                    });
 
-                  if (frameData) {
-                    try {
-                      const analysisResponse = await fetch('/api/analyze-frame', {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                          frameData,
-                          reason: message.arguments?.reason || 'Child is showing something'
-                        })
-                      });
+                    if (frameData) {
+                      try {
+                        const analysisResponse = await fetch('/api/analyze-frame', {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                          },
+                          body: JSON.stringify({
+                            frameData,
+                            reason: message.arguments?.reason || 'Child is showing something'
+                          })
+                        });
 
-                      if (analysisResponse.ok) {
-                        const result = await analysisResponse.json();
-                        console.log('🔧 Frame analysis result:', result.analysis);
+                        if (analysisResponse.ok) {
+                          const result = await analysisResponse.json();
+                          console.log('🔧 Frame analysis result:', result.analysis);
 
-                        // Send the result back through data channel
-                        if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
-                          dataChannelRef.current.send(JSON.stringify({
-                            type: 'conversation.item.create',
-                            item: {
-                              type: 'function_call_output',
-                              call_id: message.call_id,
-                              output: result.analysis
-                            }
-                          }));
+                          // Send the result back through data channel
+                          if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
+                            dataChannelRef.current.send(JSON.stringify({
+                              type: 'conversation.item.create',
+                              item: {
+                                type: 'function_call_output',
+                                call_id: message.call_id,
+                                output: result.analysis
+                              }
+                            }));
+                          }
+                        } else {
+                          console.error('Frame analysis failed');
+                          if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
+                            dataChannelRef.current.send(JSON.stringify({
+                              type: 'conversation.item.create',
+                              item: {
+                                type: 'function_call_output',
+                                call_id: message.call_id,
+                                output: "I'm having trouble seeing what you're showing me right now. Can you try again?"
+                              }
+                            }));
+                          }
                         }
-                      } else {
-                        console.error('Frame analysis failed');
-                        if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
-                          dataChannelRef.current.send(JSON.stringify({
-                            type: 'conversation.item.create',
-                            item: {
-                              type: 'function_call_output',
-                              call_id: message.call_id,
-                              output: "I'm having trouble seeing what you're showing me right now. Can you try again?"
-                            }
-                          }));
-                        }
+                      } catch (error) {
+                        console.error('Error in getEyesTool:', error);
                       }
-                    } catch (error) {
-                      console.error('Error in getEyesTool:', error);
-                    }
-                  } else {
-                    console.log('No frame available for analysis');
-                    if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
-                      dataChannelRef.current.send(JSON.stringify({
-                        type: 'conversation.item.create',
-                        item: {
-                          type: 'function_call_output',
-                          call_id: message.call_id,
-                          output: "I don't see anything right now. Make sure your camera is on and try showing me again!"
-                        }
-                      }));
+                    } else {
+                      console.log('No frame available for analysis');
+                      if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
+                        dataChannelRef.current.send(JSON.stringify({
+                          type: 'conversation.item.create',
+                          item: {
+                            type: 'function_call_output',
+                            call_id: message.call_id,
+                            output: "I don't see anything right now. Make sure your camera is on and try showing me again!"
+                          }
+                        }));
+                      }
                     }
                   }
+                } catch (frameError) {
+                  console.error('Error in getEyesTool handler:', frameError);
                 }
                 break;
               case 'response.done':
@@ -331,6 +338,9 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
                 console.error('Realtime API error:', message);
                 setState(prev => ({ ...prev, error: message.error?.message || 'Unknown error' }));
                 options.onError?.(message.error?.message || 'Unknown error');
+                break;
+              default:
+                console.log('Unhandled message type:', message.type);
                 break;
             }
           } catch (error) {
