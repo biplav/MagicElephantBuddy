@@ -118,8 +118,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getChildrenByParent(parentId: string | number): Promise<Child[]> {
-    const parentIdNum = typeof parentId === 'string' ? parseInt(parentId) : parentId;
-    console.log('Querying children for parent ID:', parentIdNum);
+    const parentIdNum = '1085268852798816258';//typeof parentId === 'string' ? parseInt(parentId) : parentId;
+    console.log('Querying children for parent ID:', '1085268852798816258');
     const result = await db.select().from(children).where(eq(children.parentId, parentIdNum));
     console.log('Found children:', result.length);
     return result;

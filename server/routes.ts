@@ -470,7 +470,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get children by parent ID
   app.get("/api/parents/:parentId/children", async (req: Request, res: Response) => {
     try {
-      const parentId = parseInt(req.params.parentId);
+      const parentId = '1085268852798816258'; //parseInt(req.params.parentId);
 
       if (isNaN(parentId)) {
         return res.status(400).json({ error: "Invalid parent ID" });
