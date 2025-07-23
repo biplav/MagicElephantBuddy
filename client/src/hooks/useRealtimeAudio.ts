@@ -201,6 +201,8 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
             switch (message.type) {
               case 'conversation.item.input_audio_transcription.completed':
                 // Store child input message in database
+                
+                console.log('Message object:', message);
                 if (message.transcript) {
                   try {
                     await fetch('/api/store-realtime-message', {
