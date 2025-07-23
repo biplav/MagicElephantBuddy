@@ -60,7 +60,7 @@ export default function Home() {
     const handleStorageChange = () => {
       const currentParent = localStorage.getItem("currentParent");
       setIsParentLoggedIn(!!currentParent);
-      
+
       const selectedChild = localStorage.getItem("selectedChildId");
       setSelectedChildId(selectedChild ? parseInt(selectedChild) : null);
     };
@@ -85,26 +85,26 @@ export default function Home() {
         try {
           const parent = JSON.parse(currentParent);
           console.log("Loading children for parent:", parent.id);
-          
+
           if (!parent.id) {
             console.error("Parent ID is missing");
             return;
           }
-          
+
           if (!parent.id) {
             console.error("Parent ID is missing:", parent);
             setAvailableChildren([]);
             return;
           }
-          
+
           const response = await fetch(`/api/parents/${parent.id}/children`);
           console.log("Children API response status:", response.status);
-          
+
           if (response.ok) {
             const children = await response.json();
             console.log("Loaded children:", children);
             setAvailableChildren(children);
-            
+
             // Auto-select first child if none selected
             if (children.length > 0 && !selectedChildId) {
               const firstChildId = children[0].id;
@@ -161,6 +161,7 @@ export default function Home() {
   // Initialize realtime audio hook
   const realtimeAudio = useRealtimeAudio({
     onTranscriptionReceived: (transcription) => {
+      console.log('🎤 HOME: Transcription callback received:', transcription);
       setTranscribedText(transcription);
     },
     onResponseReceived: (text) => {
@@ -941,7 +942,7 @@ export default function Home() {
                         ))}
                       </select>
                     </div>
-                    
+
                     <Button
                       className="bg-secondary hover:bg-yellow-400 text-black font-bold py-3 px-6 sm:py-4 sm:px-8 rounded-full text-lg sm:text-xl shadow-lg transition transform hover:scale-105 active:scale-95"
                       onClick={handleStartButton}

@@ -133,6 +133,29 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       // Add the audio track to peer connection
       const audioTrack = stream.getAudioTracks()[0];
       pc.addTrack(audioTrack, stream);
+      
+      // Add audio level monitoring for debugging
+      if (audioTrack) {
+        console.log('🎤 AUDIO: Audio track added:', {
+          kind: audioTrack.kind,
+          enabled: audioTrack.enabled,
+          readyState: audioTrack.readyState,
+          label: audioTrack.label
+        });
+        
+        // Monitor audio track state changes
+        audioTrack.addEventListener('ended', () => {
+          console.log('🎤 AUDIO: Audio track ended');
+        });
+        
+        audioTrack.addEventListener('mute', () => {
+          console.log('🎤 AUDIO: Audio track muted');
+        });
+        
+        audioTrack.addEventListener('unmute', () => {
+          console.log('🎤 AUDIO: Audio track unmuted');
+        });
+      }
 
       // Handle video if enabled
       if (options.enableVideo && stream.getVideoTracks().length > 0) {
@@ -207,14 +230,23 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
         channel.onmessage = async (messageEvent) => {
           try {
             const message = JSON.parse(messageEvent.data);
-            console.log('Received message:', message);
+            console.log('🎤 REALTIME: Received message type:', message.type);
+            console.log('🎤 REALTIME: Full message:', message);
 
             switch (message.type) {
               case 'conversation.item.input_audio_transcription.completed':
-                // Store child input message in database
+                console.log('🎤 TRANSCRIPTION: Transcription completed event received');
+                console.log('🎤 TRANSCRIPTION: Message structure:', {
+                  type: message.type,
+                  transcript: message.transcript,
+                  hasTranscript: !!message.transcript,
+                  transcriptLength: message.transcript?.length || 0
+                });
                 
-                console.log('Message object:', message);
+                // Store child input message in database
                 if (message.transcript) {
+                  console.log('🎤 TRANSCRIPTION: Processing transcript:', message.transcript);
+                  
                   try {
                     await fetch('/api/store-realtime-message', {
                       method: 'POST',
@@ -225,13 +257,36 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
                         transcription: message.transcript
                       })
                     });
+                    console.log('🎤 TRANSCRIPTION: Stored message in database');
                   } catch (error) {
-                    console.error('Error storing child input message:', error);
+                    console.error('🎤 TRANSCRIPTION: Error storing child input message:', error);
                   }
+                  
+                  // Call transcription callback
+                  console.log('🎤 TRANSCRIPTION: Calling onTranscriptionReceived callback');
+                  options.onTranscriptionReceived?.(message.transcript);
+                } else {
+                  console.warn('🎤 TRANSCRIPTION: No transcript in message');
                 }
-                options.onTranscriptionReceived?.(message.transcript);
+                break;
+              case 'conversation.item.input_audio_transcription.delta':
+                console.log('🎤 TRANSCRIPTION: Partial transcription delta:', message.delta);
+                // Optionally handle partial transcription updates
+                break;
+              case 'conversation.item.input_audio_transcription.failed':
+                console.error('🎤 TRANSCRIPTION: Transcription failed:', message.error);
+                break;
+              case 'input_audio_buffer.speech_started':
+                console.log('🎤 AUDIO: Speech detection started');
+                break;
+              case 'input_audio_buffer.speech_stopped':
+                console.log('🎤 AUDIO: Speech detection stopped');
+                break;
+              case 'input_audio_buffer.committed':
+                console.log('🎤 AUDIO: Audio buffer committed for transcription');
                 break;
               case 'response.text.delta':
+                console.log('🎤 RESPONSE: Text delta received:', message.delta);
                 options.onResponseReceived?.(message.delta);
                 break;
               case 'response.function_call_arguments.done':
@@ -353,7 +408,13 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
                 options.onError?.(message.error?.message || 'Unknown error');
                 break;
               default:
-                console.log('Unhandled message type:', message.type);
+                console.log('🎤 REALTIME: Unhandled message type:', message.type);
+                console.log('🎤 REALTIME: Unhandled message data:', message);
+                
+                // Check if this might be a transcription message with different structure
+                if (message.type && message.type.includes('transcription')) {
+                  console.log('🎤 TRANSCRIPTION: Possible transcription message with unknown type');
+                }
                 break;
             }
           } catch (error) {
