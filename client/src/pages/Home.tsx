@@ -768,8 +768,7 @@ export default function Home() {
                             : "bg-accent hover:bg-pink-400"
                         }`}
                         onClick={handleMicrophoneButton}
-                        disabled```python
-={!isReady || isProcessing}
+                        disabled={!currentRecorder.isReady || currentRecorder.isProcessing}
                       >
                         {isRecording ? (
                           <div className="relative">
