@@ -1016,9 +1016,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           { source: 'returnResult', target: '__end__', label: 'complete' }
         ],
         entryPoint: '__start__'
-      }; code
-
-
+      };
 
       res.json({
         success: true,
