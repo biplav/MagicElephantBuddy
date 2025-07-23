@@ -837,7 +837,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let audioUrl = null;
       if (result.audioResponse) {
         const audioFileName = `appu-speech-${Date.now()}.wav`;
-        const audioPath = path.join(process.cwd(), 'public', 'public', audioFileName);
+        const audioPath = path.join(process.cwd(), 'public', 'public', audio```text
+FileName);
         fs.writeFileSync(audioPath, result.audioResponse);
         audioUrl = `/${audioFileName}`;
       }
@@ -1018,28 +1019,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         entryPoint: '__start__'
       }; code
 
-      const conversationWorkflow = {
-        nodes: [
-          { id: '__start__', type: 'start', label: 'Start' },
-          { id: 'transcribe', type: 'process', label: 'Transcribe Audio' },
-          { id: 'loadContext', type: 'process', label: 'Load Child Context' },
-          { id: 'getEyesTool', type: 'process', label: 'getEyesTool (Vision Analysis)' },
-          { id: 'generateResponse', type: 'process', label: 'Generate AI Response' },
-          { id: 'synthesizeSpeech', type: 'process', label: 'Synthesize Speech' },
-          { id: 'storeConversation', type: 'process', label: 'Store Conversation' },
-          { id: '__end__', type: 'end', label: 'End' }
-        ],
-        edges: [
-          { source: '__start__', target: 'transcribe', label: 'start' },
-          { source: 'transcribe', target: 'loadContext', label: 'audio processed' },
-          { source: 'loadContext', target: 'getEyesTool', label: 'context loaded' },
-          { source: 'getEyesTool', target: 'generateResponse', label: 'video analyzed' },
-          { source: 'generateResponse', target: 'synthesizeSpeech', label: 'response generated' },
-          { source: 'synthesizeSpeech', target: 'storeConversation', label: 'speech synthesized' },
-          { source: 'storeConversation', target: '__end__', label: 'conversation stored' }
-        ],
-        entryPoint: '__start__'
-      };
+
 
       res.json({
         success: true,
