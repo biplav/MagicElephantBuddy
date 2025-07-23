@@ -281,7 +281,6 @@ const WorkflowVisualizer: React.FC = () => {
                     {workflowData.workflows.conversationWorkflow?.edges?.length || 0}
                   </div>
                   <div className="text-xs text-muted-foreground">Total Edges</div>
-                </div></div>
                 </div>
               </div>
             </CardContent>
