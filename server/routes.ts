@@ -148,28 +148,6 @@ CURRENT DATE AND TIME INFORMATION:
 
     const profileInfo = `
 
-  // Get children by parent ID
-  app.get("/api/parents/:parentId/children", async (req: Request, res: Response) => {
-    try {
-      const parentId = parseInt(req.params.parentId);
-      
-      if (isNaN(parentId)) {
-        return res.status(400).json({ error: "Invalid parent ID" });
-      }
-      
-      console.log("Fetching children for parent ID:", parentId);
-      const children = await storage.getChildrenByParent(parentId);
-      console.log("Found children:", children.length);
-      
-      res.json(children);
-    } catch (error) {
-      console.error("Error fetching children by parent:", error);
-      res.status(500).json({ error: "Failed to fetch children" });
-    }
-  });
-
-
-
 CHILD PROFILE INFORMATION:
 ${generateProfileSection(childProfile)}
 Use this information to personalize your responses and make them more engaging for ${(childProfile as any).name || "the child"}.`;
@@ -486,6 +464,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         error: "Processing failed",
         details: error.message,
       });
+    }
+  });
+
+  // Get children by parent ID
+  app.get("/api/parents/:parentId/children", async (req: Request, res: Response) => {
+    try {
+      const parentId = parseInt(req.params.parentId);
+
+      if (isNaN(parentId)) {
+        return res.status(400).json({ error: "Invalid parent ID" });
+      }
+
+      console.log("Fetching children for parent ID:", parentId);
+      const children = await storage.getChildrenByParent(parentId);
+      console.log("Found children:", children.length);
+
+      res.json(children);
+    } catch (error) {
+      console.error("Error fetching children by parent:", error);
+      res.status(500).json({ error: "Failed to fetch children" });
     }
   });
 
