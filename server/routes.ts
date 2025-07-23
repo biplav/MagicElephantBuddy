@@ -978,8 +978,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Visualize LangGraph workflow structure
   app.get('/api/admin/workflow-graph', async (req: Request, res: Response) => {
     try {
-      // Instead of trying to access internal graph structure, provide a static representation
-      // based on the known workflow structure from the code
+      // Provide a structured representation of the LangGraph workflows
+      const conversationWorkflow = {
+        nodes: [
+          { id: '__start__', type: 'start', label: 'Start' },
+          { id: 'loadContext', type: 'process', label: 'Load Child Context' },
+          { id: 'callModel', type: 'process', label: 'Call LLM with Tools' },
+          { id: 'useTool', type: 'process', label: 'Execute Tools (getEyesTool)' },
+          { id: 'synthesizeSpeech', type: 'process', label: 'Synthesize Speech' },
+          { id: 'storeConversation', type: 'process', label: 'Store Conversation' },
+          { id: '__end__', type: 'end', label: 'End' }
+        ],
+        edges: [
+          { source: '__start__', target: 'loadContext', label: 'start' },
+          { source: 'loadContext', target: 'callModel', label: 'context loaded' },
+          { source: 'callModel', target: 'useTool', label: 'tools requested' },
+          { source: 'callModel', target: 'synthesizeSpeech', label: 'no tools needed' },
+          { source: 'useTool', target: 'synthesizeSpeech', label: 'tools executed' },
+          { source: 'synthesizeSpeech', target: 'storeConversation', label: 'speech synthesized' },
+          { source: 'storeConversation', target: '__end__', label: 'stored' }
+        ],
+        entryPoint: '__start__'
+      };
+
+      const videoAnalysisWorkflow = {
+        nodes: [
+          { id: '__start__', type: 'start', label: 'Start' },
+          { id: 'receiveFrame', type: 'process', label: 'Receive Video Frame' },
+          { id: 'analyzeFrame', type: 'process', label: 'OpenAI Vision Analysis' },
+          { id: 'returnResult', type: 'process', label: 'Return Analysis Result' },
+          { id: '__end__', type: 'end', label: 'End' }
+        ],
+        edges: [
+          { source: '__start__', target: 'receiveFrame', label: 'start' },
+          { source: 'receiveFrame', target: 'analyzeFrame', label: 'frame available' },
+          { source: 'analyzeFrame', target: 'returnResult', label: 'analysis complete' },
+          { source: 'returnResult', target: '__end__', label: 'complete' }
+        ],
+        entryPoint: '__start__'
+      }; code
 
       const conversationWorkflow = {
         nodes: [
@@ -1005,13 +1042,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       res.json({
+        success: true,
         workflows: {
-          conversationWorkflow
+          conversationWorkflow,
+          videoAnalysisWorkflow
         }
       });
     } catch (error) {
       console.error('Error getting workflow graphs:', error);
-      res.status(500).json({ error: 'Failed to get workflow graphs', details: String(error) });
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to get workflow graphs', 
+        details: String(error) 
+      });
     }
   });
 

@@ -38,15 +38,44 @@ const WorkflowVisualizer: React.FC = () => {
   const fetchWorkflowGraph = async () => {
     try {
       setLoading(true);
+      setError(null);
+      
       const response = await fetch('/api/admin/workflow-graph');
       if (!response.ok) {
-        throw new Error('Failed to fetch workflow graph');
+        throw new Error(`HTTP ${response.status}: Failed to fetch workflow graph`);
       }
+      
       const data = await response.json();
+      
+      // Validate the data structure
+      if (!data || !data.workflows || !data.workflows.conversationWorkflow) {
+        throw new Error('Invalid workflow data structure received');
+      }
+      
+      // Add missing videoAnalysisWorkflow if not present
+      if (!data.workflows.videoAnalysisWorkflow) {
+        data.workflows.videoAnalysisWorkflow = {
+          nodes: [
+            { id: '__start__', type: 'start', label: 'Start' },
+            { id: 'receiveVideoFrame', type: 'process', label: 'Receive Video Frame' },
+            { id: 'analyzeFrame', type: 'process', label: 'Analyze Frame with OpenAI Vision' },
+            { id: 'returnAnalysis', type: 'process', label: 'Return Analysis' },
+            { id: '__end__', type: 'end', label: 'End' }
+          ],
+          edges: [
+            { source: '__start__', target: 'receiveVideoFrame', label: 'start' },
+            { source: 'receiveVideoFrame', target: 'analyzeFrame', label: 'frame received' },
+            { source: 'analyzeFrame', target: 'returnAnalysis', label: 'analysis complete' },
+            { source: 'returnAnalysis', target: '__end__', label: 'complete' }
+          ],
+          entryPoint: '__start__'
+        };
+      }
+      
       setWorkflowData(data);
-      setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      console.error('Error fetching workflow graph:', err);
+      setError(err instanceof Error ? err.message : 'Unknown error occurred');
     } finally {
       setLoading(false);
     }
@@ -57,6 +86,27 @@ const WorkflowVisualizer: React.FC = () => {
   }, []);
 
   const renderWorkflowDiagram = (workflow: WorkflowData, title: string) => {
+    if (!workflow || !workflow.nodes || !workflow.edges) {
+      return (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-600">
+              <Eye className="w-5 h-5" />
+              {title} - Data Error
+            </CardTitle>
+            <CardDescription>
+              Invalid workflow data structure
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Unable to render workflow due to missing or invalid data.
+            </p>
+          </CardContent>
+        </Card>
+      );
+    }
+
     return (
       <Card className="mb-6">
         <CardHeader>
@@ -65,7 +115,7 @@ const WorkflowVisualizer: React.FC = () => {
             {title}
           </CardTitle>
           <CardDescription>
-            {workflow.nodes.length} nodes, {workflow.edges.length} connections
+            {workflow.nodes?.length || 0} nodes, {workflow.edges?.length || 0} connections
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -80,8 +130,8 @@ const WorkflowVisualizer: React.FC = () => {
             <div className="space-y-3">
               <h4 className="font-semibold text-sm">Workflow Flow:</h4>
               <div className="flex flex-wrap items-center gap-2">
-                {workflow.nodes
-                  .filter(node => node.id !== '__start__' && node.id !== '__end__')
+                {(workflow.nodes || [])
+                  .filter(node => node && node.id && node.id !== '__start__' && node.id !== '__end__')
                   .map((node, index, filteredNodes) => (
                     <React.Fragment key={node.id}>
                       <div className="flex flex-col items-center">
@@ -107,8 +157,8 @@ const WorkflowVisualizer: React.FC = () => {
             <div className="space-y-3">
               <h4 className="font-semibold text-sm">Node Details:</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {workflow.nodes
-                  .filter(node => node.id !== '__start__' && node.id !== '__end__')
+                {(workflow.nodes || [])
+                  .filter(node => node && node.id && node.id !== '__start__' && node.id !== '__end__')
                   .map(node => (
                     <div key={node.id} className="p-3 border rounded-lg bg-muted/20">
                       <div className="font-mono text-sm font-semibold">{node.label}</div>
@@ -122,11 +172,11 @@ const WorkflowVisualizer: React.FC = () => {
             </div>
 
             {/* Connection Details */}
-            {workflow.edges.length > 0 && (
+            {(workflow.edges || []).length > 0 && (
               <div className="space-y-3">
                 <h4 className="font-semibold text-sm">Connections:</h4>
                 <div className="space-y-2">
-                  {workflow.edges.map((edge, index) => (
+                  {(workflow.edges || []).map((edge, index) => (
                     <div key={index} className="flex items-center gap-2 text-sm font-mono">
                       <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 rounded text-xs">
                         {edge.source}
@@ -170,11 +220,23 @@ const WorkflowVisualizer: React.FC = () => {
             <CardTitle className="text-red-600">Error Loading Workflows</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground mb-4">{error}</p>
-            <Button onClick={fetchWorkflowGraph} variant="outline">
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Retry
-            </Button>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">{error}</p>
+              <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                <h4 className="font-semibold text-sm text-yellow-800 dark:text-yellow-200 mb-2">
+                  Troubleshooting Tips:
+                </h4>
+                <ul className="text-xs text-yellow-700 dark:text-yellow-300 space-y-1">
+                  <li>• Check if the server is running and responding</li>
+                  <li>• Verify the LangGraph workflow is properly configured</li>
+                  <li>• Check browser console for additional error details</li>
+                </ul>
+              </div>
+              <Button onClick={fetchWorkflowGraph} variant="outline">
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Retry Loading
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -215,25 +277,25 @@ const WorkflowVisualizer: React.FC = () => {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="text-center">
                   <div className="text-2xl font-bold">
-                    {workflowData.workflows.conversationWorkflow.nodes.length}
+                    {workflowData.workflows.conversationWorkflow?.nodes?.length || 0}
                   </div>
                   <div className="text-xs text-muted-foreground">Conversation Nodes</div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold">
-                    {workflowData.workflows.conversationWorkflow.edges.length}
+                    {workflowData.workflows.conversationWorkflow?.edges?.length || 0}
                   </div>
                   <div className="text-xs text-muted-foreground">Conversation Edges</div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold">
-                    {workflowData.workflows.videoAnalysisWorkflow.nodes.length}
+                    {workflowData.workflows.videoAnalysisWorkflow?.nodes?.length || 0}
                   </div>
                   <div className="text-xs text-muted-foreground">Video Nodes</div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold">
-                    {workflowData.workflows.videoAnalysisWorkflow.edges.length}
+                    {workflowData.workflows.videoAnalysisWorkflow?.edges?.length || 0}
                   </div>
                   <div className="text-xs text-muted-foreground">Video Edges</div>
                 </div>
