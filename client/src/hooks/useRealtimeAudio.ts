@@ -35,6 +35,9 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const wsRef = useRef<WebSocket | null>(null); // WebSocket Reference
+  const videoStreamRef = useRef<MediaStream | null>(null); // Video stream ref
+  const frameIntervalRef = useRef<NodeJS.Timeout | null>(null);
   // Direct frame capture function for getEyesTool
   const captureCurrentFrame = useCallback((): string | null => {
     const video = videoRef.current;
@@ -56,7 +59,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     if (typeof window !== 'undefined') {
       (window as any).captureCurrentFrame = captureCurrentFrame;
     }
-    
+
     return () => {
       if (typeof window !== 'undefined') {
         delete (window as any).captureCurrentFrame;
@@ -217,7 +220,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
                 // Handle function call (getEyesTool)
                 if (message.name === 'getEyesTool') {
                   console.log('🔧 getEyesTool invoked:', message);
-                  
+
                   // Capture current frame and send to analyze-frame endpoint
                   const frameData = captureCurrentFrame();
                   if (frameData) {
@@ -236,7 +239,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
                       if (analysisResponse.ok) {
                         const result = await analysisResponse.json();
                         console.log('🔧 Frame analysis result:', result.analysis);
-                        
+
                         // Send the result back through data channel
                         if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
                           dataChannelRef.current.send(JSON.stringify({
@@ -458,6 +461,90 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       disconnect();
     };
   }, [disconnect]);
+
+  const stopVideoCapture = useCallback(() => {
+      if (videoStreamRef.current) {
+        videoStreamRef.current.getTracks().forEach(track => track.stop());
+        videoStreamRef.current = null;
+      }
+
+      if (frameIntervalRef.current) {
+        clearInterval(frameIntervalRef.current);
+        frameIntervalRef.current = null;
+      }
+
+      setState(prev => ({ ...prev, isVideoCapturing: false }));
+    }, []);
+
+    // Handle tool-triggered frame capture
+    const handleToolFrameCapture = useCallback(async (callId: string, toolName: string) => {
+      console.log(`🔧 ${toolName} triggered - capturing frame...`);
+
+      try {
+        if (!videoStreamRef.current) {
+          throw new Error('Camera not available');
+        }
+
+        // Capture current frame
+        const canvas = document.createElement('canvas');
+        const video = document.createElement('video');
+        video.srcObject = videoStreamRef.current;
+        video.play();
+
+        await new Promise(resolve => {
+          video.onloadedmetadata = resolve;
+        });
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(video, 0, 0);
+
+        // Convert to base64
+        const frameData = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+
+        // Send to analyze-frame endpoint
+        const response = await fetch('/api/analyze-frame', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            frameData,
+            sessionId: state.conversationId
+          })
+        });
+
+        const result = await response.json();
+
+        if (result.analysis) {
+          // Send tool response back to server
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({
+              type: 'tool_response',
+              call_id: callId,
+              tool_name: toolName,
+              result: result.analysis
+            }));
+          }
+        } else {
+          throw new Error('No analysis result received');
+        }
+
+      } catch (error) {
+        console.error('Tool frame capture failed:', error);
+
+        // Send error response
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({
+            type: 'tool_response',
+            call_id: callId,
+            tool_name: toolName,
+            result: "I'm having trouble seeing right now. Can you try showing me again?"
+          }));
+        }
+      }
+    }, [state.conversationId]);
 
   return {
     ...state,

@@ -823,26 +823,16 @@ async function startRealtimeSession(session: RealtimeSession) {
 
         // Forward all messages from OpenAI to client
         session.ws.send(data.toString());
-      } catch (error) {
-        realtimeLogger.error("Error processing OpenAI message:", {
-          error: error.message,
-        });
-      }
-    });
 
-      // Handle tool calls from OpenAI
-      session.openaiWs.on("message", async (data) => {
-        try {
-          const message = JSON.parse(data.toString());
-
-          if (message.type === 'response.function_call_arguments.done') {
+         // Tool call handling - moved inside the main message handler
+        if (message.type === 'response.function_call_arguments.done') {
             realtimeLogger.info("🔧 OpenAI function call received:", { 
               name: message.name,
               call_id: message.call_id 
             });
 
             // Check for getEyesTool invocation
-              if (message.type === 'response.function_call_output' && message.name === 'getEyesTool') {
+            if (message.name === 'getEyesTool') {
                 realtimeLogger.info("🔧 getEyesTool invoked by OpenAI:", { args: message.arguments });
 
                 let toolResult = "I don't see anything right now. Make sure your camera is on and try showing me again!";
@@ -876,11 +866,15 @@ async function startRealtimeSession(session: RealtimeSession) {
                       output: "I'm having trouble using my eyes right now. Can you try again?"
                     }
                   }));
-          }
-        } catch (parseError) {
-          realtimeLogger.error("Error parsing OpenAI tool call message:", { error: parseError.message });
+                }
+            }
         }
-      });
+      } catch (error) {
+        realtimeLogger.error("Error processing OpenAI message:", {
+          error: error.message,
+        });
+      }
+    });
 
     session.openaiWs.on("error", (error) => {
       realtimeLogger.error("OpenAI Realtime API error:", {
