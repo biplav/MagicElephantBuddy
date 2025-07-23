@@ -260,12 +260,7 @@ const WorkflowVisualizer: React.FC = () => {
         <div className="space-y-6">
           {renderWorkflowDiagram(
             workflowData.workflows.conversationWorkflow,
-            "Conversation Workflow"
-          )}
-          
-          {renderWorkflowDiagram(
-            workflowData.workflows.videoAnalysisWorkflow,
-            "Video Analysis Workflow"
+            "Main Conversation Workflow (includes video analysis via getEyesTool)"
           )}
 
           {/* Summary Statistics */}
@@ -274,30 +269,19 @@ const WorkflowVisualizer: React.FC = () => {
               <CardTitle>Workflow Summary</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="text-center">
                   <div className="text-2xl font-bold">
                     {workflowData.workflows.conversationWorkflow?.nodes?.length || 0}
                   </div>
-                  <div className="text-xs text-muted-foreground">Conversation Nodes</div>
+                  <div className="text-xs text-muted-foreground">Total Nodes</div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold">
                     {workflowData.workflows.conversationWorkflow?.edges?.length || 0}
                   </div>
-                  <div className="text-xs text-muted-foreground">Conversation Edges</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold">
-                    {workflowData.workflows.videoAnalysisWorkflow?.nodes?.length || 0}
-                  </div>
-                  <div className="text-xs text-muted-foreground">Video Nodes</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold">
-                    {workflowData.workflows.videoAnalysisWorkflow?.edges?.length || 0}
-                  </div>
-                  <div className="text-xs text-muted-foreground">Video Edges</div>
+                  <div className="text-xs text-muted-foreground">Total Edges</div>
+                </div></div>
                 </div>
               </div>
             </CardContent>

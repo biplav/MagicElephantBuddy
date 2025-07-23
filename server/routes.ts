@@ -978,7 +978,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Visualize LangGraph workflow structure
   app.get('/api/admin/workflow-graph', async (req: Request, res: Response) => {
     try {
-      // Provide a structured representation of the LangGraph workflows
+      // Provide a structured representation of the main conversation workflow
       const conversationWorkflow = {
         nodes: [
           { id: '__start__', type: 'start', label: 'Start' },
@@ -1001,29 +1001,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         entryPoint: '__start__'
       };
 
-      const videoAnalysisWorkflow = {
-        nodes: [
-          { id: '__start__', type: 'start', label: 'Start' },
-          { id: 'receiveFrame', type: 'process', label: 'Receive Video Frame' },
-          { id: 'analyzeFrame', type: 'process', label: 'OpenAI Vision Analysis' },
-          { id: 'returnResult', type: 'process', label: 'Return Analysis Result' },
-          { id: '__end__', type: 'end', label: 'End' }
-        ],
-        edges: [
-          { source: '__start__', target: 'receiveFrame', label: 'start' },
-          { source: 'receiveFrame', target: 'analyzeFrame', label: 'frame available' },
-          { source: 'analyzeFrame', target: 'returnResult', label: 'analysis complete' },
-          { source: 'returnResult', target: '__end__', label: 'complete' }
-        ],
-        entryPoint: '__start__'
-      };
-
       res.json({
         success: true,
         workflows: {
-          conversationWorkflow,
-          videoAnalysisWorkflow
-        }
+          conversationWorkflow
+        },
+        note: "Video analysis is integrated into the conversation workflow via getEyesTool"
       });
     } catch (error) {
       console.error('Error getting workflow graphs:', error);
