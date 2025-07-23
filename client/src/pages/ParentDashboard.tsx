@@ -68,6 +68,13 @@ export default function ParentDashboard() {
 
   const { data: dashboardData, isLoading, error, refetch } = useQuery<DashboardData>({
     queryKey: [`/api/parents/${currentParent?.id}/dashboard`],
+    queryFn: async () => {
+      const response = await fetch(`/api/parents/${currentParent?.id}/dashboard`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch dashboard data');
+      }
+      return response.json();
+    },
     enabled: !!currentParent?.id,
   });
 
