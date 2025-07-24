@@ -170,7 +170,10 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       });
 
       const ws = new WebSocket(wsUrl);
-      console.log('🔗 GEMINI: WebSocket object created, readyState:', ws.readyState);
+      console.log('🔗 GEMINI: WebSocket object created');
+      console.log('🔗 GEMINI: Initial readyState:', ws.readyState, '(0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)');
+      console.log('🔗 GEMINI: WebSocket protocols:', ws.protocol);
+      console.log('🔗 GEMINI: WebSocket extensions:', ws.extensions);
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -224,13 +227,26 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
 
       ws.onerror = (error) => {
         console.error('🔗 GEMINI: WebSocket error occurred');
-        console.error('🔗 GEMINI: Error details:', error);
+        console.error('🔗 GEMINI: Error event:', error);
+        console.error('🔗 GEMINI: Error type:', error.type);
         console.error('🔗 GEMINI: WebSocket URL was:', wsUrl);
         console.error('🔗 GEMINI: WebSocket readyState:', ws.readyState);
+        console.error('🔗 GEMINI: WebSocket readyState meanings:', {
+          0: 'CONNECTING',
+          1: 'OPEN', 
+          2: 'CLOSING',
+          3: 'CLOSED'
+        }[ws.readyState] || 'UNKNOWN');
         console.error('🔗 GEMINI: Current location:', window.location.href);
 
-        // Prevent unhandled promise rejections
-        const errorMessage = error instanceof ErrorEvent ? error.message : 'WebSocket connection failed';
+        // More detailed error message
+        let errorMessage = 'WebSocket connection failed';
+        if (error instanceof ErrorEvent) {
+          errorMessage = error.message || 'WebSocket connection failed';
+        } else if (error instanceof Event) {
+          errorMessage = `WebSocket ${error.type} event occurred`;
+        }
+
         setState(prev => ({ ...prev, error: errorMessage, isConnected: false }));
         options.onError?.(errorMessage);
 
