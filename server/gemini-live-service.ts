@@ -4,6 +4,9 @@ import { storage } from "./storage";
 import { APPU_SYSTEM_PROMPT } from "@shared/appuPrompts";
 import { getCurrentTimeContext, DEFAULT_PROFILE } from "@shared/childProfile";
 import { memoryService } from './memory-service';
+import { createServiceLogger } from './logger';
+
+const geminiLogger = createServiceLogger('gemini-live');
 
 interface GeminiLiveSession {
   ws: WebSocket;
@@ -82,7 +85,7 @@ async function formMemoryFromContent(childId: number, content: string, role: 'us
       }
     }
   } catch (error) {
-    console.error('Error forming memory from content:', error);
+    geminiLogger.error('Error forming memory from content', { error: error.message, childId, role, conversationId });
   }
 }
 
@@ -263,7 +266,7 @@ Use this information to personalize your responses and make them more engaging f
     return APPU_SYSTEM_PROMPT + dateTimeInfo + profileInfo + milestonesInfo + memoryInfo;
     
   } catch (error) {
-    console.error('Error creating enhanced Gemini prompt:', error);
+    geminiLogger.error('Error creating enhanced Gemini prompt', { error: error.message, childId });
     // Fallback to basic prompt if there's an error
     return APPU_SYSTEM_PROMPT;
   }
@@ -273,11 +276,17 @@ Use this information to personalize your responses and make them more engaging f
 async function handleGeminiVideoFrame(session: GeminiLiveSession, frameData: string) {
   try {
     if (!session.isConnected || !session.conversationId) {
-      console.log('Video frame received but session not ready');
+      geminiLogger.warn('Video frame received but session not ready', { 
+        sessionId: session.conversationId, 
+        isConnected: session.isConnected 
+      });
       return;
     }
 
-    console.log(`Gemini Live processing video frame: ${frameData.slice(0, 50)}...`);
+    geminiLogger.debug('Processing video frame', { 
+      frameDataLength: frameData.length, 
+      sessionId: session.conversationId 
+    });
     
     // For now, we'll analyze the video frame with Gemini's vision capabilities
     // In a full Live API implementation, this would be handled differently
@@ -298,7 +307,10 @@ async function handleGeminiVideoFrame(session: GeminiLiveSession, frameData: str
     ]);
 
     const visionResponse = result.response.text();
-    console.log(`Gemini vision response: ${visionResponse}`);
+    geminiLogger.info('Gemini vision response generated', { 
+      responseLength: visionResponse.length, 
+      sessionId: session.conversationId 
+    });
 
     // Send vision response back to client (this could be combined with other responses)
     session.ws.send(JSON.stringify({
@@ -315,14 +327,17 @@ async function handleGeminiVideoFrame(session: GeminiLiveSession, frameData: str
     });
 
   } catch (error) {
-    console.error('Error handling Gemini video frame:', error);
+    geminiLogger.error('Error handling Gemini video frame', { 
+      error: error.message, 
+      sessionId: session.conversationId 
+    });
     // Don't send error to client for vision processing - it's supplementary
   }
 }
 
 async function startGeminiLiveSession(session: GeminiLiveSession) {
   try {
-    console.log('Starting Gemini Live session');
+    geminiLogger.info('Starting Gemini Live session', { childId: session.childId });
     
     // Create new conversation in database
     const conversation = await storage.createConversation({
@@ -331,7 +346,10 @@ async function startGeminiLiveSession(session: GeminiLiveSession) {
     });
     
     session.conversationId = conversation.id;
-    console.log(`Created conversation ${conversation.id} for Gemini Live session`);
+    geminiLogger.info('Created conversation for Gemini Live session', { 
+      conversationId: conversation.id, 
+      childId: session.childId 
+    });
 
     // Initialize Gemini client
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
@@ -382,9 +400,15 @@ LIVE CONVERSATION GUIDANCE:
       conversationId: session.conversationId
     }));
 
-    console.log('Gemini Live session started successfully');
+    geminiLogger.info('Gemini Live session started successfully', { 
+      conversationId: session.conversationId, 
+      childId: session.childId 
+    });
   } catch (error) {
-    console.error('Error starting Gemini Live session:', error);
+    geminiLogger.error('Error starting Gemini Live session', { 
+      error: error.message, 
+      childId: session.childId 
+    });
     session.ws.send(JSON.stringify({
       type: 'error',
       error: 'Failed to start session'
@@ -398,7 +422,11 @@ async function handleGeminiTextInput(session: GeminiLiveSession, text: string) {
       throw new Error('Session not properly initialized');
     }
 
-    console.log(`Gemini Live processing text: ${text}`);
+    geminiLogger.info('Processing text input', { 
+      textLength: text.length, 
+      conversationId: session.conversationId,
+      childId: session.childId 
+    });
     
     // Store child's message
     await storage.createMessage({
@@ -415,14 +443,20 @@ async function handleGeminiTextInput(session: GeminiLiveSession, text: string) {
       'user',
       session.conversationId
     );
-    console.log(`Memory formed from child input: "${text.slice(0, 50)}..."`);
+    geminiLogger.debug('Memory formed from child input', { 
+      textPreview: text.slice(0, 50), 
+      conversationId: session.conversationId 
+    });
 
     // Generate response using Gemini
     const chat = (session as any).geminiChat;
     const result = await chat.sendMessage(text);
     const responseText = result.response.text();
 
-    console.log(`Gemini Live response: ${responseText}`);
+    geminiLogger.info('Generated Gemini response', { 
+      responseLength: responseText.length, 
+      conversationId: session.conversationId 
+    });
 
     // Store Appu's response
     await storage.createMessage({
@@ -438,7 +472,10 @@ async function handleGeminiTextInput(session: GeminiLiveSession, text: string) {
       'assistant',
       session.conversationId
     );
-    console.log(`Memory formed from Appu's response: "${responseText.slice(0, 50)}..."`);
+    geminiLogger.debug('Memory formed from Appu response', { 
+      responsePreview: responseText.slice(0, 50), 
+      conversationId: session.conversationId 
+    });
 
     // Update conversation message count
     session.messageCount += 2;
@@ -453,9 +490,15 @@ async function handleGeminiTextInput(session: GeminiLiveSession, text: string) {
       conversationId: session.conversationId
     }));
 
-    console.log(`Stored messages for Gemini conversation ${session.conversationId}`);
+    geminiLogger.debug('Stored messages for Gemini conversation', { 
+      conversationId: session.conversationId, 
+      messageCount: session.messageCount 
+    });
   } catch (error) {
-    console.error('Error handling Gemini text input:', error);
+    geminiLogger.error('Error handling Gemini text input', { 
+      error: error.message, 
+      conversationId: session.conversationId 
+    });
     session.ws.send(JSON.stringify({
       type: 'error',
       error: 'Failed to process text input'
@@ -474,7 +517,11 @@ async function endGeminiLiveSession(session: GeminiLiveSession) {
         duration
       });
       
-      console.log(`Closed Gemini conversation ${session.conversationId} - Duration: ${duration}s`);
+      geminiLogger.info('Closed Gemini conversation', { 
+        conversationId: session.conversationId, 
+        duration: duration,
+        childId: session.childId 
+      });
     }
 
     if (session.geminiWs) {
@@ -485,9 +532,12 @@ async function endGeminiLiveSession(session: GeminiLiveSession) {
     session.isConnected = false;
     session.conversationId = null;
     
-    console.log('Gemini Live session ended');
+    geminiLogger.info('Gemini Live session ended', { conversationId: session.conversationId });
   } catch (error) {
-    console.error('Error ending Gemini Live session:', error);
+    geminiLogger.error('Error ending Gemini Live session', { 
+      error: error.message, 
+      conversationId: session.conversationId 
+    });
   }
 }
 
@@ -501,11 +551,10 @@ export function setupGeminiLiveWebSocket(server: any) {
     path: '/gemini-ws'
   });
 
-  console.log('Gemini Live WebSocket server initialized on /gemini-ws');
+  geminiLogger.info('Gemini Live WebSocket server initialized on /gemini-ws');
 
   wss.on('connection', (ws: WebSocket) => {
-    console.log('New Gemini Live WebSocket connection established');
-    console.log('WebSocket state:', ws.readyState);
+    geminiLogger.info('New Gemini Live WebSocket connection established', { readyState: ws.readyState });
     
     // Send immediate confirmation that connection is established
     ws.send(JSON.stringify({
@@ -526,14 +575,14 @@ export function setupGeminiLiveWebSocket(server: any) {
     ws.on('message', async (data: Buffer) => {
       try {
         const message = JSON.parse(data.toString());
-        console.log('Received Gemini Live message:', message.type);
+        geminiLogger.debug('Received Gemini Live message', { messageType: message.type });
 
         switch (message.type) {
           case 'start_session':
             // Set child ID from message if provided
             if (message.childId) {
               session.childId = message.childId;
-              console.log(`Gemini session child ID set to: ${session.childId}`);
+              geminiLogger.info('Gemini session child ID set', { childId: session.childId });
             }
             await startGeminiLiveSession(session);
             break;
@@ -549,7 +598,10 @@ export function setupGeminiLiveWebSocket(server: any) {
             break;
           
           case 'video_frame':
-            console.log(`📹 GEMINI: Received video frame from client - Size: ${message.frameData?.length || 0} bytes`);
+            geminiLogger.debug('Received video frame from client', { 
+              frameSize: message.frameData?.length || 0,
+              conversationId: session.conversationId 
+            });
             await handleGeminiVideoFrame(session, message.frameData);
             break;
           
@@ -562,7 +614,10 @@ export function setupGeminiLiveWebSocket(server: any) {
             break;
         }
       } catch (error) {
-        console.error('Error processing Gemini Live message:', error);
+        geminiLogger.error('Error processing Gemini Live message', { 
+          error: error.message, 
+          conversationId: session.conversationId 
+        });
         ws.send(JSON.stringify({
           type: 'error',
           error: 'Failed to process message'
@@ -571,12 +626,17 @@ export function setupGeminiLiveWebSocket(server: any) {
     });
 
     ws.on('close', async () => {
-      console.log('Gemini Live WebSocket connection closed');
+      geminiLogger.info('Gemini Live WebSocket connection closed', { 
+        conversationId: session.conversationId 
+      });
       await endGeminiLiveSession(session);
     });
 
     ws.on('error', (error) => {
-      console.error('Gemini Live WebSocket error:', error);
+      geminiLogger.error('Gemini Live WebSocket error', { 
+        error: error.message, 
+        conversationId: session.conversationId 
+      });
     });
   });
 
