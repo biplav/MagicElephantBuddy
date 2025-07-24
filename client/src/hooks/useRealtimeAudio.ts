@@ -194,8 +194,16 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     try {
       geminiLogger.info('Initiating WebSocket connection setup');
 
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      // Force WSS for Replit environment
+      const protocol = 'wss:';
       const wsUrl = `${protocol}//${window.location.host}/gemini-ws`;
+      
+      geminiLogger.info('WebSocket URL constructed', { 
+        wsUrl,
+        protocol,
+        host: window.location.host,
+        location: window.location.href
+      });
 
       // Initialize modular utilities
       const connectionTracker = new WebSocketConnectionTracker(geminiLogger);
@@ -235,7 +243,20 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
         timing: connectionTracker.startTracking()
       });
 
-      const ws = new WebSocket(wsUrl);
+      let ws: WebSocket;
+      try {
+        ws = new WebSocket(wsUrl);
+        geminiLogger.info('WebSocket object created successfully', {
+          wsUrl,
+          readyState: ws.readyState
+        });
+      } catch (wsCreateError: any) {
+        geminiLogger.error('Failed to create WebSocket object', {
+          error: wsCreateError.message,
+          wsUrl
+        });
+        throw new Error(`Failed to create WebSocket: ${wsCreateError.message}`);
+      }
       geminiLogger.debug('WebSocket object created', {
         readyState: ws.readyState,
         readyStateLabel: ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'][ws.readyState],
@@ -837,12 +858,38 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
         }
       }, [state.conversationId]);
 
-  // Cleanup on unmount
+  // Cleanup on unmount and handle unhandled rejections
   useEffect(() => {
+    // Add global handler for unhandled promise rejections
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      geminiLogger.error('Unhandled promise rejection detected', {
+        reason: event.reason,
+        promise: event.promise,
+        stack: event.reason?.stack
+      });
+      
+      // Prevent default browser behavior
+      event.preventDefault();
+      
+      // Update state with error if it's WebSocket related
+      if (event.reason?.message?.includes('WebSocket') || 
+          event.reason?.message?.includes('connection')) {
+        setState(prev => ({ 
+          ...prev, 
+          error: 'Connection failed. Please try again.',
+          isConnected: false 
+        }));
+        options.onError?.('Connection failed. Please try again.');
+      }
+    };
+
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
     return () => {
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
       disconnect();
     };
-  }, [disconnect]);
+  }, [disconnect, options]);
 
   // Expose additional methods for Gemini
   return {

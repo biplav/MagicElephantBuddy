@@ -552,7 +552,15 @@ export function setupGeminiLiveWebSocket(server: any) {
     perMessageDeflate: false,
     maxPayload: 1024 * 1024 * 3, // 3MB for video frames
     clientTracking: true,
-    host: '0.0.0.0' // Ensure it binds to all interfaces
+    // Remove host binding - let it inherit from server
+    verifyClient: (info) => {
+      geminiLogger.debug('WebSocket client verification', {
+        origin: info.origin,
+        secure: info.secure,
+        protocols: info.protocols
+      });
+      return true; // Accept all connections for now
+    }
   });
 
   geminiLogger.info('Gemini Live WebSocket server initialized on /gemini-ws with host 0.0.0.0');
@@ -564,17 +572,25 @@ export function setupGeminiLiveWebSocket(server: any) {
       userAgent: req.headers['user-agent']?.slice(0, 100),
       remoteAddress: req.socket.remoteAddress,
       url: req.url,
-      headers: Object.keys(req.headers)
+      headers: Object.keys(req.headers),
+      connectionId: Math.random().toString(36).substring(7)
     });
     
     // Send immediate confirmation that connection is established
     try {
-      ws.send(JSON.stringify({
+      const confirmationMessage = {
         type: 'connection_established',
-        message: 'Gemini WebSocket connected successfully'
-      }));
+        message: 'Gemini WebSocket connected successfully',
+        timestamp: new Date().toISOString()
+      };
+      
+      ws.send(JSON.stringify(confirmationMessage));
+      geminiLogger.debug('Connection confirmation sent', confirmationMessage);
     } catch (error) {
-      geminiLogger.error('Failed to send connection confirmation', { error: error.message });
+      geminiLogger.error('Failed to send connection confirmation', { 
+        error: error.message,
+        wsReadyState: ws.readyState 
+      });
     }
     
     const session: GeminiLiveSession = {
