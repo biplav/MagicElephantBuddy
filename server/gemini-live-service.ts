@@ -128,14 +128,14 @@ async function formMemoryFromContent(childId: number, content: string, role: 'us
 }
 
 export function setupGeminiLiveWebSocket(server: any) {
-  geminiLogger.info('Setting up Gemini Live WebSocket server');
+  geminiLogger.info('Setting up Gemini Live WebSocket server with minimal config');
   
+  // Use working WebSocket configuration that avoids RSV1 frame issues
   const wss = new WebSocketServer({ 
     server: server, 
     path: '/gemini-ws',
-    perMessageDeflate: false,
-    maxPayload: 1024 * 1024 * 3, // 3MB for video frames
-    clientTracking: true
+    perMessageDeflate: false,  // Critical: prevents compression frame issues
+    skipUTF8Validation: false  // Critical: ensures proper frame validation
   });
 
   wss.on('connection', (ws: WebSocket, req) => {
@@ -149,18 +149,28 @@ export function setupGeminiLiveWebSocket(server: any) {
       connectionId: Math.random().toString(36).substring(7)
     });
     
-    // Send connection confirmation
+    // Send connection confirmation with explicit encoding
     const confirmationMessage = {
       type: 'connection_established',
-      message: 'Gemini WebSocket connected successfully',
-      timestamp: new Date().toISOString()
+      message: 'Connected'
     };
     
-    ws.send(JSON.stringify(confirmationMessage));
-    geminiLogger.debug('Connection confirmation sent', { 
-      message: confirmationMessage,
+    const messageStr = JSON.stringify(confirmationMessage);
+    geminiLogger.debug('Sending connection confirmation', { 
+      messageStr,
+      messageLength: messageStr.length,
       wsReadyState: ws.readyState 
     });
+    
+    try {
+      ws.send(messageStr);
+      geminiLogger.debug('Connection confirmation sent successfully');
+    } catch (error: any) {
+      geminiLogger.error('Error sending confirmation message', { 
+        error: error.message,
+        messageStr 
+      });
+    }
 
     // Create session object
     const session: GeminiLiveSession = {
@@ -173,14 +183,39 @@ export function setupGeminiLiveWebSocket(server: any) {
       messageCount: 0
     };
 
-    ws.on('message', async (data: Buffer) => {
+    ws.on('message', async (data) => {
       try {
-        const message = JSON.parse(data.toString());
-        geminiLogger.info('📨 Received Gemini Live message', { 
+        // Handle both Buffer and String data types
+        let messageStr;
+        if (Buffer.isBuffer(data)) {
+          messageStr = data.toString();
+        } else {
+          messageStr = data.toString();
+        }
+        
+        geminiLogger.info('📨 Message received from client', { 
+          messageStr,
+          dataType: typeof data,
+          isBuffer: Buffer.isBuffer(data)
+        });
+        
+        // Handle ping/pong for connection testing
+        if (messageStr === 'ping') {
+          ws.send('pong');
+          return;
+        }
+        
+        // Try to parse as JSON
+        let message;
+        try {
+          message = JSON.parse(messageStr);
+        } catch (jsonError) {
+          geminiLogger.warn('Received non-JSON message', { messageStr });
+          return;
+        }
+        geminiLogger.info('📨 Parsed Gemini Live message', { 
           messageType: message.type,
-          messageData: message,
-          sessionConnected: session.isConnected,
-          conversationId: session.conversationId
+          sessionConnected: session.isConnected
         });
 
         switch (message.type) {
@@ -227,12 +262,15 @@ export function setupGeminiLiveWebSocket(server: any) {
       } catch (error: any) {
         geminiLogger.error('Error processing WebSocket message', { 
           error: error.message, 
-          conversationId: session.conversationId 
+          conversationId: session.conversationId,
+          messageStr: messageStr
         });
-        ws.send(JSON.stringify({
-          type: 'error',
-          message: `Error processing message: ${error.message}`
-        }));
+        if (ws.readyState === ws.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'error',
+            message: `Error processing message: ${error.message}`
+          }));
+        }
       }
     });
 
@@ -268,34 +306,29 @@ export function setupGeminiLiveWebSocket(server: any) {
 
 async function startGeminiLiveSession(session: GeminiLiveSession) {
   try {
-    geminiLogger.info('Starting Gemini Live session', { childId: session.childId });
+    geminiLogger.info('🚀 Starting FULL Gemini Live session with chat', { childId: session.childId });
 
     // Create or get conversation
     const conversation = await storage.createConversation({
-      childId: session.childId,
-      aiProvider: 'gemini-live',
-      modelUsed: 'gemini-2.0-flash-exp'
+      childId: session.childId
     });
     
     session.conversationId = conversation.id;
-    geminiLogger.info('Conversation created', { conversationId: session.conversationId });
+    geminiLogger.info('Conversation created for Gemini Live session', { 
+      conversationId: session.conversationId,
+      childId: session.childId 
+    });
 
     // Get child profile for enhanced prompt
-    const child = await storage.getChildById(session.childId);
+    const child = await storage.getChild(session.childId);
     if (!child) {
       throw new Error(`Child with ID ${session.childId} not found`);
     }
 
-    // Generate enhanced system prompt with child's details and memories
+    // Generate enhanced system prompt with child's details
     const timeContext = getCurrentTimeContext();
-    const profile = child.profile || DEFAULT_PROFILE;
+    const profile = child.profile as any || {};
     
-    // Get relevant memories for context
-    const memories = await memoryService.searchMemories(session.childId, 'general conversation', { limit: 10 });
-    const memoryContext = memories.length > 0 
-      ? `\n\nRecent memories about ${child.name}:\n${memories.map(m => `- ${m.content}`).join('\n')}`
-      : '';
-
     const enhancedSystemPrompt = `${APPU_SYSTEM_PROMPT}
 
 Current time context: ${timeContext}
@@ -306,12 +339,9 @@ Child Profile:
 - Languages: ${profile.preferredLanguages?.join(', ') || 'Hindi, English'}
 - Likes: ${profile.likes?.join(', ') || 'various things'}
 - Dislikes: ${profile.dislikes?.join(', ') || 'some things'}
-- Favorite things: ${JSON.stringify(profile.favoriteThings, null, 2)}
 - Learning goals: ${profile.learningGoals?.join(', ') || 'general development'}
-- Daily routine: Wake up at ${profile.dailyRoutine?.wakeUpTime || '7:00 AM'}, bed time at ${profile.dailyRoutine?.bedTime || '8:00 PM'}
-${memoryContext}
 
-Remember to use the child's name naturally in conversation and reference their interests and learning goals when appropriate.`;
+Remember to use the child's name naturally in conversation and reference their interests when appropriate.`;
 
     // Initialize Gemini model
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
@@ -339,12 +369,19 @@ Remember to use the child's name naturally in conversation and reference their i
     // Store chat instance for this session
     session.geminiChat = chat;
     session.isConnected = true;
-
+    
     // Send session started confirmation
     session.ws.send(JSON.stringify({
       type: 'session_started',
-      conversationId: session.conversationId
+      conversationId: session.conversationId,
+      message: 'Gemini Live session started successfully!'
     }));
+    
+    geminiLogger.info('✅ Gemini Live session with chat initialized', { 
+      conversationId: session.conversationId,
+      childId: session.childId,
+      childName: child.name
+    });
 
     geminiLogger.info('Gemini Live session started successfully', { 
       conversationId: session.conversationId, 
@@ -446,7 +483,7 @@ async function endGeminiLiveSession(session: GeminiLiveSession) {
       // Update conversation end time and duration
       const duration = Math.floor((Date.now() - session.sessionStartTime.getTime()) / 1000);
       await storage.updateConversation(session.conversationId, {
-        endedAt: new Date(),
+        endTime: new Date(),
         duration: duration
       });
 
