@@ -159,9 +159,9 @@ export default function Home() {
   };
 
   // State for UI controls - enableLocalPlayback already declared above
-  const [enableVideo, setEnableVideo] = useState<boolean>(false); // Toggle for video capture
-  const [useRealtimeAPI, setUseRealtimeAPI] = useState<boolean>(true);
-  const [selectedModel, setSelectedModel] = useState<'openai' | 'gemini'>('openai');
+  // enableVideo already declared above at line 37
+  // const [useRealtimeAPI, setUseRealtimeAPI] = useState<boolean>(true); // Already declared above
+  // const [selectedModel, setSelectedModel] = useState<'openai' | 'gemini'>('openai'); // Need to use aiProvider instead
 
   // Initialize realtime audio hook
   const realtimeAudio = useRealtimeAudio({
@@ -213,7 +213,7 @@ export default function Home() {
       }, 3000);
     },
     enableVideo: enableVideo,
-    model: selectedModel,
+    model: aiProvider,
   });
 
   // Destructure realtime audio properties
@@ -1151,45 +1151,7 @@ export default function Home() {
                   </Button>
                 </div>
 
-                {/* AI Provider Selection */}
-        <div className="flex flex-col items-center space-y-4 mb-6">
-          <div className="flex items-center space-x-6">
-            <label className="flex items-center space-x-2 text-sm text-gray-600">
-              <input
-                type="radio"
-                name="aiProvider"
-                value="openai"
-                checked={aiProvider === 'openai'}
-                onChange={(e) => setAiProvider('openai')}
-                className="rounded"
-              />
-              <span>OpenAI (GPT-4o)</span>
-            </label>
-            <label className="flex items-center space-x-2 text-sm text-gray-600">
-              <input
-                type="radio"
-                name="aiProvider"
-                value="gemini"
-                checked={aiProvider === 'gemini'}
-                onChange={(e) => setAiProvider('gemini')}
-                className="rounded"
-              />
-              <span>Google Gemini</span>
-            </label>
-          </div>
-
-          {aiProvider === 'openai' && (
-            <label className="flex items-center space-x-2 text-sm text-gray-600">
-              <input
-                type="checkbox"
-                checked={useRealtimeAPI}
-                onChange={(e) => setUseRealtimeAPI(e.target.checked)}
-                className="rounded"
-              />
-              <span>Use Realtime API (WebRTC)</span>
-            </label>
-          )}
-        </div>
+                
 
                 <div className="mt-3">
                   <p>
