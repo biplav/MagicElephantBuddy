@@ -235,8 +235,8 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     try {
       geminiLogger.info('Initiating WebSocket connection setup');
 
-      // Force WSS for Replit environment
-      const protocol = 'wss:';
+      // Determine protocol based on current page protocol
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/gemini-ws`;
       
       geminiLogger.info('WebSocket URL constructed', { 
@@ -342,6 +342,16 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
           url: wsUrl
         });
 
+        geminiLogger.error('WebSocket connection error detailed analysis', {
+          wsUrl,
+          protocol,
+          host: window.location.host,
+          currentUrl: window.location.href,
+          readyState: ws.readyState,
+          readyStateLabel: ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'][ws.readyState],
+          errorAnalysis: analysis
+        });
+
         // Update state with the analyzed error
         setState(prev => ({ ...prev, error: analysis.message, isConnected: false }));
         options.onError?.(analysis.message);
@@ -359,6 +369,15 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       ws.onclose = (event) => {
         connectionTracker.clearTimeout();
         connectionTracker.logConnectionClose(event, wsUrl);
+
+        geminiLogger.info('WebSocket connection closed', {
+          wsUrl,
+          closeCode: event.code,
+          closeReason: event.reason,
+          wasClean: event.wasClean,
+          protocol,
+          host: window.location.host
+        });
 
         setState(prev => ({ ...prev, isConnected: false, isRecording: false }));
 

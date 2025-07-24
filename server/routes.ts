@@ -2157,11 +2157,12 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
 
   const httpServer = createServer(app);
 
-  // Set up OpenAI Realtime API WebSocket service
-  setupRealtimeWebSocket(httpServer);
-
+  // Set up WebSocket services BEFORE any other middleware to avoid conflicts
   // Set up Gemini Live API WebSocket service
   setupGeminiLiveWebSocket(httpServer);
+  
+  // Set up OpenAI Realtime API WebSocket service
+  setupRealtimeWebSocket(httpServer);
 
   // Set up WebSocket server for real-time communication (future use)
   const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
