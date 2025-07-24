@@ -548,19 +548,30 @@ function generateSessionId(): string {
 export function setupGeminiLiveWebSocket(server: any) {
   const wss = new WebSocketServer({ 
     server: server, 
-    path: '/gemini-ws'
+    path: '/gemini-ws',
+    perMessageDeflate: false,
+    maxPayload: 1024 * 1024 * 3, // 3MB for video frames
+    clientTracking: true
   });
 
   geminiLogger.info('Gemini Live WebSocket server initialized on /gemini-ws');
 
-  wss.on('connection', (ws: WebSocket) => {
-    geminiLogger.info('New Gemini Live WebSocket connection established', { readyState: ws.readyState });
+  wss.on('connection', (ws: WebSocket, req) => {
+    geminiLogger.info('New Gemini Live WebSocket connection established', { 
+      readyState: ws.readyState,
+      origin: req.headers.origin,
+      userAgent: req.headers['user-agent']?.slice(0, 100)
+    });
     
     // Send immediate confirmation that connection is established
-    ws.send(JSON.stringify({
-      type: 'connection_established',
-      message: 'Gemini WebSocket connected successfully'
-    }));
+    try {
+      ws.send(JSON.stringify({
+        type: 'connection_established',
+        message: 'Gemini WebSocket connected successfully'
+      }));
+    } catch (error) {
+      geminiLogger.error('Failed to send connection confirmation', { error: error.message });
+    }
     
     const session: GeminiLiveSession = {
       ws: ws,
@@ -638,6 +649,16 @@ export function setupGeminiLiveWebSocket(server: any) {
         conversationId: session.conversationId 
       });
     });
+  });
+
+  // Add server-level error handling
+  wss.on('error', (error) => {
+    geminiLogger.error('Gemini WebSocket Server error', { error: error.message });
+  });
+
+  // Log server status
+  wss.on('listening', () => {
+    geminiLogger.info('Gemini WebSocket server is listening on /gemini-ws');
   });
 
   return wss;

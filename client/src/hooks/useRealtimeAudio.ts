@@ -166,16 +166,20 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('🔗 GEMINI: WebSocket connected');
-        setState(prev => ({ ...prev, isConnected: true }));
+        console.log('🔗 GEMINI: WebSocket connected successfully to', wsUrl);
+        setState(prev => ({ ...prev, isConnected: true, error: null }));
 
         // Start Gemini session
         const childId = getSelectedChildId();
         console.log('🔗 GEMINI: Starting session for child ID:', childId);
-        ws.send(JSON.stringify({
-          type: 'start_session',
-          childId: childId
-        }));
+        try {
+          ws.send(JSON.stringify({
+            type: 'start_session',
+            childId: childId
+          }));
+        } catch (error) {
+          console.error('🔗 GEMINI: Failed to send start_session:', error);
+        }
       };
 
       ws.onmessage = async (event) => {
@@ -220,14 +224,31 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       };
 
       ws.onerror = (error) => {
-        console.error('🔗 GEMINI: WebSocket error:', error);
+        console.error('🔗 GEMINI: WebSocket error occurred');
+        console.error('🔗 GEMINI: Error details:', error);
         console.error('🔗 GEMINI: WebSocket URL was:', wsUrl);
         console.error('🔗 GEMINI: WebSocket readyState:', ws.readyState);
+        console.error('🔗 GEMINI: Current location:', window.location.href);
         
         // Prevent unhandled promise rejections
-        const errorMessage = error instanceof Error ? error.message : 'WebSocket connection failed';
+        const errorMessage = error instanceof ErrorEvent ? error.message : 'WebSocket connection failed';
         setState(prev => ({ ...prev, error: errorMessage, isConnected: false }));
         options.onError?.(errorMessage);
+        
+        // Clean up WebSocket reference
+        if (wsRef.current === ws) {
+          wsRef.current = null;
+        }
+      };
+
+      ws.onclose = (event) => {
+        console.log('🔗 GEMINI: WebSocket closed', {
+          code: event.code,
+          reason: event.reason,
+          wasClean: event.wasClean,
+          url: wsUrl
+        });
+        setState(prev => ({ ...prev, isConnected: false }));
         
         // Clean up WebSocket reference
         if (wsRef.current === ws) {
