@@ -74,23 +74,64 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     modelType
   });
 
-  // Update state.modelType when options.modelType changes
+  // Add isConnecting state
+  const [isConnecting, setIsConnecting] = useState<boolean>(false);
+
+  // Track current model type to prevent infinite loops
+  const currentModelRef = useRef(modelType);
+
+  // Update state.modelType when options.modelType changes (avoid using state in useEffect to prevent loops)
   useEffect(() => {
-    if (state.modelType !== modelType) {
+    if (currentModelRef.current !== modelType) {
       realtimeLogger.info('Model type change detected', { 
-        from: state.modelType, 
+        from: currentModelRef.current, 
         to: modelType 
       });
 
-      // Clean up any existing connections before switching
-      if (state.isConnected) {
+      // Only update if we actually need to switch models
+      setState(prev => {
+        // If already disconnected, just update the model type
+        if (!prev.isConnected) {
+          currentModelRef.current = modelType;
+          return { ...prev, modelType };
+        }
+        
+        // If connected, we need to disconnect and update model type
         realtimeLogger.warn('Cleaning up existing connection before model switch');
-        disconnect();
-      }
+        
+        // Clean up connections asynchronously to avoid blocking
+        Promise.resolve().then(() => {
+          // Close WebRTC connections
+          if (pcRef.current) {
+            pcRef.current.close();
+            pcRef.current = null;
+          }
+          if (dataChannelRef.current) {
+            dataChannelRef.current.close();
+            dataChannelRef.current = null;
+          }
+          
+          // Close WebSocket connections
+          if (wsRef.current) {
+            wsRef.current.close();
+            wsRef.current = null;
+          }
+          
+          // Clean up media elements
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+          }
+          
+          isConnectingRef.current = false;
+          setIsConnecting(false);
+        });
 
-      setState(prev => ({ ...prev, modelType, isConnected: false, isRecording: false }));
+        currentModelRef.current = modelType;
+        return { ...prev, modelType, isConnected: false, isRecording: false };
+      });
     }
-  }, [modelType, state.modelType]);
+  }, [modelType]);
 
   // Refs for connection management
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -622,6 +663,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
 
     try {
       isConnectingRef.current = true;
+      setIsConnecting(true);
       setState(prev => ({ ...prev, error: null }));
 
       realtimeLogger.info('Starting connection process', { modelType: state.modelType });
@@ -646,6 +688,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       options.onError?.(error.message || 'Failed to connect');
     } finally {
       isConnectingRef.current = false;
+      setIsConnecting(false);
       realtimeLogger.debug('Connection attempt flag cleared');
     }
   }, [state.isConnected, state.modelType, options, setupGeminiWebSocket, connectOpenAI]);
@@ -894,6 +937,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
   // Expose additional methods for Gemini
   return {
     ...state,
+    isConnecting, // Add missing isConnecting property
     connect,
     disconnect,
     startRecording,

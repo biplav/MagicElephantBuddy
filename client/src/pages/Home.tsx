@@ -61,75 +61,79 @@ const Home = memo(() => {
   useEffect(() => {
     const handleStorageChange = () => {
       const currentParent = localStorage.getItem("currentParent");
-      setIsParentLoggedIn(!!currentParent);
+      const parentLoggedIn = !!currentParent;
 
       const selectedChild = localStorage.getItem("selectedChildId");
-      setSelectedChildId(selectedChild ? parseInt(selectedChild) : null);
+      const childId = selectedChild ? parseInt(selectedChild) : null;
+
+      // Only update state if values actually changed
+      setIsParentLoggedIn(prev => prev !== parentLoggedIn ? parentLoggedIn : prev);
+      setSelectedChildId(prev => prev !== childId ? childId : prev);
     };
 
     // Listen for storage changes
     window.addEventListener("storage", handleStorageChange);
 
-    // Check on component mount and periodically
-    const interval = setInterval(handleStorageChange, 1000);
+    // Check on component mount only (remove interval polling)
+    handleStorageChange();
 
     return () => {
       window.removeEventListener("storage", handleStorageChange);
-      clearInterval(interval);
     };
   }, []);
 
+  // Memoize loadChildren function to prevent recreating on every render
+  const loadChildren = useCallback(async () => {
+    const currentParent = localStorage.getItem("currentParent");
+    if (!currentParent) {
+      setAvailableChildren([]);
+      return;
+    }
+
+    try {
+      const parent = JSON.parse(currentParent);
+      console.log("Loading children for parent:", parent.id);
+
+      if (!parent.id) {
+        console.error("Parent ID is missing");
+        setAvailableChildren([]);
+        return;
+      }
+
+      const response = await fetch(`/api/parents/${parent.id}/children`);
+      console.log("Children API response status:", response.status);
+
+      if (response.ok) {
+        const children = await response.json();
+        console.log("Loaded children:", children);
+        setAvailableChildren(children);
+
+        // Auto-select first child if none selected
+        if (children.length > 0 && !selectedChildId) {
+          const firstChildId = children[0].id;
+          setSelectedChildId(firstChildId);
+          localStorage.setItem("selectedChildId", firstChildId.toString());
+          console.log("Auto-selected child:", firstChildId);
+        }
+      } else {
+        const errorText = await response.text();
+        console.error("Failed to load children:", response.status, errorText);
+        setAvailableChildren([]);
+      }
+    } catch (error) {
+      console.error("Error loading children:", error);
+      setAvailableChildren([]);
+    }
+  }, [selectedChildId]);
+
   // Load available children when parent logs in
   useEffect(() => {
-    const loadChildren = async () => {
-      const currentParent = localStorage.getItem("currentParent");
-      if (currentParent) {
-        try {
-          const parent = JSON.parse(currentParent);
-          console.log("Loading children for parent:", parent.id);
-
-          if (!parent.id) {
-            console.error("Parent ID is missing");
-            return;
-          }
-
-          if (!parent.id) {
-            console.error("Parent ID is missing:", parent);
-            setAvailableChildren([]);
-            return;
-          }
-
-          const response = await fetch(`/api/parents/${parent.id}/children`);
-          console.log("Children API response status:", response.status);
-
-          if (response.ok) {
-            const children = await response.json();
-            console.log("Loaded children:", children);
-            setAvailableChildren(children);
-
-            // Auto-select first child if none selected
-            if (children.length > 0 && !selectedChildId) {
-              const firstChildId = children[0].id;
-              setSelectedChildId(firstChildId);
-              localStorage.setItem("selectedChildId", firstChildId.toString());
-              console.log("Auto-selected child:", firstChildId);
-            }
-          } else {
-            const errorText = await response.text();
-            console.error("Failed to load children:", response.status, errorText);
-          }
-        } catch (error) {
-          console.error("Error loading children:", error);
-          // Reset children array on error
-          setAvailableChildren([]);
-        }
-      }
-    };
-
     if (isParentLoggedIn) {
       loadChildren();
+    } else {
+      setAvailableChildren([]);
     }
-  }, [isParentLoggedIn]); // Removed selectedChildId dependency to prevent infinite loop
+  }, [isParentLoggedIn, loadChildren]);
 
   // Fullscreen utility functions
   const enterFullscreen = async () => {
@@ -165,13 +169,13 @@ const Home = memo(() => {
   // const [useRealtimeAPI, setUseRealtimeAPI] = useState<boolean>(true); // Already declared above
   // const [selectedModel, setSelectedModel] = useState<'openai' | 'gemini'>('openai'); // Need to use aiProvider instead
 
-  // Initialize realtime audio hook
-  const realtimeAudio = useRealtimeAudio({
-    onTranscriptionReceived: (transcription) => {
+  // Initialize realtime audio hook with stable options
+  const realtimeAudio = useRealtimeAudio(useMemo(() => ({
+    onTranscriptionReceived: (transcription: string) => {
       console.log('🎤 HOME: Transcription callback received:', transcription);
       setTranscribedText(transcription);
     },
-    onResponseReceived: (text) => {
+    onResponseReceived: (text: string) => {
       setElephantState("speaking");
       setSpeechText(text);
 
@@ -183,7 +187,7 @@ const Home = memo(() => {
         }, 1000);
       }, 4000);
     },
-    onAudioResponseReceived: (audioData) => {
+    onAudioResponseReceived: (audioData: string) => {
       if (enableLocalPlayback) {
         try {
           // Convert base64 to blob and play
@@ -202,7 +206,7 @@ const Home = memo(() => {
         }
       }
     },
-    onError: (error) => {
+    onError: (error: string) => {
       console.error("Realtime API error:", error);
       setElephantState("error");
       setSpeechText(
@@ -216,7 +220,7 @@ const Home = memo(() => {
     },
     enableVideo: enableVideo,
     modelType: aiProvider,
-  });
+  }), [enableLocalPlayback, enableVideo, aiProvider]));
 
   // Destructure realtime audio properties
   const {
