@@ -277,27 +277,127 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
 
       ws.onerror = (error) => {
         geminiLogger.error('WebSocket error occurred', {
+          // Basic error information
           errorType: error.type,
+          errorConstructor: error.constructor.name,
+          errorToString: error.toString(),
+          
+          // WebSocket state information
           url: wsUrl,
           readyState: ws.readyState,
           readyStateLabel: ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'][ws.readyState] || 'UNKNOWN',
+          protocol: ws.protocol,
+          extensions: ws.extensions,
+          
+          // Environment information
           currentLocation: window.location.href,
-          errorInstance: error.constructor.name
+          timestamp: new Date().toISOString(),
+          userAgent: navigator.userAgent,
+          
+          // Network information
+          isOnline: navigator.onLine,
+          connectionType: (navigator as any).connection?.effectiveType || 'unknown',
+          
+          // Complete error object serialization
+          errorObject: {
+            bubbles: error.bubbles,
+            cancelable: error.cancelable,
+            composed: error.composed,
+            currentTarget: error.currentTarget?.constructor?.name || 'unknown',
+            defaultPrevented: error.defaultPrevented,
+            eventPhase: error.eventPhase,
+            isTrusted: error.isTrusted,
+            target: error.target?.constructor?.name || 'unknown',
+            timeStamp: error.timeStamp,
+            type: error.type
+          }
         });
 
-        // More detailed error message
-        let errorMessage = 'WebSocket connection failed';
+        // Enhanced error event analysis
         if (error instanceof ErrorEvent) {
-          errorMessage = error.message || 'WebSocket connection failed';
-          geminiLogger.error('ErrorEvent details', { 
-            message: error.message,
-            filename: error.filename,
-            lineno: error.lineno,
-            colno: error.colno
+          geminiLogger.error('ErrorEvent specific details', { 
+            message: error.message || 'No message provided',
+            filename: error.filename || 'No filename',
+            lineno: error.lineno || 'No line number',
+            colno: error.colno || 'No column number',
+            error: error.error ? {
+              name: error.error.name,
+              message: error.error.message,
+              stack: error.error.stack
+            } : 'No error object'
+          });
+        } else if (error instanceof CloseEvent) {
+          geminiLogger.error('CloseEvent details', {
+            code: error.code,
+            reason: error.reason || 'No reason provided',
+            wasClean: error.wasClean,
+            codeDescription: getCloseCodeDescription(error.code)
           });
         } else if (error instanceof Event) {
-          errorMessage = `WebSocket ${error.type} event occurred`;
+          geminiLogger.error('Generic Event details', {
+            type: error.type,
+            bubbles: error.bubbles,
+            cancelable: error.cancelable,
+            timestamp: error.timeStamp
+          });
         }
+
+        // Log any additional properties on the error object
+        const errorKeys = Object.getOwnPropertyNames(error);
+        if (errorKeys.length > 0) {
+          const additionalProps = {};
+          errorKeys.forEach(key => {
+            try {
+              additionalProps[key] = error[key];
+            } catch (e) {
+              additionalProps[key] = `[Error accessing property: ${e.message}]`;
+            }
+          });
+          geminiLogger.error('Additional error properties', additionalProps);
+        }
+
+        // Network-specific error analysis
+        try {
+          // Check if it might be a CORS issue
+          if (wsUrl.includes('wss://') || wsUrl.includes('ws://')) {
+            const urlObject = new URL(wsUrl);
+            geminiLogger.error('WebSocket URL analysis', {
+              protocol: urlObject.protocol,
+              host: urlObject.host,
+              hostname: urlObject.hostname,
+              port: urlObject.port,
+              pathname: urlObject.pathname,
+              isCrossOrigin: urlObject.host !== window.location.host
+            });
+          }
+        } catch (urlError) {
+          geminiLogger.error('Error analyzing WebSocket URL', { 
+            url: wsUrl, 
+            error: urlError.message 
+          });
+        }
+
+        // Determine specific error message based on context
+        let errorMessage = 'WebSocket connection failed';
+        let errorCategory = 'unknown';
+
+        if (error instanceof ErrorEvent) {
+          errorMessage = error.message || 'WebSocket connection failed';
+          errorCategory = 'error_event';
+        } else if (error instanceof CloseEvent) {
+          errorMessage = `Connection closed: ${error.reason || 'Unknown reason'} (Code: ${error.code})`;
+          errorCategory = 'close_event';
+        } else if (error instanceof Event) {
+          errorMessage = `WebSocket ${error.type} event occurred`;
+          errorCategory = 'generic_event';
+        }
+
+        // Log final error categorization
+        geminiLogger.error('Error categorization', {
+          category: errorCategory,
+          finalMessage: errorMessage,
+          shouldRetry: ws.readyState === WebSocket.CONNECTING
+        });
 
         setState(prev => ({ ...prev, error: errorMessage, isConnected: false }));
         options.onError?.(errorMessage);
@@ -305,7 +405,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
         // Clean up WebSocket reference
         if (wsRef.current === ws) {
           wsRef.current = null;
-          geminiLogger.debug('WebSocket reference cleared');
+          geminiLogger.debug('WebSocket reference cleared due to error');
         }
       };
 
