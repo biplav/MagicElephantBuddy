@@ -38,6 +38,197 @@ interface ConnectionRefs {
   ws: WebSocket | null; // Add WebSocket ref for Gemini
 }
 
+// Define callback types for message handling
+interface MessageHandlerCallbacks {
+  onSessionStarted: (conversationId: number) => void;
+  onTextResponse: (text: string) => void;
+  onVisionResponse: (text: string) => void;
+  onError: (error: string) => void;
+}
+
+// WebSocket connection tracker class
+class WebSocketConnectionTracker {
+  private logger: ReturnType<typeof createServiceLogger>;
+  private startTime: number;
+  private timeout: NodeJS.Timeout | null = null;
+
+  constructor(logger: ReturnType<typeof createServiceLogger>) {
+    this.logger = logger;
+    this.startTime = Date.now();
+  }
+
+  startTracking() {
+    this.startTime = Date.now();
+    return {
+      startTime: this.startTime,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  setupTimeout(ws: WebSocket, wsUrl: string, timeoutDuration: number) {
+    this.timeout = setTimeout(() => {
+      if (ws.readyState === WebSocket.CONNECTING) {
+        this.logger.error('WebSocket connection timeout', {
+          timeoutDuration: Date.now() - this.startTime,
+          url: wsUrl,
+          finalReadyState: ws.readyState
+        });
+        ws.close();
+      }
+    }, timeoutDuration);
+  }
+
+  clearTimeout() {
+    if (this.timeout) {
+      clearTimeout(this.timeout);
+      this.timeout = null;
+    }
+  }
+
+  logConnectionSuccess(wsUrl: string, ws: WebSocket) {
+    const connectionDuration = Date.now() - this.startTime;
+    this.logger.info('WebSocket connection established successfully', {
+      url: wsUrl,
+      connectionDuration: `${connectionDuration}ms`,
+      finalReadyState: ws.readyState,
+      protocol: ws.protocol,
+      extensions: ws.extensions
+    });
+  }
+
+  logConnectionClose(event: any, wsUrl: string) {
+    const connectionDuration = Date.now() - this.startTime;
+    this.logger.info('WebSocket connection closed', {
+      code: event.code,
+      reason: event.reason || 'No reason provided',
+      wasClean: event.wasClean,
+      url: wsUrl,
+      codeDescription: WebSocketErrorAnalyzer.getCloseCodeDescription(event.code),
+      connectionDuration: `${connectionDuration}ms`,
+      timing: {
+        connectionStart: this.startTime,
+        closeTime: Date.now(),
+        totalDuration: connectionDuration
+      },
+      closeEventDetails: {
+        bubbles: event.bubbles,
+        cancelable: event.cancelable,
+        timeStamp: event.timeStamp,
+        type: event.type
+      }
+    });
+
+    // Log connection lifecycle summary
+    this.logger.info('Connection lifecycle summary', {
+      url: wsUrl,
+      success: event.wasClean && event.code === 1000,
+      duration: `${connectionDuration}ms`,
+      closeReason: event.code === 1000 ? 'Normal closure' : 'Abnormal closure',
+      retryRecommended: !event.wasClean && event.code !== 1000
+    });
+  }
+}
+
+// WebSocket session manager class
+class WebSocketSessionManager {
+  private logger: ReturnType<typeof createServiceLogger>;
+
+  constructor(logger: ReturnType<typeof createServiceLogger>) {
+    this.logger = logger;
+  }
+
+  sendSessionStart(ws: WebSocket, childId: number) {
+    this.logger.info('Starting Gemini session', {
+      childId,
+      sessionStartTime: new Date().toISOString()
+    });
+
+    try {
+      const sessionMessage = {
+        type: 'start_session',
+        childId: childId
+      };
+      ws.send(JSON.stringify(sessionMessage));
+      this.logger.debug('Session start message sent successfully', {
+        messageType: sessionMessage.type,
+        childId: sessionMessage.childId,
+        messageSize: JSON.stringify(sessionMessage).length
+      });
+    } catch (error: any) {
+      this.logger.error('Failed to send start_session message', {
+        error: error.message,
+        errorType: error.constructor.name,
+        wsReadyState: ws.readyState
+      });
+    }
+  }
+}
+
+// WebSocket message handler class
+class WebSocketMessageHandler {
+  private logger: ReturnType<typeof createServiceLogger>;
+  private callbacks: MessageHandlerCallbacks;
+
+  constructor(logger: ReturnType<typeof createServiceLogger>, callbacks: MessageHandlerCallbacks) {
+    this.logger = logger;
+    this.callbacks = callbacks;
+  }
+
+  handleMessage(event: MessageEvent) {
+    try {
+      const message = JSON.parse(event.data);
+      this.logger.debug('Received WebSocket message', {
+        type: message.type,
+        messageSize: event.data.length
+      });
+
+      switch (message.type) {
+        case 'session_started':
+          this.logger.info('Session started successfully', {
+            conversationId: message.conversationId
+          });
+          this.callbacks.onSessionStarted(message.conversationId);
+          break;
+
+        case 'text_response':
+          this.logger.info('Text response received', {
+            textLength: message.text?.length,
+            preview: message.text?.substring(0, 50) + '...'
+          });
+          this.callbacks.onTextResponse(message.text);
+          break;
+
+        case 'vision_response':
+          this.logger.info('Vision response received', {
+            textLength: message.text?.length,
+            preview: message.text?.substring(0, 50) + '...'
+          });
+          this.callbacks.onVisionResponse(message.text);
+          break;
+
+        case 'error':
+          this.logger.error('Received error message', {
+            error: message.error,
+            errorType: typeof message.error
+          });
+          this.callbacks.onError(message.error);
+          break;
+
+        default:
+          this.logger.warn('Unknown message type received', {
+            type: message.type,
+            message: message
+          });
+      }
+    } catch (error: any) {
+      this.logger.error('Error parsing WebSocket message', {
+        error: error.message,
+        rawData: event.data?.substring(0, 200) + '...'
+      });
+    }
+  }
+}
+
 export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) {
   // Initialize service loggers
   const realtimeLogger = createServiceLogger('realtime-audio');
@@ -184,6 +375,28 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/gemini-ws`;
 
+      // Initialize modular utilities
+      const connectionTracker = new WebSocketConnectionTracker(geminiLogger);
+      const sessionManager = new WebSocketSessionManager(geminiLogger);
+
+      const messageCallbacks: MessageHandlerCallbacks = {
+        onSessionStarted: (conversationId: number) => {
+          setState(prev => ({ ...prev, conversationId }));
+        },
+        onTextResponse: (text: string) => {
+          options.onResponseReceived?.(text);
+        },
+        onVisionResponse: (text: string) => {
+          options.onResponseReceived?.(text);
+        },
+        onError: (error: string) => {
+          setState(prev => ({ ...prev, error }));
+          options.onError?.(error);
+        }
+      };
+
+      const messageHandler = new WebSocketMessageHandler(geminiLogger, messageCallbacks);
+
       geminiLogger.info('Connection attempt starting', { 
         url: wsUrl,
         locationDetails: {
@@ -192,7 +405,8 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
           port: window.location.port,
           protocol: window.location.protocol,
           pathname: window.location.pathname
-        }
+        },
+        timing: connectionTracker.startTracking()
       });
 
       const ws = new WebSocket(wsUrl);
@@ -200,84 +414,33 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
         readyState: ws.readyState,
         readyStateLabel: ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'][ws.readyState],
         protocols: ws.protocol,
-        extensions: ws.extensions
+        extensions: ws.extensions,
+        binaryType: ws.binaryType,
+        bufferedAmount: ws.bufferedAmount
       });
       wsRef.current = ws;
 
+      // Set up connection timeout
+      connectionTracker.setupTimeout(ws, wsUrl, 10000);
+
       ws.onopen = () => {
-        geminiLogger.info('WebSocket connection established', { url: wsUrl });
+        connectionTracker.clearTimeout();
+        connectionTracker.logConnectionSuccess(wsUrl, ws);
+
         setState(prev => ({ ...prev, isConnected: true, error: null }));
 
         // Start Gemini session
         const childId = getSelectedChildId();
-        geminiLogger.info('Starting Gemini session', { childId });
-        try {
-          ws.send(JSON.stringify({
-            type: 'start_session',
-            childId: childId
-          }));
-          geminiLogger.debug('Session start message sent successfully');
-        } catch (error) {
-          geminiLogger.error('Failed to send start_session message', { error: error.message });
-        }
+        sessionManager.sendSessionStart(ws, childId);
       };
 
-      ws.onmessage = async (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          geminiLogger.debug('Received WebSocket message', { 
-            type: message.type,
-            messageSize: event.data.length 
-          });
-
-          switch (message.type) {
-            case 'session_started':
-              geminiLogger.info('Session started successfully', { 
-                conversationId: message.conversationId 
-              });
-              setState(prev => ({ ...prev, conversationId: message.conversationId }));
-              break;
-
-            case 'text_response':
-              geminiLogger.info('Text response received', { 
-                textLength: message.text?.length,
-                preview: message.text?.substring(0, 50) + '...'
-              });
-              options.onResponseReceived?.(message.text);
-              break;
-
-            case 'vision_response':
-              geminiLogger.info('Vision response received', { 
-                textLength: message.text?.length,
-                preview: message.text?.substring(0, 50) + '...'
-              });
-              options.onResponseReceived?.(message.text);
-              break;
-
-            case 'error':
-              geminiLogger.error('Received error message', { 
-                error: message.error,
-                errorType: typeof message.error
-              });
-              setState(prev => ({ ...prev, error: message.error }));
-              options.onError?.(message.error);
-              break;
-
-            default:
-              geminiLogger.warn('Unknown message type received', { 
-                type: message.type,
-                message: message
-              });
-          }
-        } catch (error) {
-          geminiLogger.error('Error parsing WebSocket message', { 
-            error: error.message,
-            rawData: event.data?.substring(0, 200) + '...'
-          });
-        }
+      ws.onmessage = (event) => {
+        messageHandler.handleMessage(event);
       };
 
       ws.onerror = (error) => {
+        connectionTracker.clearTimeout();
+
         const errorLogger = new WebSocketErrorLogger(geminiLogger);
         const analysis = errorLogger.logComprehensiveError({
           error,
@@ -300,19 +463,18 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       };
 
       ws.onclose = (event) => {
-        geminiLogger.info('WebSocket connection closed', {
-          code: event.code,
-          reason: event.reason || 'No reason provided',
-          wasClean: event.wasClean,
-          url: wsUrl,
-          codeDescription: WebSocketErrorAnalyzer.getCloseCodeDescription(event.code)
-        });
+        connectionTracker.clearTimeout();
+        connectionTracker.logConnectionClose(event, wsUrl);
+
         setState(prev => ({ ...prev, isConnected: false, isRecording: false }));
 
         // Clean up WebSocket reference
         if (wsRef.current === ws) {
           wsRef.current = null;
-          geminiLogger.debug('WebSocket reference cleared on close');
+          geminiLogger.debug('WebSocket reference cleared on close', {
+            closeCode: event.code,
+            wasClean: event.wasClean
+          });
         }
       };
 
@@ -327,7 +489,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     }
   }, [options, getSelectedChildId]);
 
-  
+
 
   // Send text to Gemini via WebSocket
   const sendTextToGemini = useCallback((text: string) => {
