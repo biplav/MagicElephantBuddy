@@ -144,6 +144,8 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/gemini-ws`;
+      
+      console.log('🔗 GEMINI: Attempting to connect to:', wsUrl);
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
@@ -199,6 +201,8 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
 
       ws.onerror = (error) => {
         console.error('🔗 GEMINI: WebSocket error:', error);
+        console.error('🔗 GEMINI: WebSocket URL was:', wsUrl);
+        console.error('🔗 GEMINI: WebSocket readyState:', ws.readyState);
         setState(prev => ({ ...prev, error: 'WebSocket connection failed' }));
         options.onError?.('WebSocket connection failed');
       };
