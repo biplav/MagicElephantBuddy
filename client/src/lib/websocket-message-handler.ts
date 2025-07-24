@@ -1,9 +1,8 @@
-
 export interface MessageHandlerCallbacks {
-  onSessionStarted?: (conversationId: number) => void;
-  onTextResponse?: (text: string) => void;
-  onVisionResponse?: (text: string) => void;
-  onError?: (error: string) => void;
+  onSessionStarted: (conversationId: number) => void;
+  onTextResponse: (text: string) => void;
+  onVisionResponse: (text: string) => void;
+  onError: (error: string) => void;
 }
 
 export class WebSocketMessageHandler {
@@ -18,13 +17,18 @@ export class WebSocketMessageHandler {
   handleMessage(event: MessageEvent): void {
     try {
       const message = JSON.parse(event.data);
-      
+
       this.logger.debug('Received WebSocket message', { 
         type: message.type,
         messageSize: event.data.length 
       });
 
       switch (message.type) {
+        case 'connection_established':
+          this.logger.info('Connection establishment confirmed', {
+            message: message.message
+          });
+          break;
         case 'session_started':
           this.handleSessionStarted(message);
           break;
