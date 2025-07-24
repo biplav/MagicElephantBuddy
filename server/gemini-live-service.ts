@@ -176,8 +176,26 @@ export function setupGeminiLiveWebSocket(server: any) {
           case 'start_session':
             // Set child ID from message if provided
             if (message.childId) {
-              session.childId = message.childId;
-              geminiLogger.info('Gemini session child ID set', { childId: session.childId });
+              // Ensure childId is a number
+              const numericChildId = typeof message.childId === 'string' ? parseInt(message.childId, 10) : message.childId;
+              if (isNaN(numericChildId)) {
+                geminiLogger.error('Invalid child ID received in start_session', { 
+                  originalChildId: message.childId,
+                  type: typeof message.childId 
+                });
+                ws.send(JSON.stringify({
+                  type: 'error',
+                  error: 'Invalid child ID provided'
+                }));
+                return;
+              }
+              
+              session.childId = numericChildId;
+              geminiLogger.info('Gemini session child ID set', { 
+                childId: session.childId,
+                originalValue: message.childId,
+                type: typeof session.childId
+              });
             }
             await startGeminiLiveSession(session);
             break;

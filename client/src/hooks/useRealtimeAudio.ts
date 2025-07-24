@@ -325,7 +325,27 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
 
         // Start Gemini session
         const childId = getSelectedChildId();
-        sessionManager.sendSessionStart(ws, childId);
+        geminiLogger.info('Starting Gemini session with child ID', { 
+          childId, 
+          childIdType: typeof childId,
+          rawChildId: childId 
+        });
+        
+        // Ensure childId is a number
+        const numericChildId = typeof childId === 'string' ? parseInt(childId, 10) : childId;
+        geminiLogger.debug('Child ID converted for session', { 
+          original: childId,
+          converted: numericChildId,
+          isValid: !isNaN(numericChildId)
+        });
+        
+        if (isNaN(numericChildId)) {
+          geminiLogger.error('Invalid child ID for session', { childId });
+          setState(prev => ({ ...prev, error: 'Invalid child ID selected', isConnected: false }));
+          return;
+        }
+        
+        sessionManager.sendSessionStart(ws, numericChildId);
       };
 
       ws.onmessage = (event) => {
