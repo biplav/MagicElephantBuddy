@@ -150,11 +150,17 @@ export function setupGeminiLiveWebSocket(server: any) {
     });
     
     // Send connection confirmation
-    ws.send(JSON.stringify({
+    const confirmationMessage = {
       type: 'connection_established',
       message: 'Gemini WebSocket connected successfully',
       timestamp: new Date().toISOString()
-    }));
+    };
+    
+    ws.send(JSON.stringify(confirmationMessage));
+    geminiLogger.debug('Connection confirmation sent', { 
+      message: confirmationMessage,
+      wsReadyState: ws.readyState 
+    });
 
     // Create session object
     const session: GeminiLiveSession = {
@@ -170,7 +176,12 @@ export function setupGeminiLiveWebSocket(server: any) {
     ws.on('message', async (data: Buffer) => {
       try {
         const message = JSON.parse(data.toString());
-        geminiLogger.debug('Received Gemini Live message', { messageType: message.type });
+        geminiLogger.info('📨 Received Gemini Live message', { 
+          messageType: message.type,
+          messageData: message,
+          sessionConnected: session.isConnected,
+          conversationId: session.conversationId
+        });
 
         switch (message.type) {
           case 'start_session':

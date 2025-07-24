@@ -329,7 +329,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
         connectionTracker.clearTimeout();
         connectionTracker.logConnectionSuccess(wsUrl, ws);
 
-        geminiLogger.info('WebSocket onopen event triggered', {
+        geminiLogger.info('🔗 WebSocket onopen event triggered', {
           readyState: ws.readyState,
           protocol: ws.protocol,
           url: wsUrl
@@ -337,29 +337,39 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
 
         setState(prev => ({ ...prev, isConnected: true, error: null }));
 
-        // Start Gemini session
-        const childId = getSelectedChildId();
-        geminiLogger.info('Starting Gemini session with child ID', { 
-          childId, 
-          childIdType: typeof childId,
-          rawChildId: childId 
-        });
-        
-        // Ensure childId is a number
-        const numericChildId = typeof childId === 'string' ? parseInt(childId, 10) : childId;
-        geminiLogger.debug('Child ID converted for session', { 
-          original: childId,
-          converted: numericChildId,
-          isValid: !isNaN(numericChildId)
-        });
-        
-        if (isNaN(numericChildId)) {
-          geminiLogger.error('Invalid child ID for session', { childId });
-          setState(prev => ({ ...prev, error: 'Invalid child ID selected', isConnected: false }));
-          return;
-        }
-        
-        sessionManager.sendSessionStart(ws, numericChildId);
+        // Add a small delay to ensure connection is stable before sending session start
+        setTimeout(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            // Start Gemini session
+            const childId = getSelectedChildId();
+            geminiLogger.info('🚀 Starting Gemini session with child ID', { 
+              childId, 
+              childIdType: typeof childId,
+              rawChildId: childId,
+              wsReadyState: ws.readyState
+            });
+            
+            // Ensure childId is a number
+            const numericChildId = typeof childId === 'string' ? parseInt(childId, 10) : childId;
+            geminiLogger.debug('Child ID converted for session', { 
+              original: childId,
+              converted: numericChildId,
+              isValid: !isNaN(numericChildId)
+            });
+            
+            if (isNaN(numericChildId)) {
+              geminiLogger.error('Invalid child ID for session', { childId });
+              setState(prev => ({ ...prev, error: 'Invalid child ID selected', isConnected: false }));
+              return;
+            }
+            
+            sessionManager.sendSessionStart(ws, numericChildId);
+          } else {
+            geminiLogger.warn('WebSocket not open when trying to start session', { 
+              readyState: ws.readyState 
+            });
+          }
+        }, 100); // Small delay to ensure connection stability
       };
 
       ws.onmessage = (event) => {
