@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { createServiceLogger } from '@/lib/logger';
 
 interface UseRealtimeAudioOptions {
   onTranscriptionReceived?: (transcription: string) => void;
@@ -36,10 +37,16 @@ interface ConnectionRefs {
 }
 
 export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) {
+  // Initialize service loggers
+  const realtimeLogger = createServiceLogger('realtime-audio');
+  const geminiLogger = createServiceLogger('gemini-ws');
+  const openaiLogger = createServiceLogger('openai-webrtc');
+  const mediaLogger = createServiceLogger('media-capture');
+
   // Determine model type from options or default to OpenAI
   const modelType = options.modelType || 'openai';
 
-  console.log('🔧 REALTIME AUDIO: Initializing with modelType:', modelType);
+  realtimeLogger.info('Initializing hook', { modelType, enableVideo: options.enableVideo });
 
   // State management
   const [state, setState] = useState<RealtimeAudioState>({
@@ -55,11 +62,14 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
   // Update state.modelType when options.modelType changes
   useEffect(() => {
     if (state.modelType !== modelType) {
-      console.log('🔧 REALTIME AUDIO: Updating modelType from', state.modelType, 'to', modelType);
+      realtimeLogger.info('Model type change detected', { 
+        from: state.modelType, 
+        to: modelType 
+      });
 
       // Clean up any existing connections before switching
       if (state.isConnected) {
-        console.log('🔧 REALTIME AUDIO: Cleaning up existing connection before model switch');
+        realtimeLogger.warn('Cleaning up existing connection before model switch');
         disconnect();
       }
 
@@ -124,8 +134,15 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
   }, []);
 
   const setupVideoElements = useCallback((stream: MediaStream) => {
-    if (!options.enableVideo || stream.getVideoTracks().length === 0) return;
+    if (!options.enableVideo || stream.getVideoTracks().length === 0) {
+      mediaLogger.debug('Video setup skipped', { 
+        enableVideo: options.enableVideo, 
+        videoTracks: stream.getVideoTracks().length 
+      });
+      return;
+    }
 
+    mediaLogger.info('Setting up video elements');
     setState(prev => ({ ...prev, videoEnabled: true, hasVideoPermission: true }));
 
     // Set up video preview (hidden)
@@ -138,6 +155,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       video.style.display = 'none';
       videoRef.current = video;
       document.body.appendChild(video);
+      mediaLogger.debug('Video element created and added to DOM');
     }
 
     // Set up canvas for frame capture
@@ -149,100 +167,134 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       canvas.id = 'realtime-frame-canvas';
       canvasRef.current = canvas;
       document.body.appendChild(canvas);
+      mediaLogger.debug('Canvas element created for frame capture', { 
+        width: canvas.width, 
+        height: canvas.height 
+      });
     }
   }, [options.enableVideo]);
 
   // WebSocket handlers for Gemini
   const setupGeminiWebSocket = useCallback(async () => {
     try {
-      console.log('🔗 GEMINI: Setting up WebSocket connection...');
+      geminiLogger.info('Initiating WebSocket connection setup');
 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/gemini-ws`;
 
-      console.log('🔗 GEMINI: Attempting to connect to:', wsUrl);
-      console.log('🔗 GEMINI: Current location details:', {
-        host: window.location.host,
-        hostname: window.location.hostname,
-        port: window.location.port,
-        protocol: window.location.protocol,
-        pathname: window.location.pathname
+      geminiLogger.info('Connection attempt starting', { 
+        url: wsUrl,
+        locationDetails: {
+          host: window.location.host,
+          hostname: window.location.hostname,
+          port: window.location.port,
+          protocol: window.location.protocol,
+          pathname: window.location.pathname
+        }
       });
 
       const ws = new WebSocket(wsUrl);
-      console.log('🔗 GEMINI: WebSocket object created');
-      console.log('🔗 GEMINI: Initial readyState:', ws.readyState, '(0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)');
-      console.log('🔗 GEMINI: WebSocket protocols:', ws.protocol);
-      console.log('🔗 GEMINI: WebSocket extensions:', ws.extensions);
+      geminiLogger.debug('WebSocket object created', {
+        readyState: ws.readyState,
+        readyStateLabel: ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'][ws.readyState],
+        protocols: ws.protocol,
+        extensions: ws.extensions
+      });
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('🔗 GEMINI: WebSocket connected successfully to', wsUrl);
+        geminiLogger.info('WebSocket connection established', { url: wsUrl });
         setState(prev => ({ ...prev, isConnected: true, error: null }));
 
         // Start Gemini session
         const childId = getSelectedChildId();
-        console.log('🔗 GEMINI: Starting session for child ID:', childId);
+        geminiLogger.info('Starting Gemini session', { childId });
         try {
           ws.send(JSON.stringify({
             type: 'start_session',
             childId: childId
           }));
+          geminiLogger.debug('Session start message sent successfully');
         } catch (error) {
-          console.error('🔗 GEMINI: Failed to send start_session:', error);
+          geminiLogger.error('Failed to send start_session message', { error: error.message });
         }
       };
 
       ws.onmessage = async (event) => {
         try {
           const message = JSON.parse(event.data);
-          console.log('🔗 GEMINI: Received message:', message.type);
+          geminiLogger.debug('Received WebSocket message', { 
+            type: message.type,
+            messageSize: event.data.length 
+          });
 
           switch (message.type) {
             case 'session_started':
-              console.log('🔗 GEMINI: Session started, conversation ID:', message.conversationId);
+              geminiLogger.info('Session started successfully', { 
+                conversationId: message.conversationId 
+              });
               setState(prev => ({ ...prev, conversationId: message.conversationId }));
               break;
 
             case 'text_response':
-              console.log('🔗 GEMINI: Text response received:', message.text);
+              geminiLogger.info('Text response received', { 
+                textLength: message.text?.length,
+                preview: message.text?.substring(0, 50) + '...'
+              });
               options.onResponseReceived?.(message.text);
               break;
 
             case 'vision_response':
-              console.log('🔗 GEMINI: Vision response received:', message.text);
+              geminiLogger.info('Vision response received', { 
+                textLength: message.text?.length,
+                preview: message.text?.substring(0, 50) + '...'
+              });
               options.onResponseReceived?.(message.text);
               break;
 
             case 'error':
-              console.error('🔗 GEMINI: Error:', message.error);
+              geminiLogger.error('Received error message', { 
+                error: message.error,
+                errorType: typeof message.error
+              });
               setState(prev => ({ ...prev, error: message.error }));
               options.onError?.(message.error);
               break;
+
+            default:
+              geminiLogger.warn('Unknown message type received', { 
+                type: message.type,
+                message: message
+              });
           }
         } catch (error) {
-          console.error('🔗 GEMINI: Error parsing message:', error);
+          geminiLogger.error('Error parsing WebSocket message', { 
+            error: error.message,
+            rawData: event.data?.substring(0, 200) + '...'
+          });
         }
       };
 
       ws.onerror = (error) => {
-        console.error('🔗 GEMINI: WebSocket error occurred');
-        console.error('🔗 GEMINI: Error event:', error);
-        console.error('🔗 GEMINI: Error type:', error.type);
-        console.error('🔗 GEMINI: WebSocket URL was:', wsUrl);
-        console.error('🔗 GEMINI: WebSocket readyState:', ws.readyState);
-        console.error('🔗 GEMINI: WebSocket readyState meanings:', {
-          0: 'CONNECTING',
-          1: 'OPEN', 
-          2: 'CLOSING',
-          3: 'CLOSED'
-        }[ws.readyState] || 'UNKNOWN');
-        console.error('🔗 GEMINI: Current location:', window.location.href);
+        geminiLogger.error('WebSocket error occurred', {
+          errorType: error.type,
+          url: wsUrl,
+          readyState: ws.readyState,
+          readyStateLabel: ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'][ws.readyState] || 'UNKNOWN',
+          currentLocation: window.location.href,
+          errorInstance: error.constructor.name
+        });
 
         // More detailed error message
         let errorMessage = 'WebSocket connection failed';
         if (error instanceof ErrorEvent) {
           errorMessage = error.message || 'WebSocket connection failed';
+          geminiLogger.error('ErrorEvent details', { 
+            message: error.message,
+            filename: error.filename,
+            lineno: error.lineno,
+            colno: error.colno
+          });
         } else if (error instanceof Event) {
           errorMessage = `WebSocket ${error.type} event occurred`;
         }
@@ -253,30 +305,60 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
         // Clean up WebSocket reference
         if (wsRef.current === ws) {
           wsRef.current = null;
+          geminiLogger.debug('WebSocket reference cleared');
         }
       };
 
       ws.onclose = (event) => {
-        console.log('🔗 GEMINI: WebSocket closed', {
+        geminiLogger.info('WebSocket connection closed', {
           code: event.code,
-          reason: event.reason,
+          reason: event.reason || 'No reason provided',
           wasClean: event.wasClean,
-          url: wsUrl
+          url: wsUrl,
+          codeDescription: this.getCloseCodeDescription(event.code)
         });
         setState(prev => ({ ...prev, isConnected: false, isRecording: false }));
 
         // Clean up WebSocket reference
         if (wsRef.current === ws) {
           wsRef.current = null;
+          geminiLogger.debug('WebSocket reference cleared on close');
         }
       };
 
     } catch (error: any) {
-      console.error('🔗 GEMINI: Error setting up WebSocket:', error);
+      geminiLogger.error('Error during WebSocket setup', { 
+        error: error.message,
+        stack: error.stack,
+        errorType: error.constructor.name
+      });
       setState(prev => ({ ...prev, error: error.message }));
       options.onError?.(error.message);
     }
   }, [options, getSelectedChildId]);
+
+  // Helper function to get WebSocket close code descriptions
+  const getCloseCodeDescription = useCallback((code: number): string => {
+    const descriptions: { [key: number]: string } = {
+      1000: 'Normal Closure',
+      1001: 'Going Away',
+      1002: 'Protocol Error',
+      1003: 'Unsupported Data',
+      1004: 'Reserved',
+      1005: 'No Status Received',
+      1006: 'Abnormal Closure',
+      1007: 'Invalid frame payload data',
+      1008: 'Policy Violation',
+      1009: 'Message too big',
+      1010: 'Missing Extension',
+      1011: 'Internal Error',
+      1012: 'Service Restart',
+      1013: 'Try Again Later',
+      1014: 'Bad Gateway',
+      1015: 'TLS Handshake'
+    };
+    return descriptions[code] || `Unknown code: ${code}`;
+  }, []);
 
   // Send text to Gemini via WebSocket
   const sendTextToGemini = useCallback((text: string) => {
@@ -547,7 +629,10 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
   // Main connection function - routes to appropriate method based on model type
   const connect = useCallback(async () => {
     if (isConnectingRef.current || state.isConnected) {
-      console.log('Connection already in progress or established');
+      realtimeLogger.warn('Connection attempt blocked', {
+        reason: isConnectingRef.current ? 'already connecting' : 'already connected',
+        currentState: { isConnecting: isConnectingRef.current, isConnected: state.isConnected }
+      });
       return;
     }
 
@@ -555,20 +640,29 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       isConnectingRef.current = true;
       setState(prev => ({ ...prev, error: null }));
 
+      realtimeLogger.info('Starting connection process', { modelType: state.modelType });
+
       if (state.modelType === 'gemini') {
-        console.log('🔗 CONNECTING: Using Gemini WebSocket approach');
+        realtimeLogger.info('Using Gemini WebSocket connection method');
         await setupGeminiWebSocket();
       } else {
-        console.log('🔗 CONNECTING: Using OpenAI WebRTC approach');
+        realtimeLogger.info('Using OpenAI WebRTC connection method');
         await connectOpenAI();
       }
 
+      realtimeLogger.info('Connection process completed successfully');
+
     } catch (error: any) {
-      console.error('🔗 CONNECTING: Error:', error);
+      realtimeLogger.error('Connection process failed', {
+        error: error.message,
+        stack: error.stack,
+        modelType: state.modelType
+      });
       setState(prev => ({ ...prev, error: error.message || 'Failed to connect' }));
       options.onError?.(error.message || 'Failed to connect');
     } finally {
       isConnectingRef.current = false;
+      realtimeLogger.debug('Connection attempt flag cleared');
     }
   }, [state.isConnected, state.modelType, options, setupGeminiWebSocket, connectOpenAI]);
 
@@ -605,26 +699,36 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
 
   // Disconnect function
   const disconnect = useCallback(() => {
+    realtimeLogger.info('Starting disconnect process');
     isConnectingRef.current = false;
+
+    let cleanupActions = [];
 
     // Disconnect WebRTC (OpenAI)
     if (pcRef.current) {
+      openaiLogger.info('Closing WebRTC peer connection');
       pcRef.current.close();
       pcRef.current = null;
+      cleanupActions.push('WebRTC peer connection');
     }
 
     if (dataChannelRef.current) {
+      openaiLogger.info('Closing WebRTC data channel');
       dataChannelRef.current.close();
       dataChannelRef.current = null;
+      cleanupActions.push('WebRTC data channel');
     }
 
     // Disconnect WebSocket (Gemini)
     if (wsRef.current) {
+      geminiLogger.info('Closing WebSocket connection');
       wsRef.current.close();
       wsRef.current = null;
+      cleanupActions.push('Gemini WebSocket');
     }
 
     cleanupElements();
+    cleanupActions.push('media elements');
 
     setState(prev => ({ 
       ...prev, 
@@ -635,7 +739,10 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       hasVideoPermission: false
     }));
 
-    console.log('🔗 DISCONNECTED: Cleaned up all connections');
+    realtimeLogger.info('Disconnect process completed', {
+      cleanedUp: cleanupActions,
+      totalActions: cleanupActions.length
+    });
   }, [cleanupElements]);
 
   // Recording controls
