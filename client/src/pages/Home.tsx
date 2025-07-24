@@ -158,8 +158,7 @@ export default function Home() {
     }
   };
 
-  // State for UI controls
-  const [enableLocalPlayback, setEnableLocalPlayback] = useState<boolean>(false); // Default to false for server testing
+  // State for UI controls - enableLocalPlayback already declared above
   const [enableVideo, setEnableVideo] = useState<boolean>(false); // Toggle for video capture
   const [useRealtimeAPI, setUseRealtimeAPI] = useState<boolean>(true);
   const [selectedModel, setSelectedModel] = useState<'openai' | 'gemini'>('openai');
