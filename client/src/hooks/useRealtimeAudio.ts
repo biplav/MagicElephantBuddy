@@ -39,6 +39,8 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
   // Determine model type from options or default to OpenAI
   const modelType = options.modelType || 'openai';
 
+  console.log('🔧 REALTIME AUDIO: Initializing with modelType:', modelType);
+
   // State management
   const [state, setState] = useState<RealtimeAudioState>({
     isConnected: false,

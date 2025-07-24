@@ -215,7 +215,7 @@ export default function Home() {
       }, 3000);
     },
     enableVideo: enableVideo,
-    model: aiProvider,
+    modelType: aiProvider,
   });
 
   // Destructure realtime audio properties
