@@ -1,5 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { createServiceLogger } from '@/lib/logger';
+import { WebSocketErrorLogger } from '@/lib/websocket-error-logger';
+import { WebSocketErrorAnalyzer } from '@/lib/websocket-error-analyzer';
 
 interface UseRealtimeAudioOptions {
   onTranscriptionReceived?: (transcription: string) => void;
@@ -276,136 +278,24 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       };
 
       ws.onerror = (error) => {
-        geminiLogger.error('WebSocket error occurred', {
-          // Basic error information
-          errorType: error.type,
-          errorConstructor: error.constructor.name,
-          errorToString: error.toString(),
-          
-          // WebSocket state information
-          url: wsUrl,
-          readyState: ws.readyState,
-          readyStateLabel: ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'][ws.readyState] || 'UNKNOWN',
-          protocol: ws.protocol,
-          extensions: ws.extensions,
-          
-          // Environment information
-          currentLocation: window.location.href,
-          timestamp: new Date().toISOString(),
-          userAgent: navigator.userAgent,
-          
-          // Network information
-          isOnline: navigator.onLine,
-          connectionType: (navigator as any).connection?.effectiveType || 'unknown',
-          
-          // Complete error object serialization
-          errorObject: {
-            bubbles: error.bubbles,
-            cancelable: error.cancelable,
-            composed: error.composed,
-            currentTarget: error.currentTarget?.constructor?.name || 'unknown',
-            defaultPrevented: error.defaultPrevented,
-            eventPhase: error.eventPhase,
-            isTrusted: error.isTrusted,
-            target: error.target?.constructor?.name || 'unknown',
-            timeStamp: error.timeStamp,
-            type: error.type
-          }
+        const errorLogger = new WebSocketErrorLogger(geminiLogger);
+        const analysis = errorLogger.logComprehensiveError({
+          error,
+          ws,
+          url: wsUrl
         });
 
-        // Enhanced error event analysis
-        if (error instanceof ErrorEvent) {
-          geminiLogger.error('ErrorEvent specific details', { 
-            message: error.message || 'No message provided',
-            filename: error.filename || 'No filename',
-            lineno: error.lineno || 'No line number',
-            colno: error.colno || 'No column number',
-            error: error.error ? {
-              name: error.error.name,
-              message: error.error.message,
-              stack: error.error.stack
-            } : 'No error object'
-          });
-        } else if (error instanceof CloseEvent) {
-          geminiLogger.error('CloseEvent details', {
-            code: error.code,
-            reason: error.reason || 'No reason provided',
-            wasClean: error.wasClean,
-            codeDescription: getCloseCodeDescription(error.code)
-          });
-        } else if (error instanceof Event) {
-          geminiLogger.error('Generic Event details', {
-            type: error.type,
-            bubbles: error.bubbles,
-            cancelable: error.cancelable,
-            timestamp: error.timeStamp
-          });
-        }
-
-        // Log any additional properties on the error object
-        const errorKeys = Object.getOwnPropertyNames(error);
-        if (errorKeys.length > 0) {
-          const additionalProps = {};
-          errorKeys.forEach(key => {
-            try {
-              additionalProps[key] = error[key];
-            } catch (e) {
-              additionalProps[key] = `[Error accessing property: ${e.message}]`;
-            }
-          });
-          geminiLogger.error('Additional error properties', additionalProps);
-        }
-
-        // Network-specific error analysis
-        try {
-          // Check if it might be a CORS issue
-          if (wsUrl.includes('wss://') || wsUrl.includes('ws://')) {
-            const urlObject = new URL(wsUrl);
-            geminiLogger.error('WebSocket URL analysis', {
-              protocol: urlObject.protocol,
-              host: urlObject.host,
-              hostname: urlObject.hostname,
-              port: urlObject.port,
-              pathname: urlObject.pathname,
-              isCrossOrigin: urlObject.host !== window.location.host
-            });
-          }
-        } catch (urlError) {
-          geminiLogger.error('Error analyzing WebSocket URL', { 
-            url: wsUrl, 
-            error: urlError.message 
-          });
-        }
-
-        // Determine specific error message based on context
-        let errorMessage = 'WebSocket connection failed';
-        let errorCategory = 'unknown';
-
-        if (error instanceof ErrorEvent) {
-          errorMessage = error.message || 'WebSocket connection failed';
-          errorCategory = 'error_event';
-        } else if (error instanceof CloseEvent) {
-          errorMessage = `Connection closed: ${error.reason || 'Unknown reason'} (Code: ${error.code})`;
-          errorCategory = 'close_event';
-        } else if (error instanceof Event) {
-          errorMessage = `WebSocket ${error.type} event occurred`;
-          errorCategory = 'generic_event';
-        }
-
-        // Log final error categorization
-        geminiLogger.error('Error categorization', {
-          category: errorCategory,
-          finalMessage: errorMessage,
-          shouldRetry: ws.readyState === WebSocket.CONNECTING
-        });
-
-        setState(prev => ({ ...prev, error: errorMessage, isConnected: false }));
-        options.onError?.(errorMessage);
+        // Update state with the analyzed error
+        setState(prev => ({ ...prev, error: analysis.message, isConnected: false }));
+        options.onError?.(analysis.message);
 
         // Clean up WebSocket reference
         if (wsRef.current === ws) {
           wsRef.current = null;
-          geminiLogger.debug('WebSocket reference cleared due to error');
+          geminiLogger.debug('WebSocket reference cleared due to error', {
+            errorCategory: analysis.category,
+            shouldRetry: analysis.shouldRetry
+          });
         }
       };
 
@@ -415,7 +305,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
           reason: event.reason || 'No reason provided',
           wasClean: event.wasClean,
           url: wsUrl,
-          codeDescription: this.getCloseCodeDescription(event.code)
+          codeDescription: WebSocketErrorAnalyzer.getCloseCodeDescription(event.code)
         });
         setState(prev => ({ ...prev, isConnected: false, isRecording: false }));
 
@@ -437,28 +327,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     }
   }, [options, getSelectedChildId]);
 
-  // Helper function to get WebSocket close code descriptions
-  const getCloseCodeDescription = useCallback((code: number): string => {
-    const descriptions: { [key: number]: string } = {
-      1000: 'Normal Closure',
-      1001: 'Going Away',
-      1002: 'Protocol Error',
-      1003: 'Unsupported Data',
-      1004: 'Reserved',
-      1005: 'No Status Received',
-      1006: 'Abnormal Closure',
-      1007: 'Invalid frame payload data',
-      1008: 'Policy Violation',
-      1009: 'Message too big',
-      1010: 'Missing Extension',
-      1011: 'Internal Error',
-      1012: 'Service Restart',
-      1013: 'Try Again Later',
-      1014: 'Bad Gateway',
-      1015: 'TLS Handshake'
-    };
-    return descriptions[code] || `Unknown code: ${code}`;
-  }, []);
+  
 
   // Send text to Gemini via WebSocket
   const sendTextToGemini = useCallback((text: string) => {
