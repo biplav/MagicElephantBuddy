@@ -169,10 +169,9 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
         pathname: window.location.pathname
       });
 
-      try {
-        const ws = new WebSocket(wsUrl);
-        console.log('🔗 GEMINI: WebSocket object created, readyState:', ws.readyState);
-        wsRef.current = ws;
+      const ws = new WebSocket(wsUrl);
+      console.log('🔗 GEMINI: WebSocket object created, readyState:', ws.readyState);
+      wsRef.current = ws;
 
       ws.onopen = () => {
         console.log('🔗 GEMINI: WebSocket connected successfully to', wsUrl);
