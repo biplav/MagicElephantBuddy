@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback, memo } from "react";
 import { Button } from "@/components/ui/button";
 import { Settings, Bug, Speaker, User, Brain } from "lucide-react";
 import { Link } from "wouter";
@@ -11,7 +11,7 @@ import PermissionModal from "@/components/PermissionModal";
 
 type AppState = "welcome" | "interaction";
 
-export default function Home() {
+const Home = memo(() => {
   const [appState, setAppState] = useState<AppState>("welcome");
   const [permissionModalOpen, setPermissionModalOpen] = useState(false);
   const [elephantState, setElephantState] = useState<
@@ -1155,7 +1155,7 @@ export default function Home() {
                   </Button>
                 </div>
 
-                
+
 
                 <div className="mt-3">
                   <p>
@@ -1401,4 +1401,6 @@ export default function Home() {
       )}
     </div>
   );
-}
+});
+
+export default Home;

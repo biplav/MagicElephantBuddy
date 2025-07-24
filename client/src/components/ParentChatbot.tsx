@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,7 @@ interface ParentChatbotProps {
   }>;
 }
 
-export default function ParentChatbot({ parentId, children }: ParentChatbotProps) {
+const ParentChatbot = memo(({ parentId, children }: ParentChatbotProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
@@ -48,7 +48,7 @@ export default function ParentChatbot({ parentId, children }: ParentChatbotProps
     },
     onSuccess: (data) => {
       let assistantContent = data.response;
-      
+
       // Add visual indicator for profile updates
       if (data.profileUpdated) {
         assistantContent += "\n\n🔄 Profile Updated Successfully!";
@@ -132,7 +132,7 @@ export default function ParentChatbot({ parentId, children }: ParentChatbotProps
           Ask me anything about {children.map(c => c.name).join(' and ')}'s learning journey with Appu
         </p>
       </CardHeader>
-      
+
       <CardContent className="flex flex-col flex-1 p-0">
         {/* Messages Area */}
         <ScrollArea className="flex-1 px-4 max-h-[400px]">
@@ -167,7 +167,7 @@ export default function ParentChatbot({ parentId, children }: ParentChatbotProps
                 </div>
               </div>
             ))}
-            
+
             {chatMutation.isPending && (
               <div className="flex gap-3 justify-start">
                 <div className="flex gap-2 max-w-[80%]">
@@ -183,7 +183,7 @@ export default function ParentChatbot({ parentId, children }: ParentChatbotProps
                 </div>
               </div>
             )}
-            
+
             {/* Invisible element for auto-scroll */}
             <div ref={messagesEndRef} />
           </div>
@@ -231,4 +231,6 @@ export default function ParentChatbot({ parentId, children }: ParentChatbotProps
       </CardContent>
     </Card>
   );
-}
+});
+
+export default ParentChatbot;

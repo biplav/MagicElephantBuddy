@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback, memo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -56,7 +56,7 @@ interface DashboardData {
   totalMessages: number;
 }
 
-export default function ParentDashboard() {
+const ParentDashboard = memo(() => {
   const [currentParent, setCurrentParent] = useState<Parent | null>(() => {
     const stored = localStorage.getItem('currentParent');
     return stored ? JSON.parse(stored) : null;
@@ -83,7 +83,7 @@ export default function ParentDashboard() {
     const handleProfileUpdate = () => {
       // Invalidate all relevant queries to refresh data
       queryClient.invalidateQueries({ queryKey: [`/api/parents/${currentParent?.id}/dashboard`] });
-      
+
       // Refresh specific tab data based on current active tab
       if (activeTab === "children") {
         queryClient.invalidateQueries({ queryKey: [`/api/children`] });
@@ -92,7 +92,7 @@ export default function ParentDashboard() {
       } else if (activeTab === "suggestions") {
         queryClient.invalidateQueries({ queryKey: [`/api/parents/${currentParent?.id}/profile-suggestions`] });
       }
-      
+
       // Force refetch dashboard data
       refetch();
     };
@@ -263,7 +263,7 @@ export default function ParentDashboard() {
                                 {conversation.endTime ? "Completed" : "Ongoing"}
                               </Badge>
                             </div>
-                            
+
                             <div className="text-xs text-gray-600 space-y-1">
                               <div className="flex items-center space-x-2">
                                 <Calendar className="h-3 w-3" />
@@ -579,7 +579,11 @@ export default function ParentDashboard() {
       </div>
     </div>
   );
-}
+});
+
+ParentDashboard.displayName = 'ParentDashboard';
+
+export default ParentDashboard;
 
 interface ParentLoginProps {
   onLogin: (parent: Parent) => void;
@@ -647,7 +651,7 @@ function ParentLogin({ onLogin }: ParentLoginProps) {
                 />
               </div>
             )}
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
               <input
@@ -658,7 +662,7 @@ function ParentLogin({ onLogin }: ParentLoginProps) {
                 required
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
               <input
