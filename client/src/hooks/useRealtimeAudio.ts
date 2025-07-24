@@ -56,7 +56,14 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
   useEffect(() => {
     if (state.modelType !== modelType) {
       console.log('🔧 REALTIME AUDIO: Updating modelType from', state.modelType, 'to', modelType);
-      setState(prev => ({ ...prev, modelType }));
+      
+      // Clean up any existing connections before switching
+      if (state.isConnected) {
+        console.log('🔧 REALTIME AUDIO: Cleaning up existing connection before model switch');
+        disconnect();
+      }
+      
+      setState(prev => ({ ...prev, modelType, isConnected: false, isRecording: false }));
     }
   }, [modelType, state.modelType]);
 
@@ -216,8 +223,16 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
         console.error('🔗 GEMINI: WebSocket error:', error);
         console.error('🔗 GEMINI: WebSocket URL was:', wsUrl);
         console.error('🔗 GEMINI: WebSocket readyState:', ws.readyState);
-        setState(prev => ({ ...prev, error: 'WebSocket connection failed' }));
-        options.onError?.('WebSocket connection failed');
+        
+        // Prevent unhandled promise rejections
+        const errorMessage = error instanceof Error ? error.message : 'WebSocket connection failed';
+        setState(prev => ({ ...prev, error: errorMessage, isConnected: false }));
+        options.onError?.(errorMessage);
+        
+        // Clean up WebSocket reference
+        if (wsRef.current === ws) {
+          wsRef.current = null;
+        }
       };
 
     } catch (error: any) {
