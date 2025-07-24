@@ -505,6 +505,13 @@ export function setupGeminiLiveWebSocket(server: any) {
 
   wss.on('connection', (ws: WebSocket) => {
     console.log('New Gemini Live WebSocket connection established');
+    console.log('WebSocket state:', ws.readyState);
+    
+    // Send immediate confirmation that connection is established
+    ws.send(JSON.stringify({
+      type: 'connection_established',
+      message: 'Gemini WebSocket connected successfully'
+    }));
     
     const session: GeminiLiveSession = {
       ws: ws,
@@ -523,6 +530,11 @@ export function setupGeminiLiveWebSocket(server: any) {
 
         switch (message.type) {
           case 'start_session':
+            // Set child ID from message if provided
+            if (message.childId) {
+              session.childId = message.childId;
+              console.log(`Gemini session child ID set to: ${session.childId}`);
+            }
             await startGeminiLiveSession(session);
             break;
           

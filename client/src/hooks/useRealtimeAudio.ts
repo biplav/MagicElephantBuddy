@@ -164,6 +164,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
 
         // Start Gemini session
         const childId = getSelectedChildId();
+        console.log('🔗 GEMINI: Starting session for child ID:', childId);
         ws.send(JSON.stringify({
           type: 'start_session',
           childId: childId
@@ -202,8 +203,12 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
         }
       };
 
-      ws.onclose = () => {
-        console.log('🔗 GEMINI: WebSocket disconnected');
+      ws.onclose = (event) => {
+        console.log('🔗 GEMINI: WebSocket disconnected:', {
+          code: event.code,
+          reason: event.reason,
+          wasClean: event.wasClean
+        });
         setState(prev => ({ ...prev, isConnected: false, isRecording: false }));
       };
 
