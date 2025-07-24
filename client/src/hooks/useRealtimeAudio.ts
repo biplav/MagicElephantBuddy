@@ -1,6 +1,3 @@
-Analysis: The code edits focus on adding detailed WebSocket connection debugging information for the Gemini model, specifically logging the current location details and WebSocket object readyState. This aims to provide more context for diagnosing connection issues.
-```
-```replit_final_file
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 interface UseRealtimeAudioOptions {
