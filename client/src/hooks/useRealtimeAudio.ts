@@ -52,6 +52,14 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     modelType
   });
 
+  // Update state.modelType when options.modelType changes
+  useEffect(() => {
+    if (state.modelType !== modelType) {
+      console.log('🔧 REALTIME AUDIO: Updating modelType from', state.modelType, 'to', modelType);
+      setState(prev => ({ ...prev, modelType }));
+    }
+  }, [modelType, state.modelType]);
+
   // Refs for connection management
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
