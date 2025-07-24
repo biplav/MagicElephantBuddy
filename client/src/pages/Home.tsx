@@ -158,6 +158,12 @@ export default function Home() {
     }
   };
 
+  // State for UI controls
+  const [enableLocalPlayback, setEnableLocalPlayback] = useState<boolean>(false); // Default to false for server testing
+  const [enableVideo, setEnableVideo] = useState<boolean>(false); // Toggle for video capture
+  const [useRealtimeAPI, setUseRealtimeAPI] = useState<boolean>(true);
+  const [selectedModel, setSelectedModel] = useState<'openai' | 'gemini'>('openai');
+
   // Initialize realtime audio hook
   const realtimeAudio = useRealtimeAudio({
     onTranscriptionReceived: (transcription) => {
@@ -208,6 +214,7 @@ export default function Home() {
       }, 3000);
     },
     enableVideo: enableVideo,
+    model: selectedModel,
   });
 
   // Destructure realtime audio properties
@@ -920,8 +927,7 @@ export default function Home() {
 
               {isParentLoggedIn ? (
                 selectedChildId ? (
-                  <div className="flex flex-col items-center space-y-4">
-                    {/* Child selection dropdown */}
+                  <div className="flex flex-col items-center space-y-4">                    {/* Child selection dropdown */}
                     <div className="flex flex-col items-center space-y-2">
                       <p className="text-sm text-neutral">
                         Select a child to talk with Appu:

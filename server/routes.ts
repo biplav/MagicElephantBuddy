@@ -720,7 +720,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req: Request, res: Response) => {
       try {
         const { type, content, transcription, childId: requestChildId } = req.body;
-        
+
         console.log('🎤 SERVER: Storing realtime message:', {
           type,
           contentLength: content?.length || 0,
@@ -776,15 +776,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // OpenAI Realtime session endpoint
   app.post("/api/session", async (req: Request, res: Response) => {
     try {
       if (!process.env.OPENAI_API_KEY) {
         return res.status(500).json({ error: "OpenAI API key not configured" });
       }
 
-      // Get childId from request body or use selected child from localStorage
-      const { childId } = req.body;
+      // Get childId and modelType from request body
+      const { childId, modelType } = req.body;
       const selectedChildId = childId || 1; // Default to 1 if not provided
+
+      // This endpoint is specifically for OpenAI
+      if (modelType === 'gemini') {
+        return res.status(400).json({ 
+          error: "This endpoint is for OpenAI only. Gemini uses WebSocket connection." 
+        });
+      }
 
       // Generate enhanced prompt and ensure it's a string
       console.log(`Starting enhanced prompt generation for child ${selectedChildId}...`);
@@ -940,7 +948,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res
           .status(500)
           .json({ message: "Failed to update milestone progress" });
-      }
+      }```text
     },
   );
 
@@ -1909,7 +1917,8 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
   });
 
   // Memory Console API endpoints
-  app.get("/api/memories/:userId", async (req: Request, res: Response) => {
+  app.get(
+    "/api/memories/:userId", async (req: Request, res: Response) => {
     try {
       const { userId } = req.params;
       const memories = await openSourceMem0Service.getAllMemories(userId);
