@@ -1,3 +1,6 @@
+Analysis: The code edits focus on adding detailed WebSocket connection debugging information for the Gemini model, specifically logging the current location details and WebSocket object readyState. This aims to provide more context for diagnosing connection issues.
+```
+```replit_final_file
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 interface UseRealtimeAudioOptions {
@@ -56,13 +59,13 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
   useEffect(() => {
     if (state.modelType !== modelType) {
       console.log('🔧 REALTIME AUDIO: Updating modelType from', state.modelType, 'to', modelType);
-      
+
       // Clean up any existing connections before switching
       if (state.isConnected) {
         console.log('🔧 REALTIME AUDIO: Cleaning up existing connection before model switch');
         disconnect();
       }
-      
+
       setState(prev => ({ ...prev, modelType, isConnected: false, isRecording: false }));
     }
   }, [modelType, state.modelType]);
@@ -159,11 +162,20 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/gemini-ws`;
-      
-      console.log('🔗 GEMINI: Attempting to connect to:', wsUrl);
 
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
+      console.log('🔗 GEMINI: Attempting to connect to:', wsUrl);
+      console.log('🔗 GEMINI: Current location details:', {
+        host: window.location.host,
+        hostname: window.location.hostname,
+        port: window.location.port,
+        protocol: window.location.protocol,
+        pathname: window.location.pathname
+      });
+
+      try {
+        const ws = new WebSocket(wsUrl);
+        console.log('🔗 GEMINI: WebSocket object created, readyState:', ws.readyState);
+        wsRef.current = ws;
 
       ws.onopen = () => {
         console.log('🔗 GEMINI: WebSocket connected successfully to', wsUrl);
@@ -229,12 +241,12 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
         console.error('🔗 GEMINI: WebSocket URL was:', wsUrl);
         console.error('🔗 GEMINI: WebSocket readyState:', ws.readyState);
         console.error('🔗 GEMINI: Current location:', window.location.href);
-        
+
         // Prevent unhandled promise rejections
         const errorMessage = error instanceof ErrorEvent ? error.message : 'WebSocket connection failed';
         setState(prev => ({ ...prev, error: errorMessage, isConnected: false }));
         options.onError?.(errorMessage);
-        
+
         // Clean up WebSocket reference
         if (wsRef.current === ws) {
           wsRef.current = null;
@@ -249,7 +261,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
           url: wsUrl
         });
         setState(prev => ({ ...prev, isConnected: false }));
-        
+
         // Clean up WebSocket reference
         if (wsRef.current === ws) {
           wsRef.current = null;

@@ -1316,6 +1316,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // WebSocket health check endpoint
+  app.get("/api/debug/websocket-status", async (req: Request, res: Response) => {
+    try {
+      res.json({
+        message: "WebSocket services status",
+        services: {
+          geminiWs: "Should be listening on /gemini-ws",
+          realtimeWs: "Should be listening on /ws/realtime",
+          generalWs: "Should be listening on /ws"
+        },
+        serverInfo: {
+          port: process.env.PORT || 5000,
+          host: "0.0.0.0",
+          env: process.env.NODE_ENV
+        },
+        instructions: "Check server logs for WebSocket connection attempts"
+      });
+    } catch (error) {
+      res.status(500).json({ error: "WebSocket status check failed" });
+    }
+  });
+
   // Test LangGraph workflow endpoint
   app.post("/api/admin/test-workflow", async (req: Request, res: Response) => {
     try {

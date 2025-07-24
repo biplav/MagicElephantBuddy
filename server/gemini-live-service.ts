@@ -551,16 +551,20 @@ export function setupGeminiLiveWebSocket(server: any) {
     path: '/gemini-ws',
     perMessageDeflate: false,
     maxPayload: 1024 * 1024 * 3, // 3MB for video frames
-    clientTracking: true
+    clientTracking: true,
+    host: '0.0.0.0' // Ensure it binds to all interfaces
   });
 
-  geminiLogger.info('Gemini Live WebSocket server initialized on /gemini-ws');
+  geminiLogger.info('Gemini Live WebSocket server initialized on /gemini-ws with host 0.0.0.0');
 
   wss.on('connection', (ws: WebSocket, req) => {
-    geminiLogger.info('New Gemini Live WebSocket connection established', { 
+    geminiLogger.info('🔗 NEW GEMINI WEBSOCKET CONNECTION ESTABLISHED', { 
       readyState: ws.readyState,
       origin: req.headers.origin,
-      userAgent: req.headers['user-agent']?.slice(0, 100)
+      userAgent: req.headers['user-agent']?.slice(0, 100),
+      remoteAddress: req.socket.remoteAddress,
+      url: req.url,
+      headers: Object.keys(req.headers)
     });
     
     // Send immediate confirmation that connection is established
@@ -653,12 +657,23 @@ export function setupGeminiLiveWebSocket(server: any) {
 
   // Add server-level error handling
   wss.on('error', (error) => {
-    geminiLogger.error('Gemini WebSocket Server error', { error: error.message });
+    geminiLogger.error('🚨 GEMINI WEBSOCKET SERVER ERROR', { error: error.message, stack: error.stack });
   });
 
   // Log server status
   wss.on('listening', () => {
-    geminiLogger.info('Gemini WebSocket server is listening on /gemini-ws');
+    geminiLogger.info('✅ GEMINI WEBSOCKET SERVER IS LISTENING on /gemini-ws');
+  });
+
+  // Log connection attempts (even failed ones)
+  server.on('upgrade', (request, socket, head) => {
+    if (request.url?.includes('/gemini-ws')) {
+      geminiLogger.info('🔄 WEBSOCKET UPGRADE ATTEMPT for /gemini-ws', {
+        url: request.url,
+        origin: request.headers.origin,
+        userAgent: request.headers['user-agent']?.slice(0, 50)
+      });
+    }
   });
 
   return wss;
