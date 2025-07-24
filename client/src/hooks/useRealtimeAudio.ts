@@ -226,15 +226,6 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
         }
       };
 
-      ws.onclose = (event) => {
-        console.log('🔗 GEMINI: WebSocket disconnected:', {
-          code: event.code,
-          reason: event.reason,
-          wasClean: event.wasClean
-        });
-        setState(prev => ({ ...prev, isConnected: false, isRecording: false }));
-      };
-
       ws.onerror = (error) => {
         console.error('🔗 GEMINI: WebSocket error occurred');
         console.error('🔗 GEMINI: Error details:', error);
@@ -260,7 +251,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
           wasClean: event.wasClean,
           url: wsUrl
         });
-        setState(prev => ({ ...prev, isConnected: false }));
+        setState(prev => ({ ...prev, isConnected: false, isRecording: false }));
 
         // Clean up WebSocket reference
         if (wsRef.current === ws) {
