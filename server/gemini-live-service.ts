@@ -236,9 +236,13 @@ export function setupGeminiLiveWebSocket(server: any) {
       }
     });
 
-    ws.on('close', async () => {
-      geminiLogger.info('Gemini Live WebSocket connection closed', { 
-        conversationId: session.conversationId 
+    ws.on('close', async (code, reason) => {
+      geminiLogger.info('🔌 Gemini Live WebSocket connection closed', { 
+        conversationId: session.conversationId,
+        closeCode: code,
+        closeReason: reason?.toString(),
+        sessionConnected: session.isConnected,
+        messageCount: session.messageCount
       });
       await endGeminiLiveSession(session);
     });

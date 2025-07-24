@@ -21,9 +21,12 @@ export class WebSocketSessionManager {
       return;
     }
 
-    this.logger.info('Starting session', { 
+    this.logger.info('📤 Sending session start message', { 
       childId,
-      sessionStartTime: new Date().toISOString()
+      childIdType: typeof childId,
+      sessionStartTime: new Date().toISOString(),
+      wsReadyState: ws.readyState,
+      wsReadyStateLabel: ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'][ws.readyState]
     });
     
     try {

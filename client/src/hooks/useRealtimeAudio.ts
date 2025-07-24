@@ -329,16 +329,20 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
         connectionTracker.clearTimeout();
         connectionTracker.logConnectionSuccess(wsUrl, ws);
 
+        // Track connection time for debugging
+        (ws as any)._connectTime = Date.now();
+
         geminiLogger.info('🔗 WebSocket onopen event triggered', {
           readyState: ws.readyState,
           protocol: ws.protocol,
-          url: wsUrl
+          url: wsUrl,
+          timestamp: new Date().toISOString()
         });
 
         setState(prev => ({ ...prev, isConnected: true, error: null }));
 
         // Add a small delay to ensure connection is stable before sending session start
-        setTimeout(() => {
+        const sessionStartDelay = setTimeout(() => {
           if (ws.readyState === WebSocket.OPEN) {
             // Start Gemini session
             const childId = getSelectedChildId();
@@ -346,7 +350,8 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
               childId, 
               childIdType: typeof childId,
               rawChildId: childId,
-              wsReadyState: ws.readyState
+              wsReadyState: ws.readyState,
+              delayMs: 100
             });
             
             // Ensure childId is a number
@@ -366,10 +371,14 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
             sessionManager.sendSessionStart(ws, numericChildId);
           } else {
             geminiLogger.warn('WebSocket not open when trying to start session', { 
-              readyState: ws.readyState 
+              readyState: ws.readyState,
+              readyStateLabel: ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'][ws.readyState]
             });
           }
-        }, 100); // Small delay to ensure connection stability
+        }, 100);
+
+        // Store timeout reference for cleanup
+        (ws as any)._sessionStartTimeout = sessionStartDelay;
       };
 
       ws.onmessage = (event) => {
@@ -414,13 +423,20 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
         connectionTracker.clearTimeout();
         connectionTracker.logConnectionClose(event, wsUrl);
 
-        geminiLogger.info('WebSocket connection closed', {
+        const connectTime = (ws as any)._connectTime;
+        const timeConnected = connectTime ? Date.now() - connectTime : 0;
+
+        geminiLogger.info('🔌 WebSocket connection closed', {
           wsUrl,
           closeCode: event.code,
           closeReason: event.reason,
           wasClean: event.wasClean,
           protocol,
-          host: window.location.host
+          host: window.location.host,
+          timeConnected: `${timeConnected}ms`,
+          possibleCauses: event.code === 1002 ? ['Protocol error', 'Invalid frame'] : 
+                         event.code === 1006 ? ['Connection lost', 'Server issue'] :
+                         event.code === 1000 ? ['Normal closure'] : [`Unknown (${event.code})`]
         });
 
         setState(prev => ({ ...prev, isConnected: false, isRecording: false }));
@@ -430,7 +446,17 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
           wsRef.current = null;
           geminiLogger.debug('WebSocket reference cleared on close', {
             closeCode: event.code,
-            wasClean: event.wasClean
+            wasClean: event.wasClean,
+            timeConnected: `${timeConnected}ms`
+          });
+        }
+
+        // If connection closed immediately, there might be a server issue
+        if (timeConnected < 1000) {
+          geminiLogger.warn('WebSocket closed very quickly - possible server issue', {
+            timeConnected: `${timeConnected}ms`,
+            closeCode: event.code,
+            suggestion: 'Check server logs for errors'
           });
         }
       };
