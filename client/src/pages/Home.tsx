@@ -33,7 +33,6 @@ export default function Home() {
   const [enableLocalPlayback, setEnableLocalPlayback] =
     useState<boolean>(false); // Default to false for server testing
   const [useRealtimeAPI, setUseRealtimeAPI] = useState<boolean>(true);
-  const [aiProvider, setAiProvider] = useState<'openai' | 'gemini'>('openai'); // Toggle for OpenAI Realtime API
   const [enableVideo, setEnableVideo] = useState<boolean>(false); // Toggle for video capture
   const [aiSettings, setAiSettings] = useState({
     defaultProvider: "standard",
@@ -41,6 +40,9 @@ export default function Home() {
     creativeMode: false,
     voicePreference: "nova",
   });
+
+  // Derive aiProvider from saved settings
+  const aiProvider: 'openai' | 'gemini' = aiSettings.voiceMode === 'gemini' ? 'gemini' : 'openai';
 
   // Check parent login status and selected child
   const [isParentLoggedIn, setIsParentLoggedIn] = useState<boolean>(() => {
@@ -360,6 +362,8 @@ export default function Home() {
       try {
         const parsed = JSON.parse(savedSettings);
         setAiSettings(parsed);
+        console.log("Loaded AI settings:", parsed);
+        console.log("AI Provider will be:", parsed.voiceMode === 'gemini' ? 'gemini' : 'openai');
       } catch (error) {
         console.error("Error loading AI settings:", error);
       }
