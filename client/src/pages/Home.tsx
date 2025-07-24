@@ -501,6 +501,12 @@ const Home = memo(() => {
     }
   };
 
+  const memoizedStartRecording = useCallback(() => {
+    if (currentRecorder.startRecording) {
+      currentRecorder.startRecording();
+    }
+  }, [currentRecorder]);
+
   // Start recording automatically when ready (only for realtime API after connection is established)
   useEffect(() => {
     if (
@@ -513,7 +519,7 @@ const Home = memo(() => {
       console.log(
         "Auto-starting realtime recording because connection is established",
       );
-      currentRecorder.startRecording();
+      memoizedStartRecording();
     }
   }, [
     useRealtimeAPI,
@@ -521,7 +527,7 @@ const Home = memo(() => {
     appState,
     currentRecorder.isRecording,
     currentRecorder.isProcessing,
-    currentRecorder.startRecording,
+    memoizedStartRecording,
   ]);
 
   // Restart recording after processing is complete
@@ -537,7 +543,7 @@ const Home = memo(() => {
       const timer = setTimeout(() => {
         if (!currentRecorder.isRecording && !currentRecorder.isProcessing) {
           console.log("Restarting recording after processing completed");
-          currentRecorder.startRecording();
+          memoizedStartRecording();
         }
       }, 1000);
 
@@ -549,7 +555,7 @@ const Home = memo(() => {
     appState,
     elephantState,
     currentRecorder.isRecording,
-    currentRecorder.startRecording,
+    memoizedStartRecording,
   ]);
 
   // Handle microphone button to stop current recording and trigger processing
@@ -577,7 +583,7 @@ const Home = memo(() => {
       }
 
       // Start recording
-      currentRecorder.startRecording();
+      memoizedStartRecording();
 
       // Log current state after starting
       setTimeout(() => {
@@ -691,7 +697,7 @@ const Home = memo(() => {
             console.log(
               "Auto-restarting recording after processing text input response",
             );
-            currentRecorder.startRecording();
+            memoizedStartRecording();
           }
         }, 1000);
       }, 4000);
@@ -745,15 +751,15 @@ const Home = memo(() => {
           setSpeechText(undefined);
 
           // Auto-restart recording after error message
-          if (
-            currentRecorder.isReady &&
-            appState === "interaction" &&
-            !currentRecorder.isRecording &&
-            !currentRecorder.isProcessing
-          ) {
-            console.log("Auto-restarting recording after error message");
-            currentRecorder.startRecording();
-          }
+            if (
+              currentRecorder.isReady &&
+              appState === "interaction" &&
+              !currentRecorder.isRecording &&
+              !currentRecorder.isProcessing
+            ) {
+              console.log("Auto-restarting recording after error message");
+              memoizedStartRecording();
+            }
         }, 1000);
       }, 4000);
     } finally {
