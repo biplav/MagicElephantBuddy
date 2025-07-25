@@ -79,7 +79,7 @@ app.use((req, res, next) => {
   // this serves both the API and the client.  
   // It is the only port that is not firewalled.
   const port = 5000;
-  
+
   // Handle port conflicts gracefully
   server.on('error', (err: any) => {
     if (err.code === 'EADDRINUSE') {
@@ -108,18 +108,18 @@ app.use((req, res, next) => {
       process.exit(1);
     }
   });
-  
+
   server.listen({
     port,
     host: "0.0.0.0",
   }, () => {
     serverLogger.info(`serving on port ${port}`);
-    
+
     // Configure server timeouts
     server.keepAliveTimeout = 120000; // 2 minutes
     server.headersTimeout = 120000; // 2 minutes
     server.timeout = 300000; // 5 minutes for long-running requests
-    
+
     // Start the hourly job scheduler for conversation analysis
     jobScheduler.start();
     serverLogger.info('Hourly job scheduler started for conversation analysis');

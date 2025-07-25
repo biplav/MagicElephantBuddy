@@ -1,0 +1,1 @@
+The user wants to update import paths due to a change in directory structure, specifically moving Gemini-related files into a separate folder.
