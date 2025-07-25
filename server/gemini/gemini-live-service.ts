@@ -70,8 +70,26 @@ export function setupGeminiLiveWebSocket(server: any) {
       return false;
     });
 
-    ws.on("close", async (event) => {
-      geminiLogger.info("Gemini Live WebSocket connection closed with event ", event);
+    ws.on("close", async (code: number, reason: Buffer) => {
+      const closeEvent = {
+        code,
+        reason: reason.toString('utf8'),
+        timestamp: new Date().toISOString(),
+        sessionId: session.childId,
+        connectionDuration: Date.now() - session.sessionStartTime.getTime(),
+        messageCount: session.messageCount
+      };
+
+      geminiLogger.info("Gemini Live WebSocket connection closed", {
+        closeCode: code,
+        closeReason: reason.toString('utf8') || 'No reason provided',
+        wasClean: code === 1000,
+        sessionDuration: `${closeEvent.connectionDuration}ms`,
+        messageCount: session.messageCount,
+        childId: session.childId,
+        closeEvent
+      });
+
       await geminiSessionManager.endSession(session);
     });
 
