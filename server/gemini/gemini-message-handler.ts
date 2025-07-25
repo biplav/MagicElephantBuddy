@@ -1,5 +1,4 @@
 
-import { WebSocket } from 'ws';
 import { GeminiLiveSession, geminiSessionManager } from './gemini-session-manager';
 import { createServiceLogger } from '../logger';
 

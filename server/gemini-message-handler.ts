@@ -1,7 +1,6 @@
 
-import { WebSocket } from 'ws';
-import { GeminiLiveSession, geminiSessionManager } from './gemini-session-manager';
-import { createServiceLogger } from './logger';
+// This file is redundant - functionality moved to server/gemini/gemini-message-handler.ts
+// Consider removing this file entirely
 
 const messageLogger = createServiceLogger('gemini-message');
 
