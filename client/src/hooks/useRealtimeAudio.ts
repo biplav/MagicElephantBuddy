@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createServiceLogger } from '@/lib/logger';
 import { useOpenAIConnection } from './useOpenAIConnection';
 import { useGeminiConnection } from './useGeminiConnection';
@@ -184,12 +184,15 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     return mediaCapture.captureFrame();
   }, [mediaCapture]);
 
-  // Cleanup on unmount
+  // Cleanup on unmount - use useRef to avoid dependency issues
+  const disconnectRef = useRef(disconnect);
+  disconnectRef.current = disconnect;
+
   useEffect(() => {
     return () => {
-      disconnect();
+      disconnectRef.current();
     };
-  }, [disconnect]);
+  }, []); // Empty dependency array to only run on mount/unmount
 
   return {
     ...state,

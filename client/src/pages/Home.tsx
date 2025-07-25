@@ -108,8 +108,9 @@ const Home = memo(() => {
         console.log("Loaded children:", children);
         setAvailableChildren(children);
 
-        // Auto-select first child if none selected
-        if (children.length > 0 && !selectedChildId) {
+        // Auto-select first child if none selected - check localStorage directly
+        const currentSelectedChildId = localStorage.getItem("selectedChildId");
+        if (children.length > 0 && !currentSelectedChildId) {
           const firstChildId = children[0].id;
           setSelectedChildId(firstChildId);
           localStorage.setItem("selectedChildId", firstChildId.toString());
@@ -124,7 +125,7 @@ const Home = memo(() => {
       console.error("Error loading children:", error);
       setAvailableChildren([]);
     }
-  }, [selectedChildId]);
+  }, []); // Remove selectedChildId dependency to break circular dependency
 
   // Load available children when parent logs in
   useEffect(() => {
@@ -296,27 +297,43 @@ const Home = memo(() => {
     },
   });
 
-  // Create unified recorder interface
-  const currentRecorder = useRealtimeAPI
-    ? {
-        isReady: isConnected,
-        isRecording: realtimeIsRecording,
-        isProcessing: false, // Realtime API doesn't have isProcessing state
-        startRecording: realtimeStartRecording,
-        stopRecording: realtimeStopRecording,
-        requestMicrophonePermission: realtimeRequestPermission,
-        recorderState: realtimeIsRecording ? "recording" : "inactive",
-      }
-    : {
-        isReady: traditionalRecorder.isReady,
-        isRecording: traditionalRecorder.isRecording,
-        isProcessing: traditionalRecorder.isProcessing,
-        startRecording: traditionalRecorder.startRecording,
-        stopRecording: traditionalRecorder.stopRecording,
-        requestMicrophonePermission:
-          traditionalRecorder.requestMicrophonePermission,
-        recorderState: traditionalRecorder.recorderState,
-      };
+  // Create unified recorder interface (memoized to prevent infinite re-renders)
+  const currentRecorder = useMemo(() => {
+    return useRealtimeAPI
+      ? {
+          isReady: isConnected,
+          isRecording: realtimeIsRecording,
+          isProcessing: false, // Realtime API doesn't have isProcessing state
+          startRecording: realtimeStartRecording,
+          stopRecording: realtimeStopRecording,
+          requestMicrophonePermission: realtimeRequestPermission,
+          recorderState: realtimeIsRecording ? "recording" : "inactive",
+        }
+      : {
+          isReady: traditionalRecorder.isReady,
+          isRecording: traditionalRecorder.isRecording,
+          isProcessing: traditionalRecorder.isProcessing,
+          startRecording: traditionalRecorder.startRecording,
+          stopRecording: traditionalRecorder.stopRecording,
+          requestMicrophonePermission:
+            traditionalRecorder.requestMicrophonePermission,
+          recorderState: traditionalRecorder.recorderState,
+        };
+  }, [
+    useRealtimeAPI,
+    isConnected,
+    realtimeIsRecording,
+    realtimeStartRecording,
+    realtimeStopRecording,
+    realtimeRequestPermission,
+    traditionalRecorder.isReady,
+    traditionalRecorder.isRecording,
+    traditionalRecorder.isProcessing,
+    traditionalRecorder.startRecording,
+    traditionalRecorder.stopRecording,
+    traditionalRecorder.requestMicrophonePermission,
+    traditionalRecorder.recorderState,
+  ]);
 
   const handleStopSession = async () => {
     console.log("Stopping session and returning to welcome screen");
@@ -511,7 +528,7 @@ const Home = memo(() => {
     if (currentRecorder.startRecording) {
       currentRecorder.startRecording();
     }
-  }, [currentRecorder]);
+  }, [currentRecorder]); // Now safe to depend on the whole memoized object
 
   // Start recording automatically when ready (only for realtime API after connection is established)
   useEffect(() => {
