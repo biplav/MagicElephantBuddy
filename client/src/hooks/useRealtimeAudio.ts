@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { createServiceLogger } from '@/lib/logger';
 import { useOpenAIConnection } from './useOpenAIConnection';
 import { useGeminiConnection } from './useGeminiConnection';
@@ -26,31 +26,43 @@ interface RealtimeAudioState {
 }
 
 export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) {
-  const logger = createServiceLogger('realtime-audio');
+  const logger = useMemo(() => createServiceLogger('realtime-audio'), []);
   const modelType = options.modelType || 'openai';
 
-  logger.info('Initializing hook', { modelType, enableVideo: options.enableVideo });
+  // Only log initialization once per component mount, not on every render
+  const [hasInitialized, setHasInitialized] = useState(false);
+  useEffect(() => {
+    if (!hasInitialized) {
+      logger.info('Initializing hook', { modelType, enableVideo: options.enableVideo });
+      setHasInitialized(true);
+    }
+  }, [hasInitialized, logger, modelType, options.enableVideo]);
 
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
 
-  // Initialize connection hooks
-  const openaiConnection = useOpenAIConnection({
+  // Memoize connection options to prevent unnecessary re-renders
+  const openaiOptions = useMemo(() => ({
     onTranscriptionReceived: options.onTranscriptionReceived,
     onResponseReceived: options.onResponseReceived,
     onAudioResponseReceived: options.onAudioResponseReceived,
     onError: options.onError,
     enableVideo: options.enableVideo
-  });
+  }), [options.onTranscriptionReceived, options.onResponseReceived, options.onAudioResponseReceived, options.onError, options.enableVideo]);
 
-  const geminiConnection = useGeminiConnection({
+  const geminiOptions = useMemo(() => ({
     onTranscriptionReceived: options.onTranscriptionReceived,
     onResponseReceived: options.onResponseReceived,
     onError: options.onError
-  });
+  }), [options.onTranscriptionReceived, options.onResponseReceived, options.onError]);
 
-  const mediaCapture = useMediaCapture({
+  const mediaCaptureOptions = useMemo(() => ({
     enableVideo: options.enableVideo
-  });
+  }), [options.enableVideo]);
+
+  // Initialize connection hooks with memoized options
+  const openaiConnection = useOpenAIConnection(openaiOptions);
+  const geminiConnection = useGeminiConnection(geminiOptions);
+  const mediaCapture = useMediaCapture(mediaCaptureOptions);
 
   // Get the active connection based on model type
   const activeConnection = modelType === 'openai' ? openaiConnection : geminiConnection;
@@ -68,16 +80,26 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
   };
 
   // Handle model type changes
+  const [previousModelType, setPreviousModelType] = useState<string>(modelType);
+  
   useEffect(() => {
-    logger.info('Model type effect triggered', { modelType });
+    // Only act when modelType actually changes
+    if (previousModelType !== modelType) {
+      logger.info('Model type change detected', { 
+        from: previousModelType, 
+        to: modelType 
+      });
 
-    // Disconnect other connections when switching
-    if (modelType === 'openai' && geminiConnection.isConnected) {
-      geminiConnection.disconnect();
-    } else if (modelType === 'gemini' && openaiConnection.isConnected) {
-      openaiConnection.disconnect();
+      // Disconnect other connections when switching
+      if (modelType === 'openai' && geminiConnection.isConnected) {
+        geminiConnection.disconnect();
+      } else if (modelType === 'gemini' && openaiConnection.isConnected) {
+        openaiConnection.disconnect();
+      }
+
+      setPreviousModelType(modelType);
     }
-  }, [modelType, openaiConnection, geminiConnection]);
+  }, [modelType, previousModelType, openaiConnection, geminiConnection, logger]);
 
   const connect = useCallback(async () => {
     if (isConnecting || state.isConnected) {
