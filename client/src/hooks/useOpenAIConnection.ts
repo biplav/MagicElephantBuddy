@@ -97,29 +97,79 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
 
       channel.onmessage = async (messageEvent: MessageEvent) => {
         try {
+          logger.info('Raw data channel message received', {
+            messageSize: messageEvent.data?.length,
+            dataType: typeof messageEvent.data,
+            rawData: messageEvent.data?.substring(0, 500) // First 500 chars for inspection
+          });
+
           const message = JSON.parse(messageEvent.data);
+          
+          logger.info('Parsed data channel message', {
+            messageType: message.type,
+            messageKeys: Object.keys(message),
+            fullMessage: message
+          });
           
           switch (message.type) {
             case 'conversation.item.input_audio_transcription.completed':
+              logger.info('Transcription completed message', {
+                hasTranscript: !!message.transcript,
+                transcriptLength: message.transcript?.length,
+                transcript: message.transcript,
+                fullMessage: message
+              });
               if (message.transcript) {
                 options.onTranscriptionReceived?.(message.transcript);
               }
               break;
             case 'response.audio_transcript.done':
+              logger.info('Audio transcript done message', {
+                hasTranscript: !!message.transcript,
+                transcriptLength: message.transcript?.length,
+                transcript: message.transcript,
+                fullMessage: message
+              });
               if (message.transcript) {
                 options.onResponseReceived?.(message.transcript);
               }
               break;
             case 'response.audio.delta':
+              logger.info('Audio delta message', {
+                hasDelta: !!message.delta,
+                deltaLength: message.delta?.length,
+                deltaType: typeof message.delta,
+                delta: message.delta,
+                fullMessage: message
+              });
               options.onAudioResponseReceived?.(message.delta);
               break;
             case 'error':
+              logger.error('Error message received', {
+                errorMessage: message.error?.message,
+                errorType: message.error?.type,
+                errorCode: message.error?.code,
+                fullError: message.error,
+                fullMessage: message
+              });
               setState(prev => ({ ...prev, error: message.error?.message || 'Unknown error' }));
               options.onError?.(message.error?.message || 'Unknown error');
               break;
+            default:
+              logger.warn('Unknown message type received', {
+                messageType: message.type,
+                messageKeys: Object.keys(message),
+                fullMessage: message
+              });
+              break;
           }
         } catch (error) {
-          logger.error('Error parsing data channel message', { error: error instanceof Error ? error.message : String(error) });
+          logger.error('Error parsing data channel message', { 
+            error: error instanceof Error ? error.message : String(error),
+            rawData: messageEvent.data?.substring(0, 200),
+            dataType: typeof messageEvent.data,
+            messageEventType: messageEvent.type
+          });
         }
       };
     };
