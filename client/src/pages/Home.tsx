@@ -170,7 +170,7 @@ const Home = memo(() => {
   // const [selectedModel, setSelectedModel] = useState<'openai' | 'gemini'>('openai'); // Need to use aiProvider instead
 
   // Initialize realtime audio hook with stable options
-  const realtimeAudio = useRealtimeAudio(useMemo(() => ({
+  const realtimeOptions = useMemo(() => ({
     onTranscriptionReceived: (transcription: string) => {
       console.log('🎤 HOME: Transcription callback received:', transcription);
       setTranscribedText(transcription);
@@ -220,7 +220,9 @@ const Home = memo(() => {
     },
     enableVideo: enableVideo,
     modelType: aiProvider,
-  }), [enableLocalPlayback, enableVideo, aiProvider]));
+  }), [enableLocalPlayback, enableVideo, aiProvider]);
+
+  const realtimeAudio = useRealtimeAudio(realtimeOptions);
 
   // Destructure realtime audio properties
   const {

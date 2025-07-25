@@ -70,7 +70,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     };
 
     pc.onconnectionstatechange = () => {
-      logger.info('WebRTC connection state:', pc.connectionState);
+      logger.info('WebRTC connection state', { state: pc.connectionState });
       switch (pc.connectionState) {
         case 'connected':
           setState(prev => ({ ...prev, isConnected: true, isRecording: true }));
@@ -122,11 +122,11 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
               break;
           }
         } catch (error) {
-          logger.error('Error parsing data channel message:', error);
+          logger.error('Error parsing data channel message', { error: error instanceof Error ? error.message : String(error) });
         }
       };
     };
-  }, [options, getSelectedChildId]);
+  }, [getSelectedChildId, options.onTranscriptionReceived, options.onResponseReceived, options.onAudioResponseReceived, options.onError]);
 
   const connect = useCallback(async () => {
     try {
@@ -190,7 +190,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
       setState(prev => ({ ...prev, error: error.message }));
       options.onError?.(error.message);
     }
-  }, [options, createSession, setupPeerConnection, setupDataChannel]);
+  }, [createSession, setupPeerConnection, setupDataChannel, options.enableVideo, options.onError]);
 
   const disconnect = useCallback(() => {
     logger.info('Disconnecting OpenAI connection');

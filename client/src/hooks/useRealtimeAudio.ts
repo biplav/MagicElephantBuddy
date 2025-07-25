@@ -76,7 +76,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     videoEnabled: mediaCapture.videoEnabled,
     hasVideoPermission: mediaCapture.hasVideoPermission,
     modelType,
-    conversationId: 'conversationId' in activeConnection ? activeConnection.conversationId : undefined
+    conversationId: 'conversationId' in activeConnection ? activeConnection.conversationId as number : undefined
   };
 
   // Handle model type changes
@@ -158,7 +158,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       await mediaCapture.requestPermissions();
       return true;
     } catch (error) {
-      logger.error('Microphone permission denied:', error);
+      logger.error('Microphone permission denied', { error: error instanceof Error ? error.message : String(error) });
       options.onError?.('Microphone permission denied');
       return false;
     }
