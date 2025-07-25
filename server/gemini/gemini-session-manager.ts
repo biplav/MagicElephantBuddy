@@ -36,21 +36,22 @@ export class GeminiSessionManager {
         },
       };
 
-      const conversation = await storage.conversations.create(conversationData);
-      session.conversationId = conversation.id;
+      /* This needs to be fixed.
+      const conversation = await storage.createConversation(conversationData);*/
+      //session.conversationId = conversation.id;
       session.isConnected = true;
 
       // Send session started confirmation
       session.ws.send(
         JSON.stringify({
           type: "session_started",
-          conversationId: conversation.id,
+          conversationId: '',//conversation.id,
           timestamp: new Date().toISOString(),
         }),
       );
 
       sessionLogger.info("Gemini session started successfully", {
-        conversationId: conversation.id,
+        conversationId: '',//conversation.id,
         childId: session.childId,
       });
     } catch (error: any) {

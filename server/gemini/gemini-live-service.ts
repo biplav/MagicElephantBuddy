@@ -67,10 +67,11 @@ export function setupGeminiLiveWebSocket(server: any) {
 
     ws.on("message", async (data: Buffer) => {
       await geminiMessageHandler.handleMessage(session, data);
+      return false;
     });
 
-    ws.on("close", async () => {
-      geminiLogger.info("Gemini Live WebSocket connection closed");
+    ws.on("close", async (event) => {
+      geminiLogger.info("Gemini Live WebSocket connection closed with event ", event);
       await geminiSessionManager.endSession(session);
     });
 

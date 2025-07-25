@@ -94,6 +94,7 @@ export function useGeminiConnection(options: GeminiConnectionOptions = {}) {
 
       ws.onmessage = (event) => {
         messageHandler.handleMessage(event);
+        return false;
       };
 
       ws.onerror = (error) => {
