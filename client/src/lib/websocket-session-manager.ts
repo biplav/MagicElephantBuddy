@@ -1,7 +1,7 @@
 
 export interface SessionMessage {
   type: string;
-  childId?: number;
+  childId?: string;
   [key: string]: any;
 }
 
@@ -12,7 +12,7 @@ export class WebSocketSessionManager {
     this.logger = logger;
   }
 
-  sendSessionStart(ws: WebSocket, childId: number): void {
+  sendSessionStart(ws: WebSocket, childId: string): void {
     if (ws.readyState !== WebSocket.OPEN) {
       this.logger.error('Cannot send session start - WebSocket not open', {
         readyState: ws.readyState,

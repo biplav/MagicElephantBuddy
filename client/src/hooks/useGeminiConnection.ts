@@ -37,17 +37,14 @@ export function useGeminiConnection(options: GeminiConnectionOptions = {}) {
 
   const wsRef = useRef<WebSocket | null>(null);
 
-  const getSelectedChildId = useCallback((): number => {
+  const getSelectedChildId = useCallback((): string => {
     const selectedChildId = localStorage.getItem("selectedChildId");
-    if (selectedChildId) {
-      const parsed = parseInt(selectedChildId, 10);
-      if (!isNaN(parsed)) {
-        return parsed;
-      }
+    if (!selectedChildId) {
+      throw new Error('User not logged in, selectedChildId is missing.');
     }
-    return 1085268853542289410;
+    return selectedChildId;
   }, []);
-
+  
   const connect = useCallback(async () => {
     try {
       logger.info('Initiating Gemini WebSocket connection setup');
