@@ -29,15 +29,12 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
   const streamRef = useRef<MediaStream | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
 
-  const getSelectedChildId = useCallback((): number => {
+  const getSelectedChildId = useCallback((): string => {
     const selectedChildId = localStorage.getItem("selectedChildId");
     if (selectedChildId) {
-      const parsed = parseInt(selectedChildId, 10);
-      if (!isNaN(parsed)) {
-        return parsed;
-      }
+      return selectedChildId;
     }
-    return 1085268853542289410;
+    return '1085268853542289410';
   }, []);
 
   const createSession = useCallback(async (): Promise<string> => {

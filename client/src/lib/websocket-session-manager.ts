@@ -58,7 +58,7 @@ export class WebSocketSessionManager {
         readyState: ws.readyState,
         messageType: message.type
       });
-      return false;
+      
     }
 
     try {
@@ -74,7 +74,7 @@ export class WebSocketSessionManager {
         messageType: message.type,
         wsReadyState: ws.readyState
       });
-      return false;
     }
+    return false;
   }
 }

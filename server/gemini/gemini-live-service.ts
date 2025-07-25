@@ -71,23 +71,13 @@ export function setupGeminiLiveWebSocket(server: any) {
     });
 
     ws.on("close", async (code: number, reason: Buffer) => {
-      const closeEvent = {
-        code,
-        reason: reason.toString('utf8'),
-        timestamp: new Date().toISOString(),
-        sessionId: session.childId,
-        connectionDuration: Date.now() - session.sessionStartTime.getTime(),
-        messageCount: session.messageCount
-      };
-
       geminiLogger.info("Gemini Live WebSocket connection closed", {
         closeCode: code,
         closeReason: reason.toString('utf8') || 'No reason provided',
         wasClean: code === 1000,
-        sessionDuration: `${closeEvent.connectionDuration}ms`,
+        sessionDuration: Date.now() - session.sessionStartTime.getTime(),
         messageCount: session.messageCount,
-        childId: session.childId,
-        closeEvent
+        childId: session.childId
       });
 
       await geminiSessionManager.endSession(session);
