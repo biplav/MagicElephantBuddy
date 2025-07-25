@@ -14,7 +14,7 @@ import {
   AI_CONFIGS,
 } from "./openai-service";
 import { setupRealtimeWebSocket } from "./realtime-service";
-import { setupGeminiLiveWebSocket } from "./gemini-live-service";
+import { setupGeminiLiveWebSocket } from "./gemini/gemini-live-service";
 import bodyParser from "body-parser";
 import { getErrorMessage } from "../shared/errorMessages";
 import { APPU_SYSTEM_PROMPT } from "../shared/appuPrompts";
