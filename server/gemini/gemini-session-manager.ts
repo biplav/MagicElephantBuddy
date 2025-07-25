@@ -4,7 +4,7 @@ import { storage } from "../storage";
 import { APPU_SYSTEM_PROMPT } from "../../../shared/appuPrompts";
 import { getCurrentTimeContext } from "../../../shared/childProfile";
 import { memoryFormationService } from '../memory-formation-service';
-import { createServiceLogger } from '../../logger';
+import { createServiceLogger } from '../logger';
 
 const sessionLogger = createServiceLogger('gemini-session');
 
