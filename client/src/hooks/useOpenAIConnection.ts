@@ -286,6 +286,12 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
               fullMessage: message
             });
             break;
+          case 'rate_limits.updated':
+            logger.info('Rate limits updated', {
+              rateLimits: message.rate_limits,
+              fullMessage: message
+            });
+            break;
           case 'error':
             logger.error('Error message received', {
               errorMessage: message.error?.message,
