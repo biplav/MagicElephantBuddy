@@ -1016,7 +1016,7 @@ const Home = memo(() => {
               transition={{ duration: 0.5 }}
             >
               {/* Video displays section - positioned at top when enabled */}
-              {enableVideo && realtimeAudio && (realtimeAudio.hasVideoPermission || realtimeAudio.lastCapturedFrame) && (
+              {enableVideo && realtimeAudio && realtimeAudio.mediaCapture && (realtimeAudio.mediaCapture.hasVideoPermission || realtimeAudio.lastCapturedFrame) && (
                 <motion.div
                   className="w-full flex flex-col sm:flex-row justify-center space-y-2 sm:space-y-0 sm:space-x-2 mb-2"
                   initial={{ opacity: 0, y: -20 }}
@@ -1024,12 +1024,12 @@ const Home = memo(() => {
                   transition={{ duration: 0.3 }}
                 >
                   {/* Live video feed */}
-                  {realtimeAudio.hasVideoPermission && realtimeAudio.mediaCapture && (
+                  {realtimeAudio.mediaCapture.hasVideoPermission && realtimeAudio.mediaCapture.videoElement && (
                     <div className="flex flex-col items-center space-y-1">
                       <p className="text-xs text-neutral font-medium">Live Camera</p>
                       <VideoDisplay 
                         videoElement={realtimeAudio.mediaCapture.videoElement}
-                        isEnabled={enableVideo && realtimeAudio.hasVideoPermission}
+                        isEnabled={enableVideo && realtimeAudio.mediaCapture.hasVideoPermission}
                         className="w-28 h-20 sm:w-32 sm:h-24 rounded-lg shadow-md border border-gray-200"
                       />
                     </div>
@@ -1070,10 +1070,10 @@ const Home = memo(() => {
                   </p>
 
                   {/* Video status indicator when enabled */}
-                  {enableVideo && realtimeAudio && (
+                  {enableVideo && realtimeAudio && realtimeAudio.mediaCapture && (
                     <div className="flex items-center space-x-2 text-xs text-neutral">
-                      <div className={`w-2 h-2 rounded-full ${realtimeAudio.hasVideoPermission ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-                      <span>{realtimeAudio.hasVideoPermission ? 'Camera ready' : 'Camera not ready'}</span>
+                      <div className={`w-2 h-2 rounded-full ${realtimeAudio.mediaCapture.hasVideoPermission ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                      <span>{realtimeAudio.mediaCapture.hasVideoPermission ? 'Camera ready' : 'Camera not ready'}</span>
                     </div>
                   )}
 
@@ -1156,7 +1156,7 @@ const Home = memo(() => {
                     {currentRecorder.isProcessing
                       ? "Please wait while Appu thinks..."
                       : currentRecorder.isRecording
-                        ? enableVideo && realtimeAudio && realtimeAudio.hasVideoPermission
+                        ? enableVideo && realtimeAudio && realtimeAudio.mediaCapture && realtimeAudio.mediaCapture.hasVideoPermission
                           ? "Appu is listening and watching! Tap when you're done talking"
                           : "Appu is listening to you now! Tap when you're done talking"
                         : "Tap to start talking with Appu!"}
