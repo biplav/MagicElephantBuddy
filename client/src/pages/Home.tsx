@@ -1015,6 +1015,44 @@ const Home = memo(() => {
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.5 }}
             >
+              {/* Video displays section - positioned at top when enabled */}
+              {enableVideo && (realtimeAudio.hasVideoPermission || realtimeAudio.lastCapturedFrame) && (
+                <motion.div
+                  className="w-full flex flex-col sm:flex-row justify-center space-y-2 sm:space-y-0 sm:space-x-2 mb-2"
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  {/* Live video feed */}
+                  {realtimeAudio.hasVideoPermission && (
+                    <div className="flex flex-col items-center space-y-1">
+                      <p className="text-xs text-neutral font-medium">Live Camera</p>
+                      <VideoDisplay 
+                        videoElement={realtimeAudio.mediaCapture.videoElement}
+                        isEnabled={enableVideo && realtimeAudio.hasVideoPermission}
+                        className="w-28 h-20 sm:w-32 sm:h-24 rounded-lg shadow-md border border-gray-200"
+                      />
+                    </div>
+                  )}
+
+                  {/* Captured frame when available */}
+                  {realtimeAudio.lastCapturedFrame && (
+                    <motion.div
+                      className="flex flex-col items-center space-y-1"
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <p className="text-xs text-neutral font-medium">What Appu Saw</p>
+                      <CapturedFrameDisplay 
+                        frameData={realtimeAudio.lastCapturedFrame}
+                        className="w-28 h-20 sm:w-32 sm:h-24 rounded-lg shadow-md border border-blue-200"
+                      />
+                    </motion.div>
+                  )}
+                </motion.div>
+              )}
+
               <div className="flex-1 flex items-center justify-center w-full min-h-0">
                 <Elephant state={elephantState} speechText={speechText} />
               </div>
@@ -1030,6 +1068,14 @@ const Home = memo(() => {
                           ? "Appu is listening..."
                           : "Appu is getting ready to listen..."}
                   </p>
+
+                  {/* Video status indicator when enabled */}
+                  {enableVideo && (
+                    <div className="flex items-center space-x-2 text-xs text-neutral">
+                      <div className={`w-2 h-2 rounded-full ${realtimeAudio.hasVideoPermission ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                      <span>{realtimeAudio.hasVideoPermission ? 'Camera ready' : 'Camera not ready'}</span>
+                    </div>
+                  )}
 
                   {currentRecorder.isProcessing ? (
                     <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full shadow-lg bg-yellow-400 flex items-center justify-center animate-pulse">
@@ -1081,7 +1127,7 @@ const Home = memo(() => {
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
                                 strokeWidth={2}
-                                d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
+                                d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m-9 9a9 9 0 019-9"
                               />
                             </svg>
                             {/* Recording indicator pulse */}
@@ -1110,7 +1156,9 @@ const Home = memo(() => {
                     {currentRecorder.isProcessing
                       ? "Please wait while Appu thinks..."
                       : currentRecorder.isRecording
-                        ? "Appu is listening to you now! Tap when you're done talking"
+                        ? enableVideo && realtimeAudio.hasVideoPermission
+                          ? "Appu is listening and watching! Tap when you're done talking"
+                          : "Appu is listening to you now! Tap when you're done talking"
                         : "Tap to start talking with Appu!"}
                   </p>
 
