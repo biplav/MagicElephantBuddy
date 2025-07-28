@@ -237,7 +237,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
       logger.info('getEyesTool was called!', { callId, args });
       
       try {
-        let frameData = null;
+        let frameData: string | null = null;
 
         // First check if video is enabled in options
         if (!options.enableVideo) {
