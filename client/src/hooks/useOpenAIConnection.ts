@@ -292,6 +292,11 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
               fullMessage: message
             });
             break;
+          case 'output_audio_buffer.stopped':
+            logger.info('Audio output buffer stopped', {
+              fullMessage: message
+            });
+            break;
           case 'error':
             logger.error('Error message received', {
               errorMessage: message.error?.message,
