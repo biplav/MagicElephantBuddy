@@ -249,6 +249,14 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
             });
             options.onAudioResponseReceived?.(message.delta);
             break;
+          case 'session.created':
+            logger.info('Session created successfully', {
+              sessionId: message.session?.id,
+              model: message.session?.model,
+              voice: message.session?.voice,
+              fullMessage: message
+            });
+            break;
           case 'error':
             logger.error('Error message received', {
               errorMessage: message.error?.message,
