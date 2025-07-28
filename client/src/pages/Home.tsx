@@ -227,6 +227,11 @@ const Home = memo(() => {
 
   const realtimeAudio = useRealtimeAudio(realtimeOptions);
 
+  // Get individual connections for direct access
+  const openaiConnection = (realtimeAudio as any).openaiConnection || { mediaCapture: null, lastCapturedFrame: null };
+  const geminiConnection = (realtimeAudio as any).geminiConnection || {};
+  const mediaCapture = (realtimeAudio as any).mediaCapture || { hasVideoPermission: false, videoElement: null };
+
   // Destructure realtime audio properties
   const {
     isConnected,
@@ -241,7 +246,8 @@ const Home = memo(() => {
     videoEnabled,
     hasVideoPermission,
     isConnecting,
-    isRecording
+    isRecording,
+    modelType
   } = realtimeAudio;
 
   const traditionalRecorder = useAudioRecorder({
@@ -1016,27 +1022,44 @@ const Home = memo(() => {
               transition={{ duration: 0.5 }}
             >
               {/* Video displays section - positioned at top when enabled */}
-              {enableVideo && realtimeAudio && realtimeAudio.mediaCapture && (realtimeAudio.mediaCapture.hasVideoPermission || realtimeAudio.lastCapturedFrame) && (
+              {enableVideo && realtimeAudio && (
                 <motion.div
                   className="w-full flex flex-col sm:flex-row justify-center space-y-2 sm:space-y-0 sm:space-x-2 mb-2"
                   initial={{ opacity: 0, y: -20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3 }}
                 >
-                  {/* Live video feed */}
-                  {realtimeAudio.mediaCapture.hasVideoPermission && realtimeAudio.mediaCapture.videoElement && (
+                  {/* Live video feed - For OpenAI connection */}
+                  {modelType === 'openai' && 
+                   openaiConnection.mediaCapture && 
+                   openaiConnection.mediaCapture.hasVideoPermission && 
+                   openaiConnection.mediaCapture.videoElement && (
                     <div className="flex flex-col items-center space-y-1">
                       <p className="text-xs text-neutral font-medium">Live Camera</p>
                       <VideoDisplay 
-                        videoElement={realtimeAudio.mediaCapture.videoElement}
-                        isEnabled={enableVideo && realtimeAudio.mediaCapture.hasVideoPermission}
+                        videoElement={openaiConnection.mediaCapture.videoElement}
+                        isEnabled={enableVideo && openaiConnection.mediaCapture.hasVideoPermission}
                         className="w-28 h-20 sm:w-32 sm:h-24 rounded-lg shadow-md border border-gray-200"
                       />
                     </div>
                   )}
 
-                  {/* Captured frame when available */}
-                  {realtimeAudio && realtimeAudio.lastCapturedFrame && (
+                  {/* Live video feed - For Gemini connection */}
+                  {modelType === 'gemini' && 
+                   mediaCapture.hasVideoPermission && 
+                   mediaCapture.videoElement && (
+                    <div className="flex flex-col items-center space-y-1">
+                      <p className="text-xs text-neutral font-medium">Live Camera</p>
+                      <VideoDisplay 
+                        videoElement={mediaCapture.videoElement}
+                        isEnabled={enableVideo && mediaCapture.hasVideoPermission}
+                        className="w-28 h-20 sm:w-32 sm:h-24 rounded-lg shadow-md border border-gray-200"
+                      />
+                    </div>
+                  )}
+
+                  {/* Captured frame when available - OpenAI */}
+                  {modelType === 'openai' && openaiConnection.lastCapturedFrame && (
                     <motion.div
                       className="flex flex-col items-center space-y-1"
                       initial={{ opacity: 0, scale: 0.8 }}
@@ -1045,7 +1068,7 @@ const Home = memo(() => {
                     >
                       <p className="text-xs text-neutral font-medium">What Appu Saw</p>
                       <CapturedFrameDisplay 
-                        frameData={realtimeAudio.lastCapturedFrame}
+                        frameData={openaiConnection.lastCapturedFrame}
                         className="w-28 h-20 sm:w-32 sm:h-24 rounded-lg shadow-md border border-blue-200"
                       />
                     </motion.div>
@@ -1070,10 +1093,18 @@ const Home = memo(() => {
                   </p>
 
                   {/* Video status indicator when enabled */}
-                  {enableVideo && realtimeAudio && realtimeAudio.mediaCapture && (
+                  {enableVideo && realtimeAudio && (
                     <div className="flex items-center space-x-2 text-xs text-neutral">
-                      <div className={`w-2 h-2 rounded-full ${realtimeAudio.mediaCapture.hasVideoPermission ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-                      <span>{realtimeAudio.mediaCapture.hasVideoPermission ? 'Camera ready' : 'Camera not ready'}</span>
+                      <div className={`w-2 h-2 rounded-full ${
+                        (modelType === 'openai' && openaiConnection.mediaCapture?.hasVideoPermission) ||
+                        (modelType === 'gemini' && mediaCapture.hasVideoPermission)
+                          ? 'bg-green-500' : 'bg-gray-400'
+                      }`}></div>
+                      <span>{
+                        (modelType === 'openai' && openaiConnection.mediaCapture?.hasVideoPermission) ||
+                        (modelType === 'gemini' && mediaCapture.hasVideoPermission)
+                          ? 'Camera ready' : 'Camera not ready'
+                      }</span>
                     </div>
                   )}
 
@@ -1156,7 +1187,10 @@ const Home = memo(() => {
                     {currentRecorder.isProcessing
                       ? "Please wait while Appu thinks..."
                       : currentRecorder.isRecording
-                        ? enableVideo && realtimeAudio && realtimeAudio.mediaCapture && realtimeAudio.mediaCapture.hasVideoPermission
+                        ? enableVideo && (
+                            (modelType === 'openai' && openaiConnection.mediaCapture?.hasVideoPermission) ||
+                            (modelType === 'gemini' && mediaCapture.hasVideoPermission)
+                          )
                           ? "Appu is listening and watching! Tap when you're done talking"
                           : "Appu is listening to you now! Tap when you're done talking"
                         : "Tap to start talking with Appu!"}

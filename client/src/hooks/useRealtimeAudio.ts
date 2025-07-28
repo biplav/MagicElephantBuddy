@@ -205,6 +205,12 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     captureCurrentFrame,
     sendTextToGemini,
     sendVideoFrameToGemini,
-    isReady: state.isConnected
+    isReady: state.isConnected,
+    // Expose individual connections for direct access
+    openaiConnection,
+    geminiConnection,
+    mediaCapture,
+    // Expose last captured frame from OpenAI connection
+    lastCapturedFrame: modelType === 'openai' ? openaiConnection.lastCapturedFrame : null
   };
 }
