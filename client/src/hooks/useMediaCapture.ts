@@ -62,8 +62,21 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
       video.muted = true;
       video.playsInline = true;
       video.style.display = 'none';
+      
+      // Add event listeners to track video readiness
+      video.onloadedmetadata = () => {
+        logger.info('Video metadata loaded, ready for capture');
+      };
+      
+      video.oncanplay = () => {
+        logger.info('Video can start playing, ready for capture');
+      };
+      
       videoRef.current = video;
       document.body.appendChild(video);
+    } else {
+      // Update existing video element with new stream
+      videoRef.current.srcObject = stream;
     }
 
     if (!canvasRef.current) {
@@ -81,15 +94,39 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
-    if (video && canvas && video.readyState >= 2) {
-      const context = canvas.getContext('2d');
-      if (context) {
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const frameData = canvas.toDataURL('image/jpeg', 0.7);
-        return frameData.split(',')[1];
-      }
+    if (!video || !canvas) {
+      logger.warn('Video or canvas element not available for capture');
+      return null;
     }
-    return null;
+
+    // Check if video is ready (readyState 2 = HAVE_CURRENT_DATA, 3 = HAVE_FUTURE_DATA, 4 = HAVE_ENOUGH_DATA)
+    if (video.readyState < 2) {
+      logger.warn('Video not ready for capture', { readyState: video.readyState });
+      return null;
+    }
+
+    // Check if video has actual dimensions
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      logger.warn('Video has no dimensions', { width: video.videoWidth, height: video.videoHeight });
+      return null;
+    }
+
+    const context = canvas.getContext('2d');
+    if (!context) {
+      logger.error('Could not get canvas 2D context');
+      return null;
+    }
+
+    try {
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const frameData = canvas.toDataURL('image/jpeg', 0.7);
+      const base64Data = frameData.split(',')[1];
+      logger.info('Frame captured successfully', { dataLength: base64Data.length });
+      return base64Data;
+    } catch (error) {
+      logger.error('Error capturing frame', { error });
+      return null;
+    }
   }, []);
 
   const requestPermissions = useCallback(async () => {

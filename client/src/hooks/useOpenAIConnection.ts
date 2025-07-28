@@ -237,6 +237,24 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
       try {
         let frameData = null;
 
+        // First check if video is enabled in options
+        if (!options.enableVideo) {
+          logger.warn('Video not enabled, cannot capture frame');
+          const result = { 
+            analysis: "I can't see anything because video is not enabled. Please enable video mode so I can see what you're showing me!" 
+          };
+          
+          dataChannelRef.current?.send(JSON.stringify({
+            type: 'conversation.item.create',
+            item: {
+              type: 'function_call_output',
+              call_id: callId,
+              output: JSON.stringify(result)
+            }
+          }));
+          return;
+        }
+
         // Check if we already have camera permission and can capture
         if (mediaCapture.hasVideoPermission && mediaCapture.captureFrame) {
           frameData = mediaCapture.captureFrame();
@@ -246,6 +264,8 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
           logger.info('Requesting camera permission for frame capture');
           try {
             await mediaCapture.requestPermissions();
+            // Wait a bit for video to initialize
+            await new Promise(resolve => setTimeout(resolve, 1000));
             // Try capturing after permission granted
             if (mediaCapture.captureFrame) {
               frameData = mediaCapture.captureFrame();
@@ -259,7 +279,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         if (!frameData) {
           // No frame available - return appropriate response
           const result = { 
-            analysis: "I can't see anything right now. Please allow camera access so I can see what you're showing me!" 
+            analysis: "I can't see anything right now. Please make sure your camera is working and try showing me again!" 
           };
           
           dataChannelRef.current?.send(JSON.stringify({
