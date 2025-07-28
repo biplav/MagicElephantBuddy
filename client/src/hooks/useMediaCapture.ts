@@ -42,6 +42,11 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
           width: { ideal: 320 },
           height: { ideal: 240 },
           frameRate: { ideal: 2 },
+          facingMode: "user", // Front-facing camera
+          // Try to improve lighting conditions
+          whiteBalanceMode: "auto",
+          exposureMode: "auto",
+          focusMode: "auto",
         };
       }
 
@@ -190,7 +195,7 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
 
     try {
       // Clear the canvas first
-      //context.clearRect(0, 0, canvas.width, canvas.height);
+      context.clearRect(0, 0, canvas.width, canvas.height);
 
       // Set canvas size to match video dimensions for better quality
       canvas.width = video.videoWidth;
@@ -199,8 +204,62 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
       // Draw the video frame
       context.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
 
+      // Check if the captured image is too dark
+      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+      const pixels = imageData.data;
+      let totalBrightness = 0;
+      let pixelCount = 0;
+
+      // Calculate average brightness
+      for (let i = 0; i < pixels.length; i += 4) {
+        const r = pixels[i];
+        const g = pixels[i + 1];
+        const b = pixels[i + 2];
+        // Calculate luminance using standard formula
+        const brightness = (0.299 * r + 0.587 * g + 0.114 * b);
+        totalBrightness += brightness;
+        pixelCount++;
+      }
+
+      const averageBrightness = totalBrightness / pixelCount;
+      
+      logger.info("Frame brightness analysis", {
+        averageBrightness,
+        isDark: averageBrightness < 50,
+        isVeryDark: averageBrightness < 20,
+      });
+
+      // If the image is too dark, apply brightness adjustment
+      if (averageBrightness < 50) {
+        logger.info("Applying brightness adjustment due to dark frame");
+        
+        // Apply brightness and contrast adjustment
+        const adjustedImageData = context.createImageData(imageData);
+        const adjustedPixels = adjustedImageData.data;
+        
+        const brightnessFactor = Math.max(1.5, 100 / averageBrightness); // Increase brightness
+        const contrastFactor = 1.2; // Slight contrast increase
+        
+        for (let i = 0; i < pixels.length; i += 4) {
+          // Apply brightness and contrast to RGB channels
+          adjustedPixels[i] = Math.min(255, Math.max(0, (pixels[i] * brightnessFactor - 128) * contrastFactor + 128));
+          adjustedPixels[i + 1] = Math.min(255, Math.max(0, (pixels[i + 1] * brightnessFactor - 128) * contrastFactor + 128));
+          adjustedPixels[i + 2] = Math.min(255, Math.max(0, (pixels[i + 2] * brightnessFactor - 128) * contrastFactor + 128));
+          adjustedPixels[i + 3] = pixels[i + 3]; // Keep alpha unchanged
+        }
+        
+        // Put the adjusted image data back to canvas
+        context.putImageData(adjustedImageData, 0, 0);
+        
+        logger.info("Brightness adjustment applied", {
+          brightnessFactor,
+          contrastFactor,
+          originalBrightness: averageBrightness,
+        });
+      }
+
       // Convert to base64
-      const frameData = canvas.toDataURL("image/png");
+      const frameData = canvas.toDataURL("image/jpeg", 0.8); // Use JPEG for better compression
       const base64Data = frameData.split(',')[1];
 
       logger.info("Frame captured successfully", {
@@ -209,7 +268,8 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
         videoHeight: video.videoHeight,
         canvasWidth: canvas.width,
         canvasHeight: canvas.height,
-        data: frameData,
+        averageBrightness,
+        wasAdjusted: averageBrightness < 50,
       });
 
       return base64Data;
@@ -243,7 +303,9 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
 
       return stream;
     } catch (error) {
-      logger.error("Media permission denied:", error);
+      logger.error("Media permission denied", { 
+        error: error instanceof Error ? error.message : String(error) 
+      });
       throw new Error("Media permission denied");
     }
   }, [options.enableVideo, createMediaConstraints, setupVideoElements]);

@@ -194,3 +194,4 @@ const Elephant: FC<ElephantProps> = ({ state, speechText }) => {
 };
 
 export default Elephant;
+export { Elephant };

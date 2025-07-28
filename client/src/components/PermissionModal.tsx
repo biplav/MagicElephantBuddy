@@ -56,3 +56,4 @@ const PermissionModal = ({ isOpen, onClose, onAllow }: PermissionModalProps) => 
 };
 
 export default PermissionModal;
+export { PermissionModal };
