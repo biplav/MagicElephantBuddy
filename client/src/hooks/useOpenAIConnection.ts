@@ -143,7 +143,51 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
       try {
         const childId = getSelectedChildId();
 
-        // Send session configuration instead of custom start_session
+        // Fetch enhanced prompt from backend
+        logger.info('Fetching enhanced prompt from backend for child:', childId);
+        const promptResponse = await fetch(`/api/debug/enhanced-prompt/${childId}`);
+        
+        if (!promptResponse.ok) {
+          throw new Error(`Failed to fetch enhanced prompt: ${promptResponse.status}`);
+        }
+        
+        const promptData = await promptResponse.json();
+        const enhancedInstructions = promptData.fullPrompt;
+        
+        logger.info('Enhanced prompt fetched successfully', {
+          promptLength: enhancedInstructions.length,
+          childId: childId
+        });
+
+        // Send session configuration with enhanced prompt from backend
+        channel.send(JSON.stringify({
+          type: 'session.update',
+          session: {
+            modalities: ['text', 'audio'],
+            instructions: enhancedInstructions,
+            voice: 'alloy',
+            input_audio_format: 'pcm16',
+            output_audio_format: 'pcm16',
+            input_audio_transcription: {
+              model: 'whisper-1'
+            },
+            turn_detection: {
+              type: 'server_vad',
+              threshold: 0.5,
+              prefix_padding_ms: 300,
+              silence_duration_ms: 200
+            },
+            temperature: 0.8
+          }
+        }));
+        logger.info('Session configuration sent successfully with enhanced prompt');
+      } catch (error) {
+        logger.error('Error sending session configuration', {
+          error: error instanceof Error ? error.message : String(error)
+        });
+        
+        // Fallback to basic prompt if enhanced prompt fetch fails
+        const childId = getSelectedChildId();
         channel.send(JSON.stringify({
           type: 'session.update',
           session: {
@@ -164,11 +208,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
             temperature: 0.8
           }
         }));
-        logger.info('Session configuration sent successfully');
-      } catch (error) {
-        logger.error('Error sending session configuration', {
-          error: error instanceof Error ? error.message : String(error)
-        });
+        logger.info('Sent fallback session configuration');
       }
     };
 
