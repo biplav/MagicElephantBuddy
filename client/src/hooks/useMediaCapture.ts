@@ -61,28 +61,50 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
       video.autoplay = true;
       video.muted = true;
       video.playsInline = true;
-      // Make video very small but visible to ensure proper rendering
-      video.style.position = 'absolute';
-      video.style.top = '-1000px';
-      video.style.left = '-1000px';
-      video.style.width = '1px';
-      video.style.height = '1px';
-      video.style.opacity = '0';
+      // Position video properly for rendering but keep it hidden from main UI
+      video.style.position = 'fixed';
+      video.style.top = '0px';
+      video.style.left = '0px';
+      video.style.width = '320px';
+      video.style.height = '240px';
+      video.style.zIndex = '-1000';
+      video.style.visibility = 'hidden';
       
       // Add event listeners to track video readiness
       video.onloadedmetadata = () => {
         logger.info('Video metadata loaded, ready for capture', { 
           videoWidth: video.videoWidth, 
-          videoHeight: video.videoHeight 
+          videoHeight: video.videoHeight,
+          readyState: video.readyState
         });
       };
       
       video.oncanplay = () => {
-        logger.info('Video can start playing, ready for capture');
+        logger.info('Video can start playing, ready for capture', {
+          currentTime: video.currentTime,
+          duration: video.duration,
+          readyState: video.readyState
+        });
       };
 
       video.onloadeddata = () => {
-        logger.info('Video loaded data, dimensions available');
+        logger.info('Video loaded data, dimensions available', {
+          videoWidth: video.videoWidth,
+          videoHeight: video.videoHeight,
+          readyState: video.readyState
+        });
+      };
+
+      video.onplay = () => {
+        logger.info('Video started playing', {
+          videoWidth: video.videoWidth,
+          videoHeight: video.videoHeight,
+          readyState: video.readyState
+        });
+      };
+
+      video.onerror = (error) => {
+        logger.error('Video element error', { error });
       };
       
       videoRef.current = video;
@@ -112,12 +134,25 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
       return null;
     }
 
+    logger.info('Attempting frame capture', {
+      videoSrc: !!video.srcObject,
+      videoTracks: video.srcObject ? (video.srcObject as MediaStream).getVideoTracks().length : 0,
+      readyState: video.readyState,
+      videoWidth: video.videoWidth,
+      videoHeight: video.videoHeight,
+      currentTime: video.currentTime,
+      paused: video.paused,
+      ended: video.ended
+    });
+
     // Check if video is ready (readyState 2 = HAVE_CURRENT_DATA, 3 = HAVE_FUTURE_DATA, 4 = HAVE_ENOUGH_DATA)
     if (video.readyState < 2) {
       logger.warn('Video not ready for capture', { 
         readyState: video.readyState,
         currentTime: video.currentTime,
-        duration: video.duration
+        duration: video.duration,
+        paused: video.paused,
+        ended: video.ended
       });
       return null;
     }
@@ -127,7 +162,8 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
       logger.warn('Video has no dimensions', { 
         videoWidth: video.videoWidth, 
         videoHeight: video.videoHeight,
-        readyState: video.readyState
+        readyState: video.readyState,
+        srcObject: !!video.srcObject
       });
       return null;
     }

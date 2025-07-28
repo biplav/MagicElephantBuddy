@@ -539,6 +539,19 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     try {
       logger.info('Starting OpenAI WebRTC connection');
 
+      // If video is enabled, ensure media capture is initialized first
+      if (options.enableVideo) {
+        logger.info('Video enabled, requesting media permissions first');
+        try {
+          await mediaCapture.requestPermissions();
+          // Wait for video to be properly initialized
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          logger.info('Media permissions granted and video initialized');
+        } catch (mediaError) {
+          logger.warn('Video permission request failed, continuing without video', { error: mediaError });
+        }
+      }
+
       // Handle session creation with explicit error handling
       const client_secret = await createSession().catch((sessionError) => {
         logger.error('Session creation failed', {
