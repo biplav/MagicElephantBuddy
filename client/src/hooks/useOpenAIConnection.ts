@@ -124,19 +124,19 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     try {
       logger.info('Fetching enhanced prompt from backend for child:', childId);
       const promptResponse = await fetch(`/api/debug/enhanced-prompt/${childId}`);
-      
+
       if (!promptResponse.ok) {
         throw new Error(`Failed to fetch enhanced prompt: ${promptResponse.status}`);
       }
-      
+
       const promptData = await promptResponse.json();
       const enhancedInstructions = promptData.fullPrompt;
-      
+
       logger.info('Enhanced prompt fetched successfully', {
         promptLength: enhancedInstructions.length,
         childId: childId
       });
-      
+
       return enhancedInstructions;
     } catch (error) {
       logger.error('Error fetching enhanced prompt', {
@@ -227,6 +227,31 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
       }
     };
 
+    const handleGetEyesTool = async (callId: string, args: any) => {
+      logger.info('getEyesTool was called!', { callId, args });
+      // You can implement your logic here to handle the getEyesTool call
+      // This could involve calling an external API, updating state, etc.
+      // Make sure to handle any errors that might occur
+      try {
+        // Implement your logic here
+        // For example, you could send a message back to the data channel
+        // to indicate that the tool call was successful
+        const result = { message: 'getEyesTool was called successfully!' };
+        dataChannelRef.current?.send(JSON.stringify({
+          type: 'tool_call.success',
+          call_id: callId,
+          result: result
+        }));
+      } catch (error: any) {
+        logger.error('Error handling getEyesTool', { error: error.message, stack: error.stack });
+        dataChannelRef.current?.send(JSON.stringify({
+          type: 'tool_call.error',
+          call_id: callId,
+          error: { message: error.message }
+        }));
+      }
+    };
+
     channel.onmessage = async (messageEvent: MessageEvent) => {
       try {
         logger.info('Raw data channel message received', {
@@ -296,6 +321,37 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
             logger.info('Audio output buffer stopped', {
               fullMessage: message
             });
+            break;
+          case 'response.output_item.added':
+            logger.info('Response output item added', {
+              itemId: message.item?.id,
+              itemType: message.item?.type,
+              itemRole: message.item?.role,
+              itemStatus: message.item?.status,
+              fullMessage: message
+            });
+            // This event indicates OpenAI is adding a new item to the response
+            // Could be text, audio, or tool calls
+            break;
+          case 'response.function_call_arguments.delta':
+            logger.info('Function call arguments delta', {
+              callId: message.call_id,
+              name: message.name,
+              delta: message.delta,
+              fullMessage: message
+            });
+            break;
+          case 'response.function_call_arguments.done':
+            logger.info('Function call arguments done', {
+              callId: message.call_id,
+              name: message.name,
+              arguments: message.arguments,
+              fullMessage: message
+            });
+            // When getEyesTool is called, handle it here
+            if (message.name === 'getEyesTool') {
+              await handleGetEyesTool(message.call_id, message.arguments);
+            }
             break;
           case 'error':
             logger.error('Error message received', {

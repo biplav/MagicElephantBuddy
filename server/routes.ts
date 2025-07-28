@@ -776,6 +776,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // Frame analysis endpoint for getEyesTool
+  app.post("/api/analyze-frame", async (req: Request, res: Response) => {
+    try {
+      const { frameData, childId, reason } = req.body;
+      
+      if (!frameData) {
+        return res.status(400).json({ error: "No frame data provided" });
+      }
+      
+      console.log(`🔍 Analyzing frame for child ${childId}, reason: ${reason}`);
+      
+      // Use OpenAI Vision API to analyze the frame
+      const OpenAI = (await import('openai')).default;
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "What do you see in this image? Please describe it briefly in a child-friendly way, as if you're Appu the elephant talking to a young child."
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:image/jpeg;base64,${frameData}`
+                }
+              }
+            ]
+          }
+        ],
+        max_tokens: 100
+      });
+      
+      const analysis = response.choices[0].message.content;
+      console.log(`🔍 Frame analysis result: ${analysis}`);
+      
+      res.json({ analysis });
+      
+    } catch (error) {
+      console.error("❌ Frame analysis error:", error);
+      res.status(500).json({
+        error: "Failed to analyze frame",
+        details: error.message
+      });
+    }
+  });
+
   // OpenAI Realtime session endpoint
   app.post("/api/session", async (req: Request, res: Response) => {
     try {
