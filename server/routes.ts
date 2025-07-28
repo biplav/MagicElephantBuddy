@@ -799,7 +799,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             content: [
               {
                 type: "text",
-                text: "What do you see in this image? Please describe it briefly in a child-friendly way, as if you're Appu the elephant talking to a young child."
+                text: "What do you see in this image? Please describe it briefly in a child-friendly way, as if you're Appu the elephant talking to a young child. Please be factual and if the frame does not contain any meaningful visual content, say 'I don't see anything special in this image'. "
               },
               {
                 type: "image_url",

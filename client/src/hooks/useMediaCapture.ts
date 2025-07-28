@@ -61,7 +61,7 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
       video.autoplay = true;
       video.muted = true;
       video.playsInline = true;
-      // Position video properly for rendering but keep it hidden from main UI
+      /* Position video properly for rendering but keep it hidden from main UI
       video.style.position = 'fixed';
       video.style.top = '0px';
       video.style.left = '0px';
@@ -69,6 +69,7 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
       video.style.height = '240px';
       video.style.zIndex = '-1000';
       video.style.visibility = 'hidden';
+      */
       
       // Add event listeners to track video readiness
       video.onloadedmetadata = () => {
