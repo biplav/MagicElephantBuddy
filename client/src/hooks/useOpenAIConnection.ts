@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { createServiceLogger } from '@/lib/logger';
+import { useMediaCapture } from './useMediaCapture';
 
 interface OpenAIConnectionOptions {
   onTranscriptionReceived?: (transcription: string) => void;
@@ -27,6 +28,9 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
+
+  // Add media capture for frame analysis
+  const mediaCapture = useMediaCapture({ enableVideo: options.enableVideo });
 
   const getSelectedChildId = useCallback((): string => {
     const selectedChildId = localStorage.getItem("selectedChildId");
@@ -231,17 +235,31 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
       logger.info('getEyesTool was called!', { callId, args });
       
       try {
-        // Capture current video frame if available
         let frameData = null;
-        if (typeof window !== 'undefined' && (window as any).captureCurrentFrame) {
-          frameData = (window as any).captureCurrentFrame();
-          logger.info('Captured frame for analysis', { hasFrame: !!frameData });
+
+        // Check if we already have camera permission and can capture
+        if (mediaCapture.hasVideoPermission && mediaCapture.captureFrame) {
+          frameData = mediaCapture.captureFrame();
+          logger.info('Captured frame using existing permission', { hasFrame: !!frameData });
+        } else {
+          // Request camera permission if not already granted
+          logger.info('Requesting camera permission for frame capture');
+          try {
+            await mediaCapture.requestPermissions();
+            // Try capturing after permission granted
+            if (mediaCapture.captureFrame) {
+              frameData = mediaCapture.captureFrame();
+              logger.info('Captured frame after permission request', { hasFrame: !!frameData });
+            }
+          } catch (permissionError) {
+            logger.warn('Camera permission denied for getEyesTool', { error: permissionError });
+          }
         }
 
         if (!frameData) {
           // No frame available - return appropriate response
           const result = { 
-            analysis: "I don't see anything right now. Make sure your camera is on and try showing me again!" 
+            analysis: "I can't see anything right now. Please allow camera access so I can see what you're showing me!" 
           };
           
           dataChannelRef.current?.send(JSON.stringify({
@@ -455,7 +473,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     channel.onbufferedamountlow = () => {
       logger.info('Data channel buffer amount low');
     };
-  }, [getSelectedChildId, fetchEnhancedPrompt, options.onTranscriptionReceived, options.onResponseReceived, options.onAudioResponseReceived, options.onError]);
+  }, [getSelectedChildId, fetchEnhancedPrompt, mediaCapture, options.onTranscriptionReceived, options.onResponseReceived, options.onAudioResponseReceived, options.onError]);
 
   const connect = useCallback(async () => {
     try {
@@ -600,12 +618,15 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
       streamRef.current = null;
     }
 
+    // Clean up media capture resources
+    mediaCapture.cleanup();
+
     setState(prev => ({ 
       ...prev, 
       isConnected: false, 
       isRecording: false 
     }));
-  }, []);
+  }, [mediaCapture]);
 
   return {
     ...state,
