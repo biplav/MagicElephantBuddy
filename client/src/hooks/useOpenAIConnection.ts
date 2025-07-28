@@ -150,7 +150,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
           session: {
             modalities: ['text', 'audio'],
             instructions: `You are Appu, a friendly AI assistant helping child ${childId}. Keep responses short, simple, and engaging for young children.`,
-            voice: 'nova',
+            voice: 'alloy',
             input_audio_format: 'pcm16',
             output_audio_format: 'pcm16',
             input_audio_transcription: {
