@@ -2,11 +2,13 @@ import { useState, useEffect, useMemo, useCallback, memo } from "react";
 import { Button } from "@/components/ui/button";
 import { Settings, Bug, Speaker, User, Brain } from "lucide-react";
 import { Link } from "wouter";
-import Elephant from "@/components/Elephant";
+import { Elephant } from "@/components/Elephant";
+import { PermissionModal } from "@/components/PermissionModal";
+import { VideoDisplay } from "@/components/VideoDisplay";
+import { CapturedFrameDisplay } from "@/components/CapturedFrameDisplay";
 import { motion, AnimatePresence } from "framer-motion";
 import useAudioRecorder from "@/hooks/useAudioRecorder";
 import useRealtimeAudio from "@/hooks/useRealtimeAudio";
-import PermissionModal from "@/components/PermissionModal";
 // Import error messages when needed
 
 type AppState = "welcome" | "interaction";
@@ -1425,6 +1427,17 @@ const Home = memo(() => {
                 </div>
               </div>
             </div>
+            <div>
+                <p>
+                  <span className="font-semibold">Video Feed:</span>
+                </p>
+                <VideoDisplay enabled={enableVideo} />
+                <p className="mt-2">
+                  <span className="font-semibold">Captured Frame:</span>
+                </p>
+                {/* Pass the capturedFrame to the CapturedFrameDisplay component */}
+                {/* <CapturedFrameDisplay frameData={capturedFrame} /> */}
+              </div>
           </div>
         </div>
       )}

@@ -14,6 +14,7 @@ interface OpenAIConnectionState {
   isConnected: boolean;
   isRecording: boolean;
   error: string | null;
+  lastCapturedFrame: string | null;
 }
 
 export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
@@ -22,7 +23,8 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
   const [state, setState] = useState<OpenAIConnectionState>({
     isConnected: false,
     isRecording: false,
-    error: null
+    error: null,
+    lastCapturedFrame: null
   });
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -259,6 +261,11 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         if (mediaCapture.hasVideoPermission && mediaCapture.captureFrame) {
           frameData = mediaCapture.captureFrame();
           logger.info('Captured frame using existing permission', { hasFrame: !!frameData });
+          
+          // Store the captured frame for UI display
+          if (frameData) {
+            setState(prev => ({ ...prev, lastCapturedFrame: frameData }));
+          }
         } else {
           // Request camera permission if not already granted
           logger.info('Requesting camera permission for frame capture');
@@ -270,6 +277,11 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
             if (mediaCapture.captureFrame) {
               frameData = mediaCapture.captureFrame();
               logger.info('Captured frame after permission request', { hasFrame: !!frameData });
+              
+              // Store the captured frame for UI display
+              if (frameData) {
+                setState(prev => ({ ...prev, lastCapturedFrame: frameData }));
+              }
             }
           } catch (permissionError) {
             logger.warn('Camera permission denied for getEyesTool', { error: permissionError });
@@ -653,13 +665,15 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     setState(prev => ({ 
       ...prev, 
       isConnected: false, 
-      isRecording: false 
+      isRecording: false,
+      lastCapturedFrame: null
     }));
   }, [mediaCapture]);
 
   return {
     ...state,
     connect,
-    disconnect
+    disconnect,
+    mediaCapture
   };
 }

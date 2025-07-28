@@ -173,6 +173,8 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
     ...state,
     captureFrame,
     requestPermissions,
-    cleanup
+    cleanup,
+    videoElement: videoRef.current,
+    canvasElement: canvasRef.current
   };
 }
