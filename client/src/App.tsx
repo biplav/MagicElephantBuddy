@@ -11,6 +11,7 @@ import Settings from "@/pages/Settings";
 import MemoriesConsole from "@/pages/MemoriesConsole";
 import WorkflowVisualizer from "./pages/WorkflowVisualizer";
 import FrameCaptureTest from "./components/FrameCaptureTest";
+import SimpleCameraTest from "./components/SimpleCameraTest";
 
 function Router() {
   return (
@@ -22,6 +23,7 @@ function Router() {
       <Route path="/settings" component={Settings} />
       <Route path="/workflow-visualizer" component={WorkflowVisualizer} />
       <Route path="/frame-test" component={FrameCaptureTest} />
+      <Route path="/camera-test" component={SimpleCameraTest} />
       <Route component={NotFound} />
     </Switch>
   );
