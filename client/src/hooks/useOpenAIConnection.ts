@@ -229,25 +229,73 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
 
     const handleGetEyesTool = async (callId: string, args: any) => {
       logger.info('getEyesTool was called!', { callId, args });
-      // You can implement your logic here to handle the getEyesTool call
-      // This could involve calling an external API, updating state, etc.
-      // Make sure to handle any errors that might occur
+      
       try {
-        // Implement your logic here
-        // For example, you could send a message back to the data channel
-        // to indicate that the tool call was successful
-        const result = { message: 'getEyesTool was called successfully!' };
+        // Capture current video frame if available
+        let frameData = null;
+        if (typeof window !== 'undefined' && (window as any).captureCurrentFrame) {
+          frameData = (window as any).captureCurrentFrame();
+          logger.info('Captured frame for analysis', { hasFrame: !!frameData });
+        }
+
+        if (!frameData) {
+          // No frame available - return appropriate response
+          const result = { 
+            analysis: "I don't see anything right now. Make sure your camera is on and try showing me again!" 
+          };
+          
+          dataChannelRef.current?.send(JSON.stringify({
+            type: 'conversation.item.create',
+            item: {
+              type: 'function_call_output',
+              call_id: callId,
+              output: JSON.stringify(result)
+            }
+          }));
+          return;
+        }
+
+        // Call the frame analysis API
+        const response = await fetch('/api/analyze-frame', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            frameData,
+            childId: getSelectedChildId(),
+            reason: args.reason || 'Child wants to show something'
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Analysis failed: ${response.status}`);
+        }
+
+        const analysisResult = await response.json();
+        logger.info('Frame analysis completed', { analysis: analysisResult.analysis });
+
+        // Send the analysis result back to OpenAI
         dataChannelRef.current?.send(JSON.stringify({
-          type: 'tool_call.success',
-          call_id: callId,
-          result: result
+          type: 'conversation.item.create',
+          item: {
+            type: 'function_call_output',
+            call_id: callId,
+            output: JSON.stringify({ analysis: analysisResult.analysis })
+          }
         }));
+
       } catch (error: any) {
         logger.error('Error handling getEyesTool', { error: error.message, stack: error.stack });
+        
+        // Send error response back to OpenAI
         dataChannelRef.current?.send(JSON.stringify({
-          type: 'tool_call.error',
-          call_id: callId,
-          error: { message: error.message }
+          type: 'conversation.item.create',
+          item: {
+            type: 'function_call_output',
+            call_id: callId,
+            output: JSON.stringify({ 
+              analysis: "I'm having trouble seeing what you're showing me right now. Can you try again?" 
+            })
+          }
         }));
       }
     };
