@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, memo } from "react";
 import { Button } from "@/components/ui/button";
 import { Settings, Bug, Speaker, User, Brain } from "lucide-react";
 import { Link } from "wouter";
-import { Elephant } from "@/components/Elephant";
+import Elephant from "@/components/Elephant";
 import { PermissionModal } from "@/components/PermissionModal";
 import { VideoDisplay } from "@/components/VideoDisplay";
 import { CapturedFrameDisplay } from "@/components/CapturedFrameDisplay";
