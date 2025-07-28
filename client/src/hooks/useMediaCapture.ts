@@ -43,10 +43,6 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
           height: { ideal: 240 },
           frameRate: { ideal: 2 },
           facingMode: "user", // Front-facing camera
-          // Try to improve lighting conditions
-          whiteBalanceMode: "auto",
-          exposureMode: "auto",
-          focusMode: "auto",
         };
       }
 
@@ -80,6 +76,18 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
         video.autoplay = true;
         video.muted = true;
         video.playsInline = true;
+        
+        // Make video visible but hidden off-screen for proper canvas capture
+        video.style.position = "fixed";
+        video.style.top = "-1000px"; 
+        video.style.left = "-1000px";
+        video.style.width = "320px";
+        video.style.height = "240px";
+        video.style.zIndex = "-9999";
+        video.style.opacity = "0.01"; // Almost invisible but still rendered
+        video.id = "media-capture-video";
+        video.width = 320;
+        video.height = 240;
         
         // Add event listeners to track video readiness
         video.onloadedmetadata = () => {
@@ -151,6 +159,21 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
       return null;
     }
 
+    // Force video to play if it's not playing
+    if (video.paused || video.readyState < 2) {
+      logger.info("Video not playing or not ready, attempting to start playback");
+      video.play().catch(err => {
+        logger.error("Failed to play video", { error: err.message });
+      });
+      
+      // Wait a moment for video to start
+      setTimeout(() => {
+        logger.info("Retrying capture after play attempt");
+      }, 100);
+      
+      return null;
+    }
+
     logger.info("Attempting frame capture", {
       videoSrc: !!video.srcObject,
       videoTracks: video.srcObject
@@ -164,15 +187,26 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
       ended: video.ended,
     });
 
-    // Check if video is ready (readyState 2 = HAVE_CURRENT_DATA, 3 = HAVE_FUTURE_DATA, 4 = HAVE_ENOUGH_DATA)
-    if (video.readyState < 2) {
+    // Wait a moment for video to be properly loaded and playing
+    if (video.readyState < 2 || video.currentTime === 0) {
       logger.warn("Video not ready for capture", {
         readyState: video.readyState,
         currentTime: video.currentTime,
         duration: video.duration,
         paused: video.paused,
         ended: video.ended,
+        videoWidth: video.videoWidth,
+        videoHeight: video.videoHeight,
       });
+      
+      // If video is paused, try to play it
+      if (video.paused) {
+        logger.info("Video was paused, attempting to play");
+        video.play().catch(err => {
+          logger.error("Failed to play video", { error: err.message });
+        });
+      }
+      
       return null;
     }
 
@@ -194,15 +228,33 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
     }
 
     try {
-      // Clear the canvas first
-      context.clearRect(0, 0, canvas.width, canvas.height);
-
       // Set canvas size to match video dimensions for better quality
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
 
+      // Clear the canvas completely with white background to test
+      context.fillStyle = 'white';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+
+      logger.info("Pre-draw video state", {
+        videoSrcObject: !!video.srcObject,
+        videoCurrentTime: video.currentTime,
+        videoPaused: video.paused,
+        videoMuted: video.muted,
+        videoReadyState: video.readyState,
+        videoWidth: video.videoWidth,
+        videoHeight: video.videoHeight,
+        canvasWidth: canvas.width,
+        canvasHeight: canvas.height,
+      });
+
       // Draw the video frame
       context.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+      
+      logger.info("Post-draw canvas state", {
+        canvasWidth: canvas.width,
+        canvasHeight: canvas.height,
+      });
 
       // Check if the captured image is too dark
       const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
@@ -295,10 +347,56 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
       setupVideoElements(stream);
       setState((prev) => ({ ...prev, stream, hasVideoPermission: true }));
 
-      // Wait a bit for video to initialize properly
+      // Wait a bit for video to initialize properly and ensure it's playing
       if (options.enableVideo && stream.getVideoTracks().length > 0) {
-        logger.info("Waiting for video to initialize...");
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        logger.info("Waiting for video to initialize and start playing...");
+        
+        // Wait for video element to be ready
+        await new Promise((resolve, reject) => {
+          const video = videoRef.current;
+          if (!video) {
+            reject(new Error("Video element not found"));
+            return;
+          }
+
+          let retries = 0;
+          const maxRetries = 10;
+          
+          const checkVideoReady = () => {
+            if (video.readyState >= 2 && video.videoWidth > 0 && !video.paused) {
+              logger.info("Video is ready for capture", {
+                readyState: video.readyState,
+                videoWidth: video.videoWidth,
+                videoHeight: video.videoHeight,
+                currentTime: video.currentTime,
+                paused: video.paused,
+              });
+              resolve(true);
+            } else if (retries < maxRetries) {
+              retries++;
+              logger.info(`Video not ready yet, retry ${retries}/${maxRetries}`, {
+                readyState: video.readyState,
+                videoWidth: video.videoWidth,
+                currentTime: video.currentTime,
+                paused: video.paused,
+              });
+              
+              // Try to play if paused
+              if (video.paused) {
+                video.play().catch(err => {
+                  logger.error("Failed to play video during initialization", { error: err.message });
+                });
+              }
+              
+              setTimeout(checkVideoReady, 200);
+            } else {
+              logger.warn("Video failed to become ready after maximum retries");
+              resolve(false); // Don't reject, just continue
+            }
+          };
+          
+          checkVideoReady();
+        });
       }
 
       return stream;
@@ -343,5 +441,58 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
     cleanup,
     videoElement: videoRef.current,
     canvasElement: canvasRef.current,
+    // Debug function to test frame capture
+    testFrameCapture: useCallback(() => {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      
+      if (!video || !canvas) {
+        logger.warn("Video or canvas not available for test");
+        return null;
+      }
+
+      logger.info("Testing frame capture with detailed debugging", {
+        videoSrcObject: !!video.srcObject,
+        videoTracks: video.srcObject ? (video.srcObject as MediaStream).getVideoTracks().length : 0,
+        videoReadyState: video.readyState,
+        videoCurrentTime: video.currentTime,
+        videoPaused: video.paused,
+        videoWidth: video.videoWidth,
+        videoHeight: video.videoHeight,
+        videoMuted: video.muted,
+        videoAutoplay: video.autoplay,
+        videoPlaysInline: video.playsInline,
+      });
+
+      // Create a test canvas with red background
+      const testCanvas = document.createElement('canvas');
+      testCanvas.width = 320;
+      testCanvas.height = 240;
+      const testContext = testCanvas.getContext('2d');
+      
+      if (testContext) {
+        // Fill with red to test canvas functionality
+        testContext.fillStyle = 'red';
+        testContext.fillRect(0, 0, testCanvas.width, testCanvas.height);
+        
+        // Try to draw video if available
+        if (video.readyState >= 2 && video.videoWidth > 0) {
+          testContext.drawImage(video, 0, 0, testCanvas.width, testCanvas.height);
+          logger.info("Video drawn to test canvas");
+        } else {
+          logger.warn("Video not ready for test capture");
+        }
+        
+        const dataUrl = testCanvas.toDataURL('image/png');
+        logger.info("Test capture result", {
+          dataLength: dataUrl.length,
+          preview: dataUrl.substring(0, 100) + '...'
+        });
+        
+        return dataUrl.split(',')[1]; // Return base64 part
+      }
+      
+      return null;
+    }, [])
   };
 }
