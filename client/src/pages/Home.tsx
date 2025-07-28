@@ -42,6 +42,7 @@ const Home = memo(() => {
     creativeMode: false,
     voicePreference: "nova",
   });
+  const [capturedFrame, setCapturedFrame] = useState<string | null>(null);
 
   // Derive aiProvider from saved settings
   const aiProvider: 'openai' | 'gemini' = aiSettings.voiceMode === 'gemini' ? 'gemini' : 'openai';
@@ -384,6 +385,7 @@ const Home = memo(() => {
     setElephantState("idle");
     setSpeechText(undefined);
     setAppState("welcome");
+    setCapturedFrame(null);
   };
 
   // Load AI settings from localStorage
@@ -1055,14 +1057,28 @@ const Home = memo(() => {
                   {/* Live video feed - For OpenAI connection */}
                   {modelType === 'openai' && 
                    realtimeAudio.openaiConnection?.mediaCapture?.hasVideoPermission && 
-                   realtimeAudio.openaiConnection.mediaCapture?.videoElement && (
-                    <div className="flex flex-col items-center space-y-1">
+                   realtimeAudio.openaiConnection.mediaCapture.videoElement && (
+                    <div className="flex flex-col items-center space-y-2">
                       <p className="text-xs text-neutral font-medium">Live Camera</p>
                       <VideoDisplay 
                         videoElement={realtimeAudio.openaiConnection.mediaCapture.videoElement}
                         isEnabled={enableVideo && realtimeAudio.openaiConnection.mediaCapture.hasVideoPermission}
                         className="w-28 h-20 sm:w-32 sm:h-24 rounded-lg shadow-md border border-gray-200"
                       />
+                      <Button
+                        onClick={() => {
+                          if (realtimeAudio.openaiConnection?.mediaCapture?.captureFrame) {
+                            const frameData = realtimeAudio.openaiConnection.mediaCapture.captureFrame();
+                            console.log('Manual capture result:', frameData ? 'Success' : 'Failed', frameData?.length || 0);
+                            if (frameData) {
+                              setCapturedFrame(frameData);
+                            }
+                          }
+                        }}
+                        className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded"
+                      >
+                        Capture
+                      </Button>
                     </div>
                   )}
 
@@ -1070,13 +1086,27 @@ const Home = memo(() => {
                   {modelType === 'gemini' && 
                    mediaCapture.hasVideoPermission && 
                    mediaCapture.videoElement && (
-                    <div className="flex flex-col items-center space-y-1">
+                    <div className="flex flex-col items-center space-y-2">
                       <p className="text-xs text-neutral font-medium">Live Camera</p>
                       <VideoDisplay 
                         videoElement={mediaCapture.videoElement}
                         isEnabled={enableVideo && mediaCapture.hasVideoPermission}
                         className="w-28 h-20 sm:w-32 sm:h-24 rounded-lg shadow-md border border-gray-200"
                       />
+                      <Button
+                        onClick={() => {
+                          if (mediaCapture.captureFrame) {
+                            const frameData = mediaCapture.captureFrame();
+                            console.log('Manual capture result:', frameData ? 'Success' : 'Failed', frameData?.length || 0);
+                            if (frameData) {
+                              setCapturedFrame(frameData);
+                            }
+                          }
+                        }}
+                        className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded"
+                      >
+                        Capture
+                      </Button>
                     </div>
                   )}
 
@@ -1542,7 +1572,7 @@ const Home = memo(() => {
                   <span className="font-semibold">Captured Frame:</span>
                 </p>
                 {/* Pass the capturedFrame to the CapturedFrameDisplay component */}
-                {/* <CapturedFrameDisplay frameData={capturedFrame} /> */}
+                 <CapturedFrameDisplay frameData={capturedFrame} />
               </div>
           </div>
         </div>
