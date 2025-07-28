@@ -439,6 +439,15 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
               await handleGetEyesTool(message.call_id, message.arguments);
             }
             break;
+          case 'response.done':
+            logger.info('Response completed', {
+              responseId: message.response?.id,
+              status: message.response?.status,
+              fullMessage: message
+            });
+            // This indicates that OpenAI has finished generating a complete response
+            // No specific action needed, just logging for completeness
+            break;
           case 'error':
             logger.error('Error message received', {
               errorMessage: message.error?.message,
