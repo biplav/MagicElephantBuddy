@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Settings, Bug, Speaker, User, Brain } from "lucide-react";
 import { Link } from "wouter";
 import Elephant from "@/components/Elephant";
-import { PermissionModal } from "@/components/PermissionModal";
+import PermissionModal from "@/components/PermissionModal";
 import { VideoDisplay } from "@/components/VideoDisplay";
 import { CapturedFrameDisplay } from "@/components/CapturedFrameDisplay";
 import { motion, AnimatePresence } from "framer-motion";
