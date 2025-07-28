@@ -188,7 +188,7 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
 
     try {
       // Clear the canvas first
-      context.clearRect(0, 0, canvas.width, canvas.height);
+      //context.clearRect(0, 0, canvas.width, canvas.height);
 
       // Set canvas size to match video dimensions for better quality
       canvas.width = video.videoWidth;
