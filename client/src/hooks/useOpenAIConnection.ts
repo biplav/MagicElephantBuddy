@@ -1,4 +1,3 @@
-
 import { useState, useRef, useCallback } from 'react';
 import { createServiceLogger } from '@/lib/logger';
 
@@ -18,7 +17,7 @@ interface OpenAIConnectionState {
 
 export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
   const logger = createServiceLogger('openai-connection');
-  
+
   const [state, setState] = useState<OpenAIConnectionState>({
     isConnected: false,
     isRecording: false,
@@ -86,7 +85,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         iceConnectionState: pc.iceConnectionState,
         iceGatheringState: pc.iceGatheringState 
       });
-      
+
       if (pc.iceConnectionState === 'failed') {
         logger.error('ICE connection failed');
         setState(prev => ({ ...prev, error: 'Connection failed' }));
@@ -140,10 +139,10 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     channel.onopen = async () => {
       logger.info('Data channel opened');
       clearInterval(stateCheckInterval);
-      
+
       try {
         const childId = getSelectedChildId();
-        
+
         // Send session configuration instead of custom start_session
         channel.send(JSON.stringify({
           type: 'session.update',
@@ -173,6 +172,32 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
       }
     };
 
+    const storeTranscribedMessage = async (transcript: string, type: 'child_input' | 'appu_response') => {
+      try {
+        const childId = getSelectedChildId();
+        const apiType = type === 'child_input' ? 'child_input' : 'appu_response';
+        const requestBody = type === 'child_input' ? {
+          type: apiType,
+          content: transcript,
+          transcription: transcript,
+          childId: childId
+        } : {
+          type: apiType,
+          content: transcript,
+          childId: childId
+        };
+
+        await fetch('/api/store-realtime-message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        });
+        logger.info(`${type === 'child_input' ? 'Child message' : 'Appu response'} stored in backend`, { transcript });
+      } catch (error) {
+        logger.error(`Failed to store ${type === 'child_input' ? 'child message' : 'Appu response'}`, { error });
+      }
+    };
+
     channel.onmessage = async (messageEvent: MessageEvent) => {
       try {
         logger.info('Raw data channel message received', {
@@ -182,13 +207,13 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         });
 
         const message = JSON.parse(messageEvent.data);
-        
+
         logger.info('Parsed data channel message', {
           messageType: message.type,
           messageKeys: Object.keys(message),
           fullMessage: message
         });
-        
+
         switch (message.type) {
           case 'conversation.item.input_audio_transcription.completed':
             logger.info('Transcription completed message', {
@@ -199,6 +224,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
             });
             if (message.transcript) {
               options.onTranscriptionReceived?.(message.transcript);
+              await storeTranscribedMessage(message.transcript, 'child_input');
             }
             break;
           case 'response.audio_transcript.done':
@@ -210,6 +236,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
             });
             if (message.transcript) {
               options.onResponseReceived?.(message.transcript);
+              await storeTranscribedMessage(message.transcript, 'appu_response');
             }
             break;
           case 'response.audio.delta':
@@ -281,7 +308,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
   const connect = useCallback(async () => {
     try {
       logger.info('Starting OpenAI WebRTC connection');
-      
+
       // Handle session creation with explicit error handling
       const client_secret = await createSession().catch((sessionError) => {
         logger.error('Session creation failed', {
@@ -320,7 +347,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         });
         throw new Error(`Media access failed: ${mediaError.message}`);
       });
-      
+
       streamRef.current = stream;
 
       const audioTrack = stream.getAudioTracks()[0];
@@ -390,7 +417,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
       });
       setState(prev => ({ ...prev, error: error.message }));
       options.onError?.(error.message);
-      
+
       // Clean up on error
       if (pcRef.current) {
         pcRef.current.close();
@@ -405,17 +432,17 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
 
   const disconnect = useCallback(() => {
     logger.info('Disconnecting OpenAI connection');
-    
+
     if (pcRef.current) {
       pcRef.current.close();
       pcRef.current = null;
     }
-    
+
     if (dataChannelRef.current) {
       dataChannelRef.current.close();
       dataChannelRef.current = null;
     }
-    
+
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
