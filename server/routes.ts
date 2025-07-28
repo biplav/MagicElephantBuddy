@@ -804,7 +804,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               {
                 type: "image_url",
                 image_url: {
-                  url: `data:image/jpeg;base64,${frameData}`
+                  url: `data:image/png;base64,${frameData}`
                 }
               }
             ]
