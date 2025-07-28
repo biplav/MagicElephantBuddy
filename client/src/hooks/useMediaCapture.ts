@@ -24,6 +24,7 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const isSetupRef = useRef<boolean>(false);
 
   const createMediaConstraints = useCallback(
     (enableVideo: boolean): MediaStreamConstraints => {
@@ -52,6 +53,12 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
   const setupVideoElements = useCallback(
     (stream: MediaStream) => {
       if (!options.enableVideo || stream.getVideoTracks().length === 0) {
+        return;
+      }
+
+      // Check if video elements are already properly set up with the same stream
+      if (isSetupRef.current && videoRef.current && canvasRef.current && videoRef.current.srcObject === stream) {
+        logger.info("Video elements already set up with current stream, skipping setup");
         return;
       }
 
@@ -122,6 +129,10 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
         canvasRef.current = canvas;
         document.body.appendChild(canvas);
       }
+
+      // Mark setup as complete
+      isSetupRef.current = true;
+      logger.info("Video elements setup completed");
     },
     [options.enableVideo],
   );
@@ -259,6 +270,8 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
       videoEnabled: false,
       hasVideoPermission: false,
     }));
+
+    isSetupRef.current = false;
   }, []);
 
   return {
