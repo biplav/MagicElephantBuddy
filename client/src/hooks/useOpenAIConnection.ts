@@ -143,13 +143,31 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
       
       try {
         const childId = getSelectedChildId();
+        
+        // Send session configuration instead of custom start_session
         channel.send(JSON.stringify({
-          type: 'start_session',
-          childId: childId
+          type: 'session.update',
+          session: {
+            modalities: ['text', 'audio'],
+            instructions: `You are Appu, a friendly AI assistant helping child ${childId}. Keep responses short, simple, and engaging for young children.`,
+            voice: 'nova',
+            input_audio_format: 'pcm16',
+            output_audio_format: 'pcm16',
+            input_audio_transcription: {
+              model: 'whisper-1'
+            },
+            turn_detection: {
+              type: 'server_vad',
+              threshold: 0.5,
+              prefix_padding_ms: 300,
+              silence_duration_ms: 200
+            },
+            temperature: 0.8
+          }
         }));
-        logger.info('Start session message sent successfully');
+        logger.info('Session configuration sent successfully');
       } catch (error) {
-        logger.error('Error sending start session message', {
+        logger.error('Error sending session configuration', {
           error: error instanceof Error ? error.message : String(error)
         });
       }
