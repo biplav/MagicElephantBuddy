@@ -259,8 +259,27 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
 
         // Check if we already have camera permission and can capture
         if (mediaCapture.hasVideoPermission && mediaCapture.captureFrame) {
-          frameData = mediaCapture.captureFrame();
-          logger.info('Captured frame using existing permission', { hasFrame: !!frameData });
+          // Try capturing frame with retry mechanism
+          let attempts = 0;
+          const maxAttempts = 3;
+          
+          while (attempts < maxAttempts && !frameData) {
+            attempts++;
+            logger.info(`Frame capture attempt ${attempts}/${maxAttempts}`);
+            
+            frameData = mediaCapture.captureFrame();
+            
+            if (!frameData && attempts < maxAttempts) {
+              // Wait a bit before retrying
+              await new Promise(resolve => setTimeout(resolve, 500));
+            }
+          }
+          
+          logger.info('Frame capture completed', { 
+            hasFrame: !!frameData, 
+            attempts,
+            frameLength: frameData?.length || 0
+          });
           
           // Store the captured frame for UI display
           if (frameData) {

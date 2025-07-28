@@ -61,15 +61,28 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
       video.autoplay = true;
       video.muted = true;
       video.playsInline = true;
-      video.style.display = 'none';
+      // Make video very small but visible to ensure proper rendering
+      video.style.position = 'absolute';
+      video.style.top = '-1000px';
+      video.style.left = '-1000px';
+      video.style.width = '1px';
+      video.style.height = '1px';
+      video.style.opacity = '0';
       
       // Add event listeners to track video readiness
       video.onloadedmetadata = () => {
-        logger.info('Video metadata loaded, ready for capture');
+        logger.info('Video metadata loaded, ready for capture', { 
+          videoWidth: video.videoWidth, 
+          videoHeight: video.videoHeight 
+        });
       };
       
       video.oncanplay = () => {
         logger.info('Video can start playing, ready for capture');
+      };
+
+      video.onloadeddata = () => {
+        logger.info('Video loaded data, dimensions available');
       };
       
       videoRef.current = video;
@@ -101,13 +114,21 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
 
     // Check if video is ready (readyState 2 = HAVE_CURRENT_DATA, 3 = HAVE_FUTURE_DATA, 4 = HAVE_ENOUGH_DATA)
     if (video.readyState < 2) {
-      logger.warn('Video not ready for capture', { readyState: video.readyState });
+      logger.warn('Video not ready for capture', { 
+        readyState: video.readyState,
+        currentTime: video.currentTime,
+        duration: video.duration
+      });
       return null;
     }
 
     // Check if video has actual dimensions
     if (video.videoWidth === 0 || video.videoHeight === 0) {
-      logger.warn('Video has no dimensions', { width: video.videoWidth, height: video.videoHeight });
+      logger.warn('Video has no dimensions', { 
+        videoWidth: video.videoWidth, 
+        videoHeight: video.videoHeight,
+        readyState: video.readyState
+      });
       return null;
     }
 
@@ -118,13 +139,36 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
     }
 
     try {
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const frameData = canvas.toDataURL('image/jpeg', 0.7);
+      // Clear the canvas first
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Set canvas size to match video dimensions for better quality
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      // Draw the video frame
+      context.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+      
+      // Convert to base64
+      const frameData = canvas.toDataURL('image/jpeg', 0.8);
       const base64Data = frameData.split(',')[1];
-      logger.info('Frame captured successfully', { dataLength: base64Data.length });
+      
+      logger.info('Frame captured successfully', { 
+        dataLength: base64Data.length,
+        videoWidth: video.videoWidth,
+        videoHeight: video.videoHeight,
+        canvasWidth: canvas.width,
+        canvasHeight: canvas.height
+      });
+      
       return base64Data;
     } catch (error) {
-      logger.error('Error capturing frame', { error });
+      logger.error('Error capturing frame', { 
+        error: error instanceof Error ? error.message : String(error),
+        videoReadyState: video.readyState,
+        videoWidth: video.videoWidth,
+        videoHeight: video.videoHeight
+      });
       return null;
     }
   }, []);
@@ -132,11 +176,19 @@ export function useMediaCapture(options: MediaCaptureOptions = {}) {
   const requestPermissions = useCallback(async () => {
     try {
       const constraints = createMediaConstraints(options.enableVideo || false);
+      logger.info('Requesting media permissions with constraints', constraints);
+      
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
       
       setupVideoElements(stream);
       setState(prev => ({ ...prev, stream, hasVideoPermission: true }));
+      
+      // Wait a bit for video to initialize properly
+      if (options.enableVideo && stream.getVideoTracks().length > 0) {
+        logger.info('Waiting for video to initialize...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
       
       return stream;
     } catch (error) {
