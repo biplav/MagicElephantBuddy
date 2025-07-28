@@ -120,6 +120,34 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     };
   }, []);
 
+  const fetchEnhancedPrompt = useCallback(async (childId: string): Promise<string> => {
+    try {
+      logger.info('Fetching enhanced prompt from backend for child:', childId);
+      const promptResponse = await fetch(`/api/debug/enhanced-prompt/${childId}`);
+      
+      if (!promptResponse.ok) {
+        throw new Error(`Failed to fetch enhanced prompt: ${promptResponse.status}`);
+      }
+      
+      const promptData = await promptResponse.json();
+      const enhancedInstructions = promptData.fullPrompt;
+      
+      logger.info('Enhanced prompt fetched successfully', {
+        promptLength: enhancedInstructions.length,
+        childId: childId
+      });
+      
+      return enhancedInstructions;
+    } catch (error) {
+      logger.error('Error fetching enhanced prompt', {
+        error: error instanceof Error ? error.message : String(error),
+        childId: childId
+      });
+      // Return fallback prompt
+      return `You are Appu, a friendly AI assistant helping child ${childId}. Keep responses short, simple, and engaging for young children.`;
+    }
+  }, []);
+
   const setupDataChannel = useCallback((pc: RTCPeerConnection) => {
     // Create the data channel as required by OpenAI WebRTC API
     const channel = pc.createDataChannel("oai-events");
@@ -142,24 +170,9 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
 
       try {
         const childId = getSelectedChildId();
+        const enhancedInstructions = await fetchEnhancedPrompt(childId);
 
-        // Fetch enhanced prompt from backend
-        logger.info('Fetching enhanced prompt from backend for child:', childId);
-        const promptResponse = await fetch(`/api/debug/enhanced-prompt/${childId}`);
-        
-        if (!promptResponse.ok) {
-          throw new Error(`Failed to fetch enhanced prompt: ${promptResponse.status}`);
-        }
-        
-        const promptData = await promptResponse.json();
-        const enhancedInstructions = promptData.fullPrompt;
-        
-        logger.info('Enhanced prompt fetched successfully', {
-          promptLength: enhancedInstructions.length,
-          childId: childId
-        });
-
-        // Send session configuration with enhanced prompt from backend
+        // Send session configuration with enhanced prompt
         channel.send(JSON.stringify({
           type: 'session.update',
           session: {
@@ -185,30 +198,6 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         logger.error('Error sending session configuration', {
           error: error instanceof Error ? error.message : String(error)
         });
-        
-        // Fallback to basic prompt if enhanced prompt fetch fails
-        const childId = getSelectedChildId();
-        channel.send(JSON.stringify({
-          type: 'session.update',
-          session: {
-            modalities: ['text', 'audio'],
-            instructions: `You are Appu, a friendly AI assistant helping child ${childId}. Keep responses short, simple, and engaging for young children.`,
-            voice: 'alloy',
-            input_audio_format: 'pcm16',
-            output_audio_format: 'pcm16',
-            input_audio_transcription: {
-              model: 'whisper-1'
-            },
-            turn_detection: {
-              type: 'server_vad',
-              threshold: 0.5,
-              prefix_padding_ms: 300,
-              silence_duration_ms: 200
-            },
-            temperature: 0.8
-          }
-        }));
-        logger.info('Sent fallback session configuration');
       }
     };
 
@@ -351,7 +340,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     channel.onbufferedamountlow = () => {
       logger.info('Data channel buffer amount low');
     };
-  }, [getSelectedChildId, options.onTranscriptionReceived, options.onResponseReceived, options.onAudioResponseReceived, options.onError]);
+  }, [getSelectedChildId, fetchEnhancedPrompt, options.onTranscriptionReceived, options.onResponseReceived, options.onAudioResponseReceived, options.onError]);
 
   const connect = useCallback(async () => {
     try {
