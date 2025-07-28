@@ -79,6 +79,46 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
           break;
       }
     };
+
+    // Handle ICE connection state changes
+    pc.oniceconnectionstatechange = () => {
+      logger.info('ICE connection state changed', { 
+        iceConnectionState: pc.iceConnectionState,
+        iceGatheringState: pc.iceGatheringState 
+      });
+      
+      if (pc.iceConnectionState === 'failed') {
+        logger.error('ICE connection failed');
+        setState(prev => ({ ...prev, error: 'Connection failed' }));
+        options.onError?.('Connection failed');
+      }
+    };
+
+    // Handle ICE gathering state changes
+    pc.onicegatheringstatechange = () => {
+      logger.info('ICE gathering state changed', { iceGatheringState: pc.iceGatheringState });
+    };
+
+    // Handle ICE candidates
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        logger.info('ICE candidate received', { 
+          candidate: event.candidate.candidate.substring(0, 50) + '...' 
+        });
+      } else {
+        logger.info('ICE candidate gathering complete');
+      }
+    };
+
+    // Handle signaling state changes
+    pc.onsignalingstatechange = () => {
+      logger.info('Signaling state changed', { signalingState: pc.signalingState });
+    };
+
+    // Handle negotiation needed
+    pc.onnegotiationneeded = () => {
+      logger.info('Negotiation needed');
+    };
   }, []);
 
   const setupDataChannel = useCallback((pc: RTCPeerConnection) => {
@@ -86,13 +126,33 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     const channel = pc.createDataChannel("oai-events");
     dataChannelRef.current = channel;
 
+    // Handle connection state changes
+    const checkReadyState = () => {
+      logger.info('Data channel ready state changed', {
+        readyState: channel.readyState,
+        readyStateLabel: ['connecting', 'open', 'closing', 'closed'][channel.readyState] || 'unknown'
+      });
+    };
+
+    // Monitor ready state changes
+    const stateCheckInterval = setInterval(checkReadyState, 1000);
+
     channel.onopen = async () => {
       logger.info('Data channel opened');
-      const childId = getSelectedChildId();
-      channel.send(JSON.stringify({
-        type: 'start_session',
-        childId: childId
-      }));
+      clearInterval(stateCheckInterval);
+      
+      try {
+        const childId = getSelectedChildId();
+        channel.send(JSON.stringify({
+          type: 'start_session',
+          childId: childId
+        }));
+        logger.info('Start session message sent successfully');
+      } catch (error) {
+        logger.error('Error sending start session message', {
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
     };
 
     channel.onmessage = async (messageEvent: MessageEvent) => {
@@ -174,11 +234,29 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     };
 
     channel.onerror = (error) => {
-      logger.error('Data channel error', { error });
+      logger.error('Data channel error', { 
+        error,
+        readyState: channel.readyState,
+        readyStateLabel: ['connecting', 'open', 'closing', 'closed'][channel.readyState] || 'unknown'
+      });
+      setState(prev => ({ ...prev, error: 'Data channel error occurred' }));
+      options.onError?.('Data channel connection failed');
     };
 
-    channel.onclose = () => {
-      logger.info('Data channel closed');
+    channel.onclose = (event) => {
+      logger.info('Data channel closed', {
+        readyState: channel.readyState,
+        wasClean: event?.wasClean,
+        code: event?.code,
+        reason: event?.reason
+      });
+      clearInterval(stateCheckInterval);
+      setState(prev => ({ ...prev, isConnected: false, isRecording: false }));
+    };
+
+    // Handle buffered amount changes
+    channel.onbufferedamountlow = () => {
+      logger.info('Data channel buffer amount low');
     };
   }, [getSelectedChildId, options.onTranscriptionReceived, options.onResponseReceived, options.onAudioResponseReceived, options.onError]);
 
@@ -186,7 +264,15 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     try {
       logger.info('Starting OpenAI WebRTC connection');
       
-      const client_secret = await createSession();
+      // Handle session creation with explicit error handling
+      const client_secret = await createSession().catch((sessionError) => {
+        logger.error('Session creation failed', {
+          error: sessionError.message,
+          stack: sessionError.stack
+        });
+        throw new Error(`Session creation failed: ${sessionError.message}`);
+      });
+
       const pc = new RTCPeerConnection();
       pcRef.current = pc;
 
@@ -207,7 +293,16 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         } : false
       };
 
-      const stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+      // Handle media stream with explicit error handling
+      const stream = await navigator.mediaDevices.getUserMedia(mediaConstraints).catch((mediaError) => {
+        logger.error('Media access failed', {
+          error: mediaError.message,
+          name: mediaError.name,
+          constraint: mediaError.constraint
+        });
+        throw new Error(`Media access failed: ${mediaError.message}`);
+      });
+      
       streamRef.current = stream;
 
       const audioTrack = stream.getAudioTracks()[0];
@@ -215,12 +310,25 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         pc.addTrack(audioTrack, stream);
       }
 
+      // Handle offer creation with explicit error handling
       const offer = await pc.createOffer({
         offerToReceiveAudio: true,
         offerToReceiveVideo: false
+      }).catch((offerError) => {
+        logger.error('Offer creation failed', {
+          error: offerError.message
+        });
+        throw new Error(`Offer creation failed: ${offerError.message}`);
       });
-      await pc.setLocalDescription(offer);
 
+      await pc.setLocalDescription(offer).catch((localDescError) => {
+        logger.error('Set local description failed', {
+          error: localDescError.message
+        });
+        throw new Error(`Set local description failed: ${localDescError.message}`);
+      });
+
+      // Handle API request with explicit error handling
       const realtimeResponse = await fetch('https://api.openai.com/v1/realtime', {
         method: 'POST',
         headers: {
@@ -228,21 +336,52 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
           'Content-Type': 'application/sdp',
         },
         body: offer.sdp,
+      }).catch((fetchError) => {
+        logger.error('OpenAI API request failed', {
+          error: fetchError.message
+        });
+        throw new Error(`OpenAI API request failed: ${fetchError.message}`);
       });
 
       if (!realtimeResponse.ok) {
-        throw new Error(`Failed to connect to OpenAI: ${realtimeResponse.status}`);
+        const errorText = await realtimeResponse.text().catch(() => 'Unable to read error response');
+        throw new Error(`Failed to connect to OpenAI: ${realtimeResponse.status} - ${errorText}`);
       }
 
-      const answerSdp = await realtimeResponse.text();
-      await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+      const answerSdp = await realtimeResponse.text().catch((textError) => {
+        logger.error('Failed to read response text', {
+          error: textError.message
+        });
+        throw new Error(`Failed to read response: ${textError.message}`);
+      });
+
+      await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp }).catch((remoteDescError) => {
+        logger.error('Set remote description failed', {
+          error: remoteDescError.message
+        });
+        throw new Error(`Set remote description failed: ${remoteDescError.message}`);
+      });
 
       logger.info('OpenAI WebRTC connection established');
 
     } catch (error: any) {
-      logger.error('Error connecting to OpenAI:', error);
+      logger.error('Error connecting to OpenAI:', {
+        error: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       setState(prev => ({ ...prev, error: error.message }));
       options.onError?.(error.message);
+      
+      // Clean up on error
+      if (pcRef.current) {
+        pcRef.current.close();
+        pcRef.current = null;
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
     }
   }, [createSession, setupPeerConnection, setupDataChannel, options.enableVideo, options.onError]);
 
