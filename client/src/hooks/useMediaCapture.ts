@@ -62,13 +62,13 @@ export const useMediaCapture = ({ enableVideo }: MediaCaptureOptions) => {
         video.id = "media-capture-video"; // Add ID for future lookups
 
         // Position off-screen but visible for canvas capture
-        video.style.position = "fixed";
+        /*video.style.position = "fixed";
         video.style.top = "-1000px";
         video.style.left = "-1000px";
         video.style.width = "320px";
         video.style.height = "240px";
         video.style.opacity = "0.01";
-        video.style.zIndex = "-9999";
+        video.style.zIndex = "-9999";*/
         video.width = 320;
         video.height = 240;
 
