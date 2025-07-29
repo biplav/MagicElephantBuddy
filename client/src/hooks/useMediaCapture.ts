@@ -52,6 +52,11 @@ export const useMediaCapture = ({ enableVideo }: MediaCaptureOptions) => {
         console.log("Found existing video element in DOM, reusing it");
         videoRef.current = existingVideo;
         videoRef.current.srcObject = stream;
+        
+        // Ensure the video plays
+        videoRef.current.play().catch(error => {
+          console.error("Failed to start existing video playback:", error);
+        });
       } else {
         // Create new video element if none exists
         const video = document.createElement("video");
@@ -74,11 +79,22 @@ export const useMediaCapture = ({ enableVideo }: MediaCaptureOptions) => {
 
         videoRef.current = video;
         document.body.appendChild(video);
+        
+        // Explicitly start playing the video
+        video.play().catch(error => {
+          console.error("Failed to start video playback:", error);
+        });
+        
         console.log("Created new video element and added to DOM");
       }
     } else {
       // If video element exists, just update the stream
       videoRef.current.srcObject = stream;
+      
+      // Ensure the video plays with the new stream
+      videoRef.current.play().catch(error => {
+        console.error("Failed to restart video playback with new stream:", error);
+      });
     }
 
     // Check DOM for existing canvas element first
@@ -114,7 +130,18 @@ export const useMediaCapture = ({ enableVideo }: MediaCaptureOptions) => {
       return null;
     }
 
-    if (video.readyState < 2 || video.paused) {
+    // Check if video is paused and try to play it
+    if (video.paused) {
+      logger.warn("Video is paused, attempting to play");
+      try {
+        await video.play();
+      } catch (error) {
+        logger.error("Failed to play paused video", { error });
+        return null;
+      }
+    }
+
+    if (video.readyState < 2) {
       logger.warn("Video not ready for capture", {
         readyState: video.readyState,
         paused: video.paused,
