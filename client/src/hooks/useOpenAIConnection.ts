@@ -395,6 +395,12 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
 
           // Send the analysis result back to OpenAI
           sendFunctionCallOutput(callId, analysisResult.analysis);
+
+          // Trigger model response after function call
+          dataChannelRef.current?.send(JSON.stringify({
+            type: 'response.create'
+          }));
+          logger.info("Triggered response.create after successful function call");
         } catch (error: any) {
           logger.error("Error handling getEyesTool", {
             error: error.message,
@@ -406,6 +412,12 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
             callId,
             "I'm having trouble seeing what you're showing me right now. Can you try again?",
           );
+
+          // Trigger model response after error function call
+          dataChannelRef.current?.send(JSON.stringify({
+            type: 'response.create'
+          }));
+          logger.info("Triggered response.create after error function call");
         }
       };
 
