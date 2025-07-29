@@ -887,7 +887,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           type: "function",
           name: "getEyesTool",
           description:
-            "Use this tool when the child is showing, pointing to, or talking about something visual that you should look at. This tool analyzes what the child is showing through their camera.",
+            "Use this tool when the child is showing, pointing to, or talking about something visual that you should look at. This tool analyzes what the child is showing through their camera. Take the analysis from the tool to engage or respond the child.",
           parameters: {
             type: "object",
             properties: {
