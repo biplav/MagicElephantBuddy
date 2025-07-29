@@ -310,7 +310,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         if (!frameData) {
           // No frame available - return appropriate response
           const result = { 
-            analysis: "I can't see anything right now. Please make sure your camera is working and try showing me again!" 
+            result: "I can't see anything right now. Please make sure your camera is working and try showing me again!" 
           };
           
           dataChannelRef.current?.send(JSON.stringify({
@@ -348,7 +348,9 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
           item: {
             type: 'function_call_output',
             call_id: callId,
-            output: JSON.stringify({ analysis: analysisResult.analysis })
+            output: { 
+              result: analysisResult.analysis
+            }
           }
         }));
 
@@ -361,9 +363,9 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
           item: {
             type: 'function_call_output',
             call_id: callId,
-            output: JSON.stringify({ 
-              analysis: "I'm having trouble seeing what you're showing me right now. Can you try again?" 
-            })
+            output: { 
+              result: "I'm having trouble seeing what you're showing me right now. Can you try again?" 
+            }
           }
         }));
       }
