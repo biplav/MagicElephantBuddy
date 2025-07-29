@@ -134,7 +134,7 @@ export const useMediaCapture = ({ enableVideo }: MediaCaptureOptions) => {
     if (video.paused) {
       logger.warn("Video is paused, attempting to play");
       try {
-        await video.play();
+        video.play();
       } catch (error) {
         logger.error("Failed to play paused video", { error });
         return null;
