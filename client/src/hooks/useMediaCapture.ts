@@ -43,37 +43,63 @@ export const useMediaCapture = ({ enableVideo }: MediaCaptureOptions) => {
       return;
     }
 
-    // Create video element
+    // Check DOM for existing video element first
     if (!videoRef.current) {
-      const video = document.createElement("video");
-      video.srcObject = stream;
-      video.autoplay = true;
-      video.muted = true;
-      video.playsInline = true;
-      
-      // Position off-screen but visible for canvas capture
-      video.style.position = "fixed";
-      video.style.top = "-1000px";
-      video.style.left = "-1000px";
-      video.style.width = "320px";
-      video.style.height = "240px";
-      video.style.opacity = "0.01";
-      video.style.zIndex = "-9999";
-      video.width = 320;
-      video.height = 240;
+      // Look for existing video element in the DOM
+      const existingVideo = document.querySelector('video[id="media-capture-video"]') as HTMLVideoElement;
 
-      videoRef.current = video;
-      document.body.appendChild(video);
+      if (existingVideo) {
+        console.log("Found existing video element in DOM, reusing it");
+        videoRef.current = existingVideo;
+        videoRef.current.srcObject = stream;
+      } else {
+        // Create new video element if none exists
+        const video = document.createElement("video");
+        video.srcObject = stream;
+        video.autoplay = true;
+        video.muted = true;
+        video.playsInline = true;
+        video.id = "media-capture-video"; // Add ID for future lookups
+
+        // Position off-screen but visible for canvas capture
+        video.style.position = "fixed";
+        video.style.top = "-1000px";
+        video.style.left = "-1000px";
+        video.style.width = "320px";
+        video.style.height = "240px";
+        video.style.opacity = "0.01";
+        video.style.zIndex = "-9999";
+        video.width = 320;
+        video.height = 240;
+
+        videoRef.current = video;
+        document.body.appendChild(video);
+        console.log("Created new video element and added to DOM");
+      }
+    } else {
+      // If video element exists, just update the stream
+      videoRef.current.srcObject = stream;
     }
 
-    // Create canvas element
+    // Check DOM for existing canvas element first
     if (!canvasRef.current) {
-      const canvas = document.createElement("canvas");
-      canvas.width = 320;
-      canvas.height = 240;
-      canvas.style.display = "none";
-      canvasRef.current = canvas;
-      document.body.appendChild(canvas);
+      // Look for existing canvas element in the DOM
+      const existingCanvas = document.querySelector('canvas[id="media-capture-canvas"]') as HTMLCanvasElement;
+
+      if (existingCanvas) {
+        console.log("Found existing canvas element in DOM, reusing it");
+        canvasRef.current = existingCanvas;
+      } else {
+        // Create new canvas element if none exists
+        const canvas = document.createElement("canvas");
+        canvas.width = 320;
+        canvas.height = 240;
+        canvas.style.display = "none";
+        canvas.id = "media-capture-canvas"; // Add ID for future lookups
+        canvasRef.current = canvas;
+        document.body.appendChild(canvas);
+        console.log("Created new canvas element and added to DOM");
+      }
     }
 
     setState(prev => ({ ...prev, videoEnabled: true }));
@@ -131,10 +157,10 @@ export const useMediaCapture = ({ enableVideo }: MediaCaptureOptions) => {
     try {
       const constraints = createMediaConstraints(enableVideo);
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      
+
       streamRef.current = stream;
       setupVideoElements(stream);
-      
+
       setState(prev => ({ 
         ...prev, 
         stream, 
