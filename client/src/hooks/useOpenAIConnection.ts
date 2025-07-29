@@ -154,6 +154,18 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     }
   }, []);
 
+  // Helper method to send function call output
+  const sendFunctionCallOutput = useCallback((callId: string, result: any) => {
+    dataChannelRef.current?.send(JSON.stringify({
+      type: 'conversation.item.create',
+      item: {
+        type: 'function_call_output',
+        call_id: callId,
+        output: typeof result === 'string' ? { result } : result
+      }
+    }));
+  }, []);
+
   const setupDataChannel = useCallback((pc: RTCPeerConnection) => {
     // Create the data channel as required by OpenAI WebRTC API
     const channel = pc.createDataChannel("oai-events");
@@ -242,18 +254,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         // First check if video is enabled in options
         if (!options.enableVideo) {
           logger.warn('Video not enabled, cannot capture frame');
-          const result = { 
-            analysis: "I can't see anything because video is not enabled. Please enable video mode so I can see what you're showing me!" 
-          };
-          
-          dataChannelRef.current?.send(JSON.stringify({
-            type: 'conversation.item.create',
-            item: {
-              type: 'function_call_output',
-              call_id: callId,
-              output: JSON.stringify(result)
-            }
-          }));
+          sendFunctionCallOutput(callId, "I can't see anything because video is not enabled. Please enable video mode so I can see what you're showing me!");
           return;
         }
 
@@ -309,18 +310,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
 
         if (!frameData) {
           // No frame available - return appropriate response
-          const result = { 
-            result: "I can't see anything right now. Please make sure your camera is working and try showing me again!" 
-          };
-          
-          dataChannelRef.current?.send(JSON.stringify({
-            type: 'conversation.item.create',
-            item: {
-              type: 'function_call_output',
-              call_id: callId,
-              output: JSON.stringify(result)
-            }
-          }));
+          sendFunctionCallOutput(callId, "I can't see anything right now. Please make sure your camera is working and try showing me again!");
           return;
         }
 
@@ -343,31 +333,13 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         logger.info('Frame analysis completed', { analysis: analysisResult.analysis });
 
         // Send the analysis result back to OpenAI
-        dataChannelRef.current?.send(JSON.stringify({
-          type: 'conversation.item.create',
-          item: {
-            type: 'function_call_output',
-            call_id: callId,
-            output: { 
-              result: analysisResult.analysis
-            }
-          }
-        }));
+        sendFunctionCallOutput(callId, analysisResult.analysis);
 
       } catch (error: any) {
         logger.error('Error handling getEyesTool', { error: error.message, stack: error.stack });
         
         // Send error response back to OpenAI
-        dataChannelRef.current?.send(JSON.stringify({
-          type: 'conversation.item.create',
-          item: {
-            type: 'function_call_output',
-            call_id: callId,
-            output: { 
-              result: "I'm having trouble seeing what you're showing me right now. Can you try again?" 
-            }
-          }
-        }));
+        sendFunctionCallOutput(callId, "I'm having trouble seeing what you're showing me right now. Can you try again?");
       }
     };
 
@@ -535,7 +507,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     channel.onbufferedamountlow = () => {
       logger.info('Data channel buffer amount low');
     };
-  }, [getSelectedChildId, fetchEnhancedPrompt, mediaCapture, options.onTranscriptionReceived, options.onResponseReceived, options.onAudioResponseReceived, options.onError]);
+  }, [getSelectedChildId, fetchEnhancedPrompt, mediaCapture, sendFunctionCallOutput, options.onTranscriptionReceived, options.onResponseReceived, options.onAudioResponseReceived, options.onError]);
 
   const connect = useCallback(async () => {
     try {
