@@ -1065,20 +1065,7 @@ const Home = memo(() => {
                         isEnabled={enableVideo && realtimeAudio.openaiConnection.mediaCapture.hasVideoPermission}
                         className="w-28 h-20 sm:w-32 sm:h-24 rounded-lg shadow-md border border-gray-200"
                       />
-                      <Button
-                        onClick={() => {
-                          if (realtimeAudio.openaiConnection?.mediaCapture?.captureFrame) {
-                            const frameData = realtimeAudio.openaiConnection.mediaCapture.captureFrame();
-                            console.log('Manual capture result:', frameData ? 'Success' : 'Failed', frameData?.length || 0);
-                            if (frameData) {
-                              setCapturedFrame(frameData);
-                            }
-                          }
-                        }}
-                        className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded"
-                      >
-                        Capture
-                      </Button>
+                      
                     </div>
                   )}
 
@@ -1093,20 +1080,7 @@ const Home = memo(() => {
                         isEnabled={enableVideo && mediaCapture.hasVideoPermission}
                         className="w-28 h-20 sm:w-32 sm:h-24 rounded-lg shadow-md border border-gray-200"
                       />
-                      <Button
-                        onClick={() => {
-                          if (mediaCapture.captureFrame) {
-                            const frameData = mediaCapture.captureFrame();
-                            console.log('Manual capture result:', frameData ? 'Success' : 'Failed', frameData?.length || 0);
-                            if (frameData) {
-                              setCapturedFrame(frameData);
-                            }
-                          }
-                        }}
-                        className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded"
-                      >
-                        Capture
-                      </Button>
+                      
                     </div>
                   )}
 
