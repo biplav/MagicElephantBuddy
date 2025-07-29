@@ -18,7 +18,7 @@ export function CapturedFrameDisplay({ frameData, className = "", title }: Captu
       <div className="w-full h-full min-h-[120px] flex items-center justify-center">
         {frameData ? (
           <img 
-            src={`${frameData}`}
+            src={frameData.startsWith('data:') ? frameData : `data:image/jpeg;base64,${frameData}`}
             alt="Captured frame"
             className="w-full h-full object-cover"
           />
