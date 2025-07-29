@@ -161,7 +161,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
       item: {
         type: 'function_call_output',
         call_id: callId,
-        output: JSON.stringify({result: result})
+        output: result
       }
     }));
   }, []);
