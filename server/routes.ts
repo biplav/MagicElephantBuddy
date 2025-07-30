@@ -645,8 +645,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Close current conversation
   app.post("/api/close-conversation", async (req: Request, res: Response) => {
     try {
-      const childId = 1; // Using the seeded child ID for demo
-      const conversation = await storage.getCurrentConversation(childId);
+      const { childId } = req.body;
+      const selectedChildId = childId || 1; // Use provided childId or default
+      
+      const conversation = await storage.getCurrentConversation(selectedChildId);
 
       if (conversation) {
         const endTime = new Date();
@@ -662,15 +664,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         console.log(
-          `Closed conversation ${conversation.id} - Duration: ${duration}s`,
+          `Closed conversation ${conversation.id} for child ${selectedChildId} - Duration: ${duration}s`,
         );
         res.json({
           message: "Conversation closed successfully",
           conversationId: conversation.id,
+          childId: selectedChildId,
           duration: duration,
         });
       } else {
-        res.json({ message: "No active conversation to close" });
+        res.json({ 
+          message: "No active conversation to close",
+          childId: selectedChildId 
+        });
       }
     } catch (error) {
       console.error("Error closing conversation:", error);

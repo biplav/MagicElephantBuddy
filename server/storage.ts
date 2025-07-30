@@ -154,13 +154,28 @@ export class DatabaseStorage implements IStorage {
     return conversation;
   }
 
-  async getConversationsByChild(childId: number, limit = 10): Promise<Conversation[]> {
+  async getConversationsByChild(childId: number, limit: number = 10): Promise<Conversation[]> {
     return await db
       .select()
       .from(conversations)
       .where(eq(conversations.childId, childId))
       .orderBy(desc(conversations.startTime))
       .limit(limit);
+  }
+
+  // Get the current active conversation (one without endTime)
+  async getCurrentConversation(childId: number): Promise<Conversation | null> {
+    const result = await db
+      .select()
+      .from(conversations)
+      .where(and(
+        eq(conversations.childId, childId),
+        isNull(conversations.endTime)
+      ))
+      .orderBy(desc(conversations.startTime))
+      .limit(1);
+
+    return result[0] || null;
   }
 
   async getConversation(conversationId: number): Promise<Conversation | undefined> {
@@ -171,15 +186,7 @@ export class DatabaseStorage implements IStorage {
     return conversation || undefined;
   }
 
-  async getCurrentConversation(childId: number): Promise<Conversation | undefined> {
-    const [conversation] = await db
-      .select()
-      .from(conversations)
-      .where(and(eq(conversations.childId, childId), isNull(conversations.endTime)))
-      .orderBy(desc(conversations.startTime))
-      .limit(1);
-    return conversation || undefined;
-  }
+  
 
   // Message methods
   async createMessage(insertMessage: InsertMessage): Promise<Message> {
@@ -446,7 +453,7 @@ export class DatabaseStorage implements IStorage {
     return result[0] || null;
   }
 
-  
+
 
   // Conversation analysis - get conversations from past hour only
   async getUnanalyzedConversations(): Promise<Conversation[]> {

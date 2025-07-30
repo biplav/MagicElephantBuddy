@@ -58,6 +58,9 @@ export class JobScheduler {
       // Job 4: Memory consolidation for all children (Phase 3)
       await this.consolidateMemoriesForAllChildren();
 
+      // Job 5: Auto-close inactive conversations
+      await this.autoCloseInactiveConversations();
+
       const endTime = new Date();
       const duration = endTime.getTime() - startTime.getTime();
       jobLogger.info(`Hourly jobs completed in ${duration}ms at ${endTime.toISOString()}`);
@@ -192,6 +195,64 @@ export class JobScheduler {
   async runJobsManually(): Promise<void> {
     jobLogger.info('Manually triggering hourly jobs...');
     await this.runHourlyJobs();
+  }
+
+  // Auto-close conversations that have been inactive for 30+ minutes
+  private async autoCloseInactiveConversations(): Promise<void> {
+    try {
+      jobLogger.info('Checking for inactive conversations to auto-close...');
+
+      const { db } = await import('./db');
+      const { conversations } = await import('@shared/schema');
+      const { isNull, and, lt } = await import('drizzle-orm');
+
+      // Get conversations that are still active (no endTime) and older than 30 minutes
+      const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+      
+      const inactiveConversations = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            isNull(conversations.endTime), // Still active (no end time)
+            lt(conversations.startTime, thirtyMinutesAgo) // Started more than 30 mins ago
+          )
+        );
+
+      if (inactiveConversations.length === 0) {
+        jobLogger.info('No inactive conversations found to auto-close');
+        return;
+      }
+
+      jobLogger.info(`Found ${inactiveConversations.length} inactive conversations to auto-close`);
+
+      for (const conversation of inactiveConversations) {
+        try {
+          const endTime = new Date();
+          const duration = Math.floor(
+            (endTime.getTime() - new Date(conversation.startTime).getTime()) / 1000
+          );
+
+          // Update conversation with end time and duration
+          const { storage } = await import('./storage');
+          await storage.updateConversation(conversation.id, {
+            endTime,
+            duration,
+            totalMessages: conversation.totalMessages,
+          });
+
+          jobLogger.info(
+            `Auto-closed inactive conversation ${conversation.id} for child ${conversation.childId} - Duration: ${duration}s`
+          );
+        } catch (error) {
+          jobLogger.error(`Error auto-closing conversation ${conversation.id}:`, error);
+        }
+      }
+
+      jobLogger.info(`Auto-closed ${inactiveConversations.length} inactive conversations`);
+    } catch (error) {
+      jobLogger.error('Error during auto-close inactive conversations job:', error);
+    }
   }
 
   // Get job status

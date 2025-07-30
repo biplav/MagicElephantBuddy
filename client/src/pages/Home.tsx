@@ -829,6 +829,34 @@ const Home = memo(() => {
     }
   }, [enableVideo, realtimeAudio, modelType]);
 
+  const handleStopTalking = useCallback(async () => {
+    console.log("🛑 Stop talking clicked");
+    stopRecording();
+    disconnect();
+
+    // Close the current conversation in the database
+    try {
+      const response = await fetch('/api/close-conversation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          childId: selectedChildId || 1
+        }),
+      });
+
+      const result = await response.json();
+      if (response.ok) {
+        console.log("✅ Conversation closed:", result);
+      } else {
+        console.error("❌ Failed to close conversation:", result.error);
+      }
+    } catch (error) {
+      console.error("❌ Error closing conversation:", error);
+    }
+  }, [stopRecording, disconnect, selectedChildId]);
+
   return (
     <div className="min-h-screen flex flex-col relative">
       {/* Header - Reduced padding for mobile */}
@@ -1065,7 +1093,7 @@ const Home = memo(() => {
                         isEnabled={enableVideo && realtimeAudio.openaiConnection.mediaCapture.hasVideoPermission}
                         className="w-28 h-20 sm:w-32 sm:h-24 rounded-lg shadow-md border border-gray-200"
                       />
-                      
+
                     </div>
                   )}
 
@@ -1080,7 +1108,7 @@ const Home = memo(() => {
                         isEnabled={enableVideo && mediaCapture.hasVideoPermission}
                         className="w-28 h-20 sm:w-32 sm:h-24 rounded-lg shadow-md border border-gray-200"
                       />
-                      
+
                     </div>
                   )}
 
