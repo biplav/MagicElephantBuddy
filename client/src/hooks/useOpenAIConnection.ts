@@ -30,6 +30,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
+  const conversationIdRef = useRef<string | null>(null); // Add conversationIdRef
 
   // Add media capture for frame analysis
   const mediaCapture = useMediaCapture({ enableVideo: options.enableVideo });
