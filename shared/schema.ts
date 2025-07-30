@@ -363,6 +363,20 @@ export const recordings = pgTable("recordings", {
   response: text("response"),
 });
 
+// Captured frames from video analysis for parent viewing
+export const capturedFrames = pgTable("captured_frames", {
+  id: serial("id").primaryKey(),
+  childId: integer("child_id").notNull().references(() => children.id),
+  conversationId: integer("conversation_id").references(() => conversations.id),
+  frameData: text("frame_data").notNull(), // Base64 encoded image
+  analysis: text("analysis").notNull(), // AI analysis result
+  reason: text("reason"), // Why the frame was captured
+  lookingFor: text("looking_for"), // What Appu was looking for
+  context: text("context"), // Conversation context
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+  isVisible: boolean("is_visible").default(true).notNull(), // Allow hiding frames if needed
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -372,6 +386,17 @@ export const insertRecordingSchema = createInsertSchema(recordings).pick({
   userId: true,
   transcription: true,
   response: true,
+});
+
+export const insertCapturedFrameSchema = createInsertSchema(capturedFrames).pick({
+  childId: true,
+  conversationId: true,
+  frameData: true,
+  analysis: true,
+  reason: true,
+  lookingFor: true,
+  context: true,
+  isVisible: true,
 });
 
 export const insertMemorySchema = createInsertSchema(memories).pick({
@@ -389,6 +414,9 @@ export type User = typeof users.$inferSelect;
 
 export type InsertRecording = z.infer<typeof insertRecordingSchema>;
 export type Recording = typeof recordings.$inferSelect;
+
+export type InsertCapturedFrame = z.infer<typeof insertCapturedFrameSchema>;
+export type CapturedFrame = typeof capturedFrames.$inferSelect;
 
 // Memory types
 export type InsertMemory = z.infer<typeof insertMemorySchema>;
@@ -411,5 +439,16 @@ export const memoryConversationLinksRelations = relations(memoryConversationLink
   memory: one(memories, {
     fields: [memoryConversationLinks.memoryId],
     references: [memories.id],
+  }),
+}));
+
+export const capturedFramesRelations = relations(capturedFrames, ({ one }) => ({
+  child: one(children, {
+    fields: [capturedFrames.childId],
+    references: [children.id],
+  }),
+  conversation: one(conversations, {
+    fields: [capturedFrames.conversationId],
+    references: [conversations.id],
   }),
 }));

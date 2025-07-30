@@ -1,12 +1,14 @@
 import { 
   users, parents, children, conversations, messages, conversationInsights,
   learningMilestones, notifications, notificationPreferences, profileUpdateSuggestions,
+  capturedFrames,
   type User, type InsertUser, type Parent, type InsertParent, 
   type Child, type InsertChild, type Conversation, type InsertConversation,
   type Message, type InsertMessage, type ConversationInsight, type InsertConversationInsight,
   type LearningMilestone, type InsertLearningMilestone, type Notification, type InsertNotification,
   type NotificationPreferences, type InsertNotificationPreferences,
-  type ProfileUpdateSuggestion, type InsertProfileUpdateSuggestion
+  type ProfileUpdateSuggestion, type InsertProfileUpdateSuggestion,
+  type CapturedFrame, type InsertCapturedFrame
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, inArray, isNull, isNotNull, gte } from "drizzle-orm";
@@ -76,6 +78,12 @@ export interface IStorage {
   // Conversation analysis
   getUnanalyzedConversations(): Promise<Conversation[]>;
   getConversationsWithoutSummary(): Promise<Conversation[]>;
+
+  // Captured frames
+  createCapturedFrame(frame: InsertCapturedFrame): Promise<CapturedFrame>;
+  getCapturedFramesByChild(childId: number, limit?: number): Promise<CapturedFrame[]>;
+  getCapturedFramesByConversation(conversationId: number): Promise<CapturedFrame[]>;
+  getCapturedFrame(frameId: number): Promise<CapturedFrame | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -477,6 +485,43 @@ export class DatabaseStorage implements IStorage {
       .where(isNull(conversationInsights.id))
       .orderBy(desc(conversations.startTime));
     return results;
+  }
+
+  // Captured frames methods
+  async createCapturedFrame(insertFrame: InsertCapturedFrame): Promise<CapturedFrame> {
+    const [frame] = await db.insert(capturedFrames).values(insertFrame).returning();
+    return frame;
+  }
+
+  async getCapturedFramesByChild(childId: number, limit: number = 20): Promise<CapturedFrame[]> {
+    return await db
+      .select()
+      .from(capturedFrames)
+      .where(and(
+        eq(capturedFrames.childId, childId),
+        eq(capturedFrames.isVisible, true)
+      ))
+      .orderBy(desc(capturedFrames.timestamp))
+      .limit(limit);
+  }
+
+  async getCapturedFramesByConversation(conversationId: number): Promise<CapturedFrame[]> {
+    return await db
+      .select()
+      .from(capturedFrames)
+      .where(and(
+        eq(capturedFrames.conversationId, conversationId),
+        eq(capturedFrames.isVisible, true)
+      ))
+      .orderBy(desc(capturedFrames.timestamp));
+  }
+
+  async getCapturedFrame(frameId: number): Promise<CapturedFrame | undefined> {
+    const [frame] = await db
+      .select()
+      .from(capturedFrames)
+      .where(eq(capturedFrames.id, frameId));
+    return frame || undefined;
   }
 }
 

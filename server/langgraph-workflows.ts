@@ -407,15 +407,17 @@ function createConversationWorkflow() {
 // Helper function for video frame analysis
 async function analyzeVideoFrame(frameData: string, analysisContext: any): Promise<string> {
   try {
-    workflowLogger.debug(`Analyzing video frame - Size: ${frameData?.length || 0} bytes`);
-
     const OpenAI = (await import('openai')).default;
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-    let prompt = "A child is showing something to their AI companion Appu. ";
+    let prompt = "A child is showing something to their AI companion Appu. Analyze this image and describe what you see. ";
+
+    if (analysisContext.reason) {
+      prompt += `Reason for looking: ${analysisContext.reason}. `;
+    }
 
     if (analysisContext.lookingFor) {
-      prompt += `Appu is trying to see or identify: ${analysisContext.lookingFor}. `;
+      prompt += `Specifically looking for: ${analysisContext.lookingFor}. `;
     }
 
     if (analysisContext.context) {
@@ -449,6 +451,29 @@ async function analyzeVideoFrame(frameData: string, analysisContext: any): Promi
 
     const analysis = response.choices[0]?.message?.content || "I can see something interesting!";
     workflowLogger.debug("Video frame analysis completed:", { analysis: analysis.slice(0, 100) });
+
+    // Store the captured frame in database if we have the necessary context
+    if (analysisContext.conversationId && analysisContext.childProfile?.id) {
+      try {
+        const { storage } = await import('./storage');
+        await storage.createCapturedFrame({
+          childId: parseInt(analysisContext.childProfile.id),
+          conversationId: analysisContext.conversationId,
+          frameData: frameData,
+          analysis: analysis,
+          reason: analysisContext.reason || null,
+          lookingFor: analysisContext.lookingFor || null,
+          context: analysisContext.conversationContext || null,
+          isVisible: true
+        });
+
+        workflowLogger.info("📸 Stored captured frame in database for LangGraph workflow");
+      } catch (storageError) {
+        workflowLogger.error("Failed to store captured frame:", { error: storageError.message });
+        // Don't fail the analysis if storage fails
+      }
+    }
+
     return analysis;
   } catch (error) {
     workflowLogger.error("Video analysis error:", { error: error.message });

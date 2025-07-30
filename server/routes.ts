@@ -785,13 +785,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Frame analysis endpoint for getEyesTool
   app.post("/api/analyze-frame", async (req: Request, res: Response) => {
     try {
-      const { frameData, childId, reason, lookingFor, context } = req.body;
+      const { frameData, childId, reason, lookingFor, context, conversationId } = req.body;
       
       if (!frameData) {
         return res.status(400).json({ error: "No frame data provided" });
       }
       
-      console.log(`🔍 Analyzing frame for child ${childId}:`, { reason, lookingFor, context });
+      console.log(`🔍 Analyzing frame for child ${childId}:`, { reason, lookingFor, context, conversationId });
       
       // Build context-aware prompt
       let analysisPrompt = "A child is showing something to their AI companion Appu. Analyze this image and describe what you see.";
@@ -839,6 +839,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const analysis = response.choices[0].message.content;
       console.log(`🔍 Context-aware frame analysis result: ${analysis}`);
+      
+      // Store the captured frame in database for parent viewing
+      if (childId && analysis) {
+        try {
+          const capturedFrame = await storage.createCapturedFrame({
+            childId: parseInt(childId),
+            conversationId: conversationId ? parseInt(conversationId) : null,
+            frameData: frameData,
+            analysis: analysis,
+            reason: reason || null,
+            lookingFor: lookingFor || null,
+            context: context || null,
+            isVisible: true
+          });
+          
+          console.log(`📸 Stored captured frame ${capturedFrame.id} for child ${childId}`);
+        } catch (storageError) {
+          console.error("❌ Failed to store captured frame:", storageError);
+          // Don't fail the analysis if storage fails
+        }
+      }
       
       res.json({ analysis });
       
@@ -2018,6 +2039,91 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
     } catch (error) {
       console.error("Error getting job status:", error);
       res.status(500).json({ message: "Failed to get job status" });
+    }
+  });
+
+  // Captured frames endpoints for parent viewing
+  app.get("/api/children/:childId/captured-frames", async (req: Request, res: Response) => {
+    try {
+      const childId = parseInt(req.params.childId);
+      const limit = parseInt(req.query.limit as string) || 20;
+      
+      const frames = await storage.getCapturedFramesByChild(childId, limit);
+      
+      // Return frames without the actual frame data to save bandwidth in list view
+      const framesWithoutData = frames.map(frame => ({
+        ...frame,
+        frameData: undefined, // Remove frame data for list view
+        hasFrameData: true
+      }));
+      
+      res.json(framesWithoutData);
+    } catch (error) {
+      console.error("Error fetching captured frames:", error);
+      res.status(500).json({ message: "Failed to fetch captured frames" });
+    }
+  });
+
+  app.get("/api/conversations/:conversationId/captured-frames", async (req: Request, res: Response) => {
+    try {
+      const conversationId = parseInt(req.params.conversationId);
+      
+      const frames = await storage.getCapturedFramesByConversation(conversationId);
+      
+      // Return frames without the actual frame data to save bandwidth in list view
+      const framesWithoutData = frames.map(frame => ({
+        ...frame,
+        frameData: undefined, // Remove frame data for list view
+        hasFrameData: true
+      }));
+      
+      res.json(framesWithoutData);
+    } catch (error) {
+      console.error("Error fetching conversation frames:", error);
+      res.status(500).json({ message: "Failed to fetch conversation frames" });
+    }
+  });
+
+  app.get("/api/captured-frames/:frameId", async (req: Request, res: Response) => {
+    try {
+      const frameId = parseInt(req.params.frameId);
+      
+      const frame = await storage.getCapturedFrame(frameId);
+      
+      if (!frame) {
+        return res.status(404).json({ message: "Frame not found" });
+      }
+      
+      res.json(frame);
+    } catch (error) {
+      console.error("Error fetching captured frame:", error);
+      res.status(500).json({ message: "Failed to fetch captured frame" });
+    }
+  });
+
+  app.get("/api/captured-frames/:frameId/image", async (req: Request, res: Response) => {
+    try {
+      const frameId = parseInt(req.params.frameId);
+      
+      const frame = await storage.getCapturedFrame(frameId);
+      
+      if (!frame || !frame.frameData) {
+        return res.status(404).json({ message: "Frame image not found" });
+      }
+      
+      // Convert base64 to buffer and serve as image
+      const imageBuffer = Buffer.from(frame.frameData, 'base64');
+      
+      res.set({
+        'Content-Type': 'image/png',
+        'Content-Length': imageBuffer.length,
+        'Cache-Control': 'public, max-age=86400' // Cache for 24 hours
+      });
+      
+      res.send(imageBuffer);
+    } catch (error) {
+      console.error("Error serving frame image:", error);
+      res.status(500).json({ message: "Failed to serve frame image" });
     }
   });
 

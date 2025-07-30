@@ -380,6 +380,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
             body: JSON.stringify({
               frameData,
               childId: getSelectedChildId(),
+              conversationId: conversationIdRef.current,
               reason: args.reason || "Child wants to show something",
               lookingFor: args.lookingFor || null,
               context: args.context || null,
