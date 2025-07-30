@@ -248,7 +248,9 @@ const Home = memo(() => {
     hasVideoPermission,
     isConnecting,
     isRecording,
-    modelType
+    modelType,
+    stopRecording,
+    disconnect: disconnectRealtime
   } = realtimeAudio;
 
   const traditionalRecorder = useAudioRecorder({
@@ -831,8 +833,12 @@ const Home = memo(() => {
 
   const handleStopTalking = useCallback(async () => {
     console.log("🛑 Stop talking clicked");
-    stopRecording();
-    disconnect();
+    if (realtimeStopRecording) {
+      realtimeStopRecording();
+    }
+    if (disconnect) {
+      disconnect();
+    }
 
     // Close the current conversation in the database
     try {
@@ -855,7 +861,7 @@ const Home = memo(() => {
     } catch (error) {
       console.error("❌ Error closing conversation:", error);
     }
-  }, [stopRecording, disconnect, selectedChildId]);
+  }, [realtimeStopRecording, disconnect, selectedChildId]);
 
   return (
     <div className="min-h-screen flex flex-col relative">
