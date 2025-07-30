@@ -36,55 +36,72 @@ const ConversationState = Annotation.Root({
 
 type ConversationStateType = typeof ConversationState.State;
 
-// Define the getEyesTool outside of workflow (standard practice)
-const getEyesTool = new DynamicStructuredTool({
-  name: "getEyesTool",
-  description: "Use this tool when the child is showing, pointing to, or talking about something visual that you should look at. This tool analyzes what the child is showing through their camera.",
-  schema: z.object({
-    reason: z.string().describe("Why you want to look at what the child is showing")
-  }),
-  func: async ({ reason }, config) => {
-    workflowLogger.info("👁️ getEyesTool invoked:", { reason });
+// Create getEyesTool with enhanced context awareness
+const createGetEyesTool = (childContext: any) => {
+  return new DynamicStructuredTool({
+    name: "getEyesTool",
+    description: "Use this tool when the child is showing, pointing to, or talking about something visual that you should look at. This tool analyzes what the child is showing through their camera.",
+    schema: z.object({
+      reason: z.string().describe("Why you want to look at what the child is showing"),
+      lookingFor: z.string().describe("What specifically you're trying to see or identify (e.g., 'counting objects', 'identifying colors', 'looking at drawing', 'checking food')").optional(),
+      context: z.string().describe("Current conversation context or learning activity").optional()
+    }),
+    func: async ({ reason, lookingFor, context }, config) => {
+      workflowLogger.info("👁️ getEyesTool invoked:", { reason, lookingFor, context });
 
-    // Extract conversationId from config runnable
-    const conversationId = config?.configurable?.conversationId;
+      // Extract conversationId from config runnable
+      const conversationId = config?.configurable?.conversationId;
 
-    if (!conversationId) {
-      workflowLogger.warn("No conversationId available for getEyesTool");
-      return "No video session available to analyze what you're showing.";
+      if (!conversationId) {
+        workflowLogger.warn("No conversationId available for getEyesTool");
+        return "No video session available to analyze what you're showing.";
+      }
+
+      // Access the global video frame storage
+      const frameStorage = global.videoFrameStorage || new Map();
+      const storedFrame = frameStorage.get(`session_${conversationId}`);
+
+      if (!storedFrame || !storedFrame.frameData) {
+        workflowLogger.info("No video frame available in session storage");
+        return "I don't see anything right now. Make sure your camera is on and try showing me again!";
+      }
+
+      // Check if frame is recent (within last 30 seconds)
+      const frameAge = Date.now() - storedFrame.timestamp.getTime();
+      if (frameAge > 30000) {
+        workflowLogger.warn("Video frame is older than 30 seconds");
+        return "That was a while ago! Can you show me again?";
+      }
+
+      try {
+        workflowLogger.debug(`Analyzing video frame - Size: ${storedFrame.frameData.length} bytes`);
+
+        // Create context-aware analysis
+        const analysisContext = {
+          reason,
+          lookingFor,
+          conversationContext: context,
+          childProfile: childContext?.childProfile || {},
+          learningGoals: childContext?.learningGoals || [],
+          currentActivity: context || "general interaction"
+        };
+
+        const analysis = await analyzeVideoFrame(storedFrame.frameData, analysisContext);
+
+        workflowLogger.info("Video analysis completed:", { analysis: analysis.slice(0, 100) });
+        return `I can see: ${analysis}`;
+      } catch (error) {
+        workflowLogger.error("getEyesTool analysis failed:", { error: error.message });
+        return "I'm having trouble seeing what you're showing me right now. Can you try again?";
+      }
     }
-
-    // Access the global video frame storage
-    const frameStorage = global.videoFrameStorage || new Map();
-    const storedFrame = frameStorage.get(`session_${conversationId}`);
-
-    if (!storedFrame || !storedFrame.frameData) {
-      workflowLogger.info("No video frame available in session storage");
-      return "I don't see anything right now. Make sure your camera is on and try showing me again!";
-    }
-
-    // Check if frame is recent (within last 30 seconds)
-    const frameAge = Date.now() - storedFrame.timestamp.getTime();
-    if (frameAge > 30000) {
-      workflowLogger.warn("Video frame is older than 30 seconds");
-      return "That was a while ago! Can you show me again?";
-    }
-
-    try {
-      workflowLogger.debug(`Analyzing video frame - Size: ${storedFrame.frameData.length} bytes`);
-      const analysis = await analyzeVideoFrame(storedFrame.frameData);
-
-      workflowLogger.info("Video analysis completed:", { analysis: analysis.slice(0, 100) });
-      return `I can see: ${analysis}`;
-    } catch (error) {
-      workflowLogger.error("getEyesTool analysis failed:", { error: error.message });
-      return "I'm having trouble seeing what you're showing me right now. Can you try again?";
-    }
-  }
-});
+  });
+};
 
 // Initialize the LLM with tools (standard LangGraph pattern)
-const createLLMWithTools = () => {
+const createLLMWithTools = (childContext: any) => {
+  const getEyesTool = createGetEyesTool(childContext);
+
   const llm = new ChatOpenAI({
     apiKey: process.env.OPENAI_API_KEY,
     modelName: "gpt-4o",
@@ -134,7 +151,7 @@ async function loadContext(state: ConversationStateType): Promise<Partial<Conver
 async function callModel(state: ConversationStateType): Promise<Partial<ConversationStateType>> {
   workflowLogger.info("Calling LLM with tools");
 
-  const llm = createLLMWithTools();
+  const llm = createLLMWithTools(state.childContext);
 
   // Add user message to conversation
   const messagesWithInput = [
@@ -187,11 +204,13 @@ async function useTool(state: ConversationStateType): Promise<Partial<Conversati
     return { nextStep: "synthesizeSpeech" };
   }
 
-  const llm = createLLMWithTools();
+  const llm = createLLMWithTools(state.childContext);
   let updatedMessages = [...state.messages];
   let visualAnalysis: string | null = null;
 
   try {
+    const getEyesTool = createGetEyesTool(state.childContext);
+
     // Execute each tool call
     for (const toolCall of lastMessage.tool_calls) {
       if (toolCall.name === "getEyesTool") {
@@ -386,12 +405,24 @@ function createConversationWorkflow() {
 }
 
 // Helper function for video frame analysis
-async function analyzeVideoFrame(frameData: string): Promise<string> {
+async function analyzeVideoFrame(frameData: string, analysisContext: any): Promise<string> {
   try {
     workflowLogger.debug(`Analyzing video frame - Size: ${frameData?.length || 0} bytes`);
 
     const OpenAI = (await import('openai')).default;
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    let prompt = "A child is showing something to their AI companion Appu. ";
+
+    if (analysisContext.lookingFor) {
+      prompt += `Appu is trying to see or identify: ${analysisContext.lookingFor}. `;
+    }
+
+    if (analysisContext.context) {
+      prompt += `The current activity or conversation context is: ${analysisContext.context}. `;
+    }
+
+    prompt += "Please describe what you see in this image in a child-friendly way. Focus on objects, toys, drawings, books, or anything the child might be proudly showing off. Be specific about colors, shapes, and details that would help Appu respond enthusiastically to what the child is showing.";
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
@@ -401,7 +432,7 @@ async function analyzeVideoFrame(frameData: string): Promise<string> {
           content: [
             {
               type: "text",
-              text: "A child is showing something to their AI companion Appu. Please describe what you see in this image in a child-friendly way. Focus on objects, toys, drawings, books, or anything the child might be proudly showing off. Be specific about colors, shapes, and details that would help Appu respond enthusiastically to what the child is showing."
+              text: prompt
             },
             {
               type: "image_url",

@@ -373,7 +373,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
             return;
           }
 
-          // Call the frame analysis API
+          // Call the frame analysis API with enhanced context
           const response = await fetch("/api/analyze-frame", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -381,6 +381,8 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
               frameData,
               childId: getSelectedChildId(),
               reason: args.reason || "Child wants to show something",
+              lookingFor: args.lookingFor || null,
+              context: args.context || null,
             }),
           });
 

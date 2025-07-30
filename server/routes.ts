@@ -785,13 +785,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Frame analysis endpoint for getEyesTool
   app.post("/api/analyze-frame", async (req: Request, res: Response) => {
     try {
-      const { frameData, childId, reason } = req.body;
+      const { frameData, childId, reason, lookingFor, context } = req.body;
       
       if (!frameData) {
         return res.status(400).json({ error: "No frame data provided" });
       }
       
-      console.log(`🔍 Analyzing frame for child ${childId}, reason: ${reason}`);
+      console.log(`🔍 Analyzing frame for child ${childId}:`, { reason, lookingFor, context });
+      
+      // Build context-aware prompt
+      let analysisPrompt = "A child is showing something to their AI companion Appu. Analyze this image and describe what you see.";
+      
+      if (lookingFor) {
+        analysisPrompt += ` Appu is specifically looking for: ${lookingFor}.`;
+      }
+      
+      if (context) {
+        analysisPrompt += ` Current conversation context: ${context}.`;
+      }
+      
+      if (reason) {
+        analysisPrompt += ` Reason for analysis: ${reason}.`;
+      }
+      
+      analysisPrompt += " Focus on details that are most relevant to what Appu is looking for. Be specific about colors, shapes, numbers, objects, and any educational elements that match the context.";
       
       // Use OpenAI Vision API to analyze the frame
       const OpenAI = (await import('openai')).default;
@@ -805,7 +822,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             content: [
               {
                 type: "text",
-                text: "What do you see in this image? Please describe it in detail so that it can be fed to another LLM to respond to the question asked to them. "
+                text: analysisPrompt
               },
               {
                 type: "image_url",
@@ -816,11 +833,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ]
           }
         ],
-        max_tokens: 100
+        max_tokens: 200,
+        temperature: 0.7
       });
       
       const analysis = response.choices[0].message.content;
-      console.log(`🔍 Frame analysis result: ${analysis}`);
+      console.log(`🔍 Context-aware frame analysis result: ${analysis}`);
       
       res.json({ analysis });
       
@@ -887,7 +905,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
       }
 
-      // Define the getEyesTool for OpenAI Realtime API
+      // Define the enhanced getEyesTool for OpenAI Realtime API
       const tools = [
         {
           type: "function",
@@ -902,6 +920,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 description:
                   "Why you want to look at what the child is showing",
               },
+              lookingFor: {
+                type: "string",
+                description: "What specifically you're trying to see or identify (e.g., 'counting objects', 'identifying colors', 'looking at drawing', 'checking food', 'finding shapes')"
+              },
+              context: {
+                type: "string", 
+                description: "Current conversation context or learning activity (e.g., 'practicing counting', 'learning colors', 'story time', 'meal time')"
+              }
             },
             required: ["reason"],
           },
