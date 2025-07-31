@@ -112,30 +112,186 @@ CREATE TABLE IF NOT EXISTS "users" (
 );
 --> statement-breakpoint
 
--- Add foreign key constraints
-ALTER TABLE "children" ADD CONSTRAINT "children_parent_id_parents_id_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."parents"("id") ON DELETE no action ON UPDATE no action;
+-- Add foreign key constraints (only if they don't exist)
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'children_parent_id_parents_id_fk'
+        AND table_name = 'children'
+        AND table_schema = 'public'
+    ) THEN
+        ALTER TABLE "children" ADD CONSTRAINT "children_parent_id_parents_id_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."parents"("id") ON DELETE no action ON UPDATE no action;
+    END IF;
+EXCEPTION
+    WHEN duplicate_object THEN 
+        RAISE NOTICE 'Foreign key constraint children_parent_id_parents_id_fk already exists, skipping...';
+END $$;
 --> statement-breakpoint
-ALTER TABLE "conversation_insights" ADD CONSTRAINT "conversation_insights_conversation_id_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") ON DELETE no action ON UPDATE no action;
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'conversation_insights_conversation_id_conversations_id_fk'
+        AND table_name = 'conversation_insights'
+        AND table_schema = 'public'
+    ) THEN
+        ALTER TABLE "conversation_insights" ADD CONSTRAINT "conversation_insights_conversation_id_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") ON DELETE no action ON UPDATE no action;
+    END IF;
+EXCEPTION
+    WHEN duplicate_object THEN 
+        RAISE NOTICE 'Foreign key constraint conversation_insights_conversation_id_conversations_id_fk already exists, skipping...';
+END $$;
 --> statement-breakpoint
-ALTER TABLE "conversations" ADD CONSTRAINT "conversations_child_id_children_id_fk" FOREIGN KEY ("child_id") REFERENCES "public"."children"("id") ON DELETE no action ON UPDATE no action;
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'conversations_child_id_children_id_fk'
+        AND table_name = 'conversations'
+        AND table_schema = 'public'
+    ) THEN
+        ALTER TABLE "conversations" ADD CONSTRAINT "conversations_child_id_children_id_fk" FOREIGN KEY ("child_id") REFERENCES "public"."children"("id") ON DELETE no action ON UPDATE no action;
+    END IF;
+EXCEPTION
+    WHEN duplicate_object THEN 
+        RAISE NOTICE 'Foreign key constraint conversations_child_id_children_id_fk already exists, skipping...';
+END $$;
 --> statement-breakpoint
-ALTER TABLE "learning_milestones" ADD CONSTRAINT "learning_milestones_child_id_children_id_fk" FOREIGN KEY ("child_id") REFERENCES "public"."children"("id") ON DELETE no action ON UPDATE no action;
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'learning_milestones_child_id_children_id_fk'
+        AND table_name = 'learning_milestones'
+        AND table_schema = 'public'
+    ) THEN
+        ALTER TABLE "learning_milestones" ADD CONSTRAINT "learning_milestones_child_id_children_id_fk" FOREIGN KEY ("child_id") REFERENCES "public"."children"("id") ON DELETE no action ON UPDATE no action;
+    END IF;
+EXCEPTION
+    WHEN duplicate_object THEN 
+        RAISE NOTICE 'Foreign key constraint learning_milestones_child_id_children_id_fk already exists, skipping...';
+END $$;
 --> statement-breakpoint
-ALTER TABLE "messages" ADD CONSTRAINT "messages_conversation_id_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") ON DELETE no action ON UPDATE no action;
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'messages_conversation_id_conversations_id_fk'
+        AND table_name = 'messages'
+        AND table_schema = 'public'
+    ) THEN
+        ALTER TABLE "messages" ADD CONSTRAINT "messages_conversation_id_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") ON DELETE no action ON UPDATE no action;
+    END IF;
+EXCEPTION
+    WHEN duplicate_object THEN 
+        RAISE NOTICE 'Foreign key constraint messages_conversation_id_conversations_id_fk already exists, skipping...';
+END $$;
 --> statement-breakpoint
-ALTER TABLE "notification_preferences" ADD CONSTRAINT "notification_preferences_parent_id_parents_id_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."parents"("id") ON DELETE no action ON UPDATE no action;
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'notification_preferences_parent_id_parents_id_fk'
+        AND table_name = 'notification_preferences'
+        AND table_schema = 'public'
+    ) THEN
+        ALTER TABLE "notification_preferences" ADD CONSTRAINT "notification_preferences_parent_id_parents_id_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."parents"("id") ON DELETE no action ON UPDATE no action;
+    END IF;
+EXCEPTION
+    WHEN duplicate_object THEN 
+        RAISE NOTICE 'Foreign key constraint notification_preferences_parent_id_parents_id_fk already exists, skipping...';
+END $$;
 --> statement-breakpoint
-ALTER TABLE "notifications" ADD CONSTRAINT "notifications_parent_id_parents_id_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."parents"("id") ON DELETE no action ON UPDATE no action;
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'notifications_parent_id_parents_id_fk'
+        AND table_name = 'notifications'
+        AND table_schema = 'public'
+    ) THEN
+        ALTER TABLE "notifications" ADD CONSTRAINT "notifications_parent_id_parents_id_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."parents"("id") ON DELETE no action ON UPDATE no action;
+    END IF;
+EXCEPTION
+    WHEN duplicate_object THEN 
+        RAISE NOTICE 'Foreign key constraint notifications_parent_id_parents_id_fk already exists, skipping...';
+END $$;
 --> statement-breakpoint
-ALTER TABLE "notifications" ADD CONSTRAINT "notifications_child_id_children_id_fk" FOREIGN KEY ("child_id") REFERENCES "public"."children"("id") ON DELETE no action ON UPDATE no action;
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'notifications_child_id_children_id_fk'
+        AND table_name = 'notifications'
+        AND table_schema = 'public'
+    ) THEN
+        ALTER TABLE "notifications" ADD CONSTRAINT "notifications_child_id_children_id_fk" FOREIGN KEY ("child_id") REFERENCES "public"."children"("id") ON DELETE no action ON UPDATE no action;
+    END IF;
+EXCEPTION
+    WHEN duplicate_object THEN 
+        RAISE NOTICE 'Foreign key constraint notifications_child_id_children_id_fk already exists, skipping...';
+END $$;
 --> statement-breakpoint
-ALTER TABLE "notifications" ADD CONSTRAINT "notifications_milestone_id_learning_milestones_id_fk" FOREIGN KEY ("milestone_id") REFERENCES "public"."learning_milestones"("id") ON DELETE no action ON UPDATE no action;
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'notifications_milestone_id_learning_milestones_id_fk'
+        AND table_name = 'notifications'
+        AND table_schema = 'public'
+    ) THEN
+        ALTER TABLE "notifications" ADD CONSTRAINT "notifications_milestone_id_learning_milestones_id_fk" FOREIGN KEY ("milestone_id") REFERENCES "public"."learning_milestones"("id") ON DELETE no action ON UPDATE no action;
+    END IF;
+EXCEPTION
+    WHEN duplicate_object THEN 
+        RAISE NOTICE 'Foreign key constraint notifications_milestone_id_learning_milestones_id_fk already exists, skipping...';
+END $$;
 --> statement-breakpoint
-ALTER TABLE "profile_update_suggestions" ADD CONSTRAINT "profile_update_suggestions_child_id_children_id_fk" FOREIGN KEY ("child_id") REFERENCES "public"."children"("id") ON DELETE no action ON UPDATE no action;
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'profile_update_suggestions_child_id_children_id_fk'
+        AND table_name = 'profile_update_suggestions'
+        AND table_schema = 'public'
+    ) THEN
+        ALTER TABLE "profile_update_suggestions" ADD CONSTRAINT "profile_update_suggestions_child_id_children_id_fk" FOREIGN KEY ("child_id") REFERENCES "public"."children"("id") ON DELETE no action ON UPDATE no action;
+    END IF;
+EXCEPTION
+    WHEN duplicate_object THEN 
+        RAISE NOTICE 'Foreign key constraint profile_update_suggestions_child_id_children_id_fk already exists, skipping...';
+END $$;
 --> statement-breakpoint
-ALTER TABLE "profile_update_suggestions" ADD CONSTRAINT "profile_update_suggestions_conversation_id_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") ON DELETE no action ON UPDATE no action;
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'profile_update_suggestions_conversation_id_conversations_id_fk'
+        AND table_name = 'profile_update_suggestions'
+        AND table_schema = 'public'
+    ) THEN
+        ALTER TABLE "profile_update_suggestions" ADD CONSTRAINT "profile_update_suggestions_conversation_id_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") ON DELETE no action ON UPDATE no action;
+    END IF;
+EXCEPTION
+    WHEN duplicate_object THEN 
+        RAISE NOTICE 'Foreign key constraint profile_update_suggestions_conversation_id_conversations_id_fk already exists, skipping...';
+END $$;
 --> statement-breakpoint
-ALTER TABLE "recordings" ADD CONSTRAINT "recordings_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'recordings_user_id_users_id_fk'
+        AND table_name = 'recordings'
+        AND table_schema = 'public'
+    ) THEN
+        ALTER TABLE "recordings" ADD CONSTRAINT "recordings_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;
+    END IF;
+EXCEPTION
+    WHEN duplicate_object THEN 
+        RAISE NOTICE 'Foreign key constraint recordings_user_id_users_id_fk already exists, skipping...';
+END $$;
 ```
 
 ```sql
