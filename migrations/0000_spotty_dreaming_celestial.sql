@@ -112,10 +112,36 @@ CREATE TABLE IF NOT EXISTS "users" (
 );
 --> statement-breakpoint
 
--- Add unique constraints
-ALTER TABLE "parents" ADD CONSTRAINT "parents_email_unique" UNIQUE("email");
+-- Add unique constraints only if they don't exist
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'parents_email_unique'
+        AND table_name = 'parents'
+        AND table_schema = 'public'
+    ) THEN
+        ALTER TABLE "parents" ADD CONSTRAINT "parents_email_unique" UNIQUE("email");
+    END IF;
+EXCEPTION
+    WHEN duplicate_object THEN 
+        RAISE NOTICE 'Unique constraint parents_email_unique already exists, skipping...';
+END $$;
 --> statement-breakpoint
-ALTER TABLE "users" ADD CONSTRAINT "users_username_unique" UNIQUE("username");
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'users_username_unique'
+        AND table_name = 'users'
+        AND table_schema = 'public'
+    ) THEN
+        ALTER TABLE "users" ADD CONSTRAINT "users_username_unique" UNIQUE("username");
+    END IF;
+EXCEPTION
+    WHEN duplicate_object THEN 
+        RAISE NOTICE 'Unique constraint users_username_unique already exists, skipping...';
+END $$;
 --> statement-breakpoint
 
 -- Add foreign key constraints
