@@ -2087,7 +2087,7 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
 
   app.get("/api/conversations/:conversationId/captured-frames", async (req: Request, res: Response) => {
     try {
-      const conversationId = parseInt(req.params.conversationId);
+      const conversationId = req.params.conversationId;
 
       const frames = await storage.getCapturedFramesByConversation(conversationId);
 
