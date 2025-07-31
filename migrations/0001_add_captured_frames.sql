@@ -11,13 +11,20 @@ CREATE TABLE IF NOT EXISTS "captured_frames" (
 );
 --> statement-breakpoint
 
--- Add foreign key constraints
-ALTER TABLE "captured_frames" ADD CONSTRAINT "captured_frames_child_id_children_id_fk" FOREIGN KEY ("child_id") REFERENCES "public"."children"("id") ON DELETE no action ON UPDATE no action;
---> statement-breakpoint
-ALTER TABLE "captured_frames" ADD CONSTRAINT "captured_frames_conversation_id_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") ON DELETE no action ON UPDATE no action;
+-- Add foreign key constraints with existence checks
+ALTER TABLE "captured_frames" 
+ADD CONSTRAINT IF NOT EXISTS "captured_frames_child_id_children_id_fk" 
+FOREIGN KEY ("child_id") REFERENCES "public"."children"("id") 
+ON DELETE no action ON UPDATE no action;
 --> statement-breakpoint
 
--- Add indexes for better query performance
+ALTER TABLE "captured_frames" 
+ADD CONSTRAINT IF NOT EXISTS "captured_frames_conversation_id_conversations_id_fk" 
+FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") 
+ON DELETE no action ON UPDATE no action;
+--> statement-breakpoint
+
+-- Add indexes for better query performance with existence checks
 CREATE INDEX IF NOT EXISTS "captured_frames_child_id_idx" ON "captured_frames" ("child_id");
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "captured_frames_conversation_id_idx" ON "captured_frames" ("conversation_id");

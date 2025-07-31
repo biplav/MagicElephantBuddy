@@ -1,3 +1,4 @@
+
 CREATE TABLE IF NOT EXISTS "children" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"parent_id" integer NOT NULL,
@@ -112,33 +113,102 @@ CREATE TABLE IF NOT EXISTS "users" (
 );
 --> statement-breakpoint
 
--- Add foreign key constraints (using direct ALTER TABLE statements)
-ALTER TABLE "children" ADD CONSTRAINT "children_parent_id_parents_id_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."parents"("id") ON DELETE no action ON UPDATE no action;
+-- Add unique constraints with existence checks
+CREATE UNIQUE INDEX IF NOT EXISTS "parents_email_unique" ON "parents" ("email");
 --> statement-breakpoint
-ALTER TABLE "conversation_insights" ADD CONSTRAINT "conversation_insights_conversation_id_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") ON DELETE no action ON UPDATE no action;
+CREATE UNIQUE INDEX IF NOT EXISTS "users_username_unique" ON "users" ("username");
 --> statement-breakpoint
-ALTER TABLE "conversations" ADD CONSTRAINT "conversations_child_id_children_id_fk" FOREIGN KEY ("child_id") REFERENCES "public"."children"("id") ON DELETE no action ON UPDATE no action;
---> statement-breakpoint
-ALTER TABLE "learning_milestones" ADD CONSTRAINT "learning_milestones_child_id_children_id_fk" FOREIGN KEY ("child_id") REFERENCES "public"."children"("id") ON DELETE no action ON UPDATE no action;
---> statement-breakpoint
-ALTER TABLE "messages" ADD CONSTRAINT "messages_conversation_id_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") ON DELETE no action ON UPDATE no action;
---> statement-breakpoint
-ALTER TABLE "notification_preferences" ADD CONSTRAINT "notification_preferences_parent_id_parents_id_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."parents"("id") ON DELETE no action ON UPDATE no action;
---> statement-breakpoint
-ALTER TABLE "notifications" ADD CONSTRAINT "notifications_parent_id_parents_id_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."parents"("id") ON DELETE no action ON UPDATE no action;
---> statement-breakpoint
-ALTER TABLE "notifications" ADD CONSTRAINT "notifications_child_id_children_id_fk" FOREIGN KEY ("child_id") REFERENCES "public"."children"("id") ON DELETE no action ON UPDATE no action;
---> statement-breakpoint
-ALTER TABLE "notifications" ADD CONSTRAINT "notifications_milestone_id_learning_milestones_id_fk" FOREIGN KEY ("milestone_id") REFERENCES "public"."learning_milestones"("id") ON DELETE no action ON UPDATE no action;
---> statement-breakpoint
-ALTER TABLE "profile_update_suggestions" ADD CONSTRAINT "profile_update_suggestions_child_id_children_id_fk" FOREIGN KEY ("child_id") REFERENCES "public"."children"("id") ON DELETE no action ON UPDATE no action;
---> statement-breakpoint
-ALTER TABLE "profile_update_suggestions" ADD CONSTRAINT "profile_update_suggestions_conversation_id_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") ON DELETE no action ON UPDATE no action;
---> statement-breakpoint
-ALTER TABLE "recordings" ADD CONSTRAINT "recordings_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;
-```
 
-```sql
-ALTER TABLE "parents" ADD CONSTRAINT "parents_email_unique" UNIQUE("email");
+-- Add foreign key constraints with existence checks
+-- Children -> Parents
+SELECT CASE 
+    WHEN NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'children_parent_id_parents_id_fk'
+        AND table_name = 'children'
+    ) 
+    THEN 1 
+    ELSE 0 
+END AS add_children_fk;
+
+ALTER TABLE "children" 
+ADD CONSTRAINT "children_parent_id_parents_id_fk" 
+FOREIGN KEY ("parent_id") REFERENCES "public"."parents"("id") 
+ON DELETE no action ON UPDATE no action;
 --> statement-breakpoint
-ALTER TABLE "users" ADD CONSTRAINT "users_username_unique" UNIQUE("username");
+
+-- Conversation Insights -> Conversations
+ALTER TABLE "conversation_insights" 
+ADD CONSTRAINT IF NOT EXISTS "conversation_insights_conversation_id_conversations_id_fk" 
+FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") 
+ON DELETE no action ON UPDATE no action;
+--> statement-breakpoint
+
+-- Conversations -> Children
+ALTER TABLE "conversations" 
+ADD CONSTRAINT IF NOT EXISTS "conversations_child_id_children_id_fk" 
+FOREIGN KEY ("child_id") REFERENCES "public"."children"("id") 
+ON DELETE no action ON UPDATE no action;
+--> statement-breakpoint
+
+-- Learning Milestones -> Children
+ALTER TABLE "learning_milestones" 
+ADD CONSTRAINT IF NOT EXISTS "learning_milestones_child_id_children_id_fk" 
+FOREIGN KEY ("child_id") REFERENCES "public"."children"("id") 
+ON DELETE no action ON UPDATE no action;
+--> statement-breakpoint
+
+-- Messages -> Conversations
+ALTER TABLE "messages" 
+ADD CONSTRAINT IF NOT EXISTS "messages_conversation_id_conversations_id_fk" 
+FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") 
+ON DELETE no action ON UPDATE no action;
+--> statement-breakpoint
+
+-- Notification Preferences -> Parents
+ALTER TABLE "notification_preferences" 
+ADD CONSTRAINT IF NOT EXISTS "notification_preferences_parent_id_parents_id_fk" 
+FOREIGN KEY ("parent_id") REFERENCES "public"."parents"("id") 
+ON DELETE no action ON UPDATE no action;
+--> statement-breakpoint
+
+-- Notifications -> Parents
+ALTER TABLE "notifications" 
+ADD CONSTRAINT IF NOT EXISTS "notifications_parent_id_parents_id_fk" 
+FOREIGN KEY ("parent_id") REFERENCES "public"."parents"("id") 
+ON DELETE no action ON UPDATE no action;
+--> statement-breakpoint
+
+-- Notifications -> Children
+ALTER TABLE "notifications" 
+ADD CONSTRAINT IF NOT EXISTS "notifications_child_id_children_id_fk" 
+FOREIGN KEY ("child_id") REFERENCES "public"."children"("id") 
+ON DELETE no action ON UPDATE no action;
+--> statement-breakpoint
+
+-- Notifications -> Learning Milestones
+ALTER TABLE "notifications" 
+ADD CONSTRAINT IF NOT EXISTS "notifications_milestone_id_learning_milestones_id_fk" 
+FOREIGN KEY ("milestone_id") REFERENCES "public"."learning_milestones"("id") 
+ON DELETE no action ON UPDATE no action;
+--> statement-breakpoint
+
+-- Profile Update Suggestions -> Children
+ALTER TABLE "profile_update_suggestions" 
+ADD CONSTRAINT IF NOT EXISTS "profile_update_suggestions_child_id_children_id_fk" 
+FOREIGN KEY ("child_id") REFERENCES "public"."children"("id") 
+ON DELETE no action ON UPDATE no action;
+--> statement-breakpoint
+
+-- Profile Update Suggestions -> Conversations
+ALTER TABLE "profile_update_suggestions" 
+ADD CONSTRAINT IF NOT EXISTS "profile_update_suggestions_conversation_id_conversations_id_fk" 
+FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") 
+ON DELETE no action ON UPDATE no action;
+--> statement-breakpoint
+
+-- Recordings -> Users
+ALTER TABLE "recordings" 
+ADD CONSTRAINT IF NOT EXISTS "recordings_user_id_users_id_fk" 
+FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") 
+ON DELETE no action ON UPDATE no action;
