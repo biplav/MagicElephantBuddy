@@ -112,38 +112,6 @@ CREATE TABLE IF NOT EXISTS "users" (
 );
 --> statement-breakpoint
 
--- Add unique constraints only if they don't exist
-DO $$ 
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.table_constraints 
-        WHERE constraint_name = 'parents_email_unique'
-        AND table_name = 'parents'
-        AND table_schema = 'public'
-    ) THEN
-        ALTER TABLE "parents" ADD CONSTRAINT "parents_email_unique" UNIQUE("email");
-    END IF;
-EXCEPTION
-    WHEN duplicate_object THEN 
-        RAISE NOTICE 'Unique constraint parents_email_unique already exists, skipping...';
-END $$;
---> statement-breakpoint
-DO $$ 
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.table_constraints 
-        WHERE constraint_name = 'users_username_unique'
-        AND table_name = 'users'
-        AND table_schema = 'public'
-    ) THEN
-        ALTER TABLE "users" ADD CONSTRAINT "users_username_unique" UNIQUE("username");
-    END IF;
-EXCEPTION
-    WHEN duplicate_object THEN 
-        RAISE NOTICE 'Unique constraint users_username_unique already exists, skipping...';
-END $$;
---> statement-breakpoint
-
 -- Add foreign key constraints
 ALTER TABLE "children" ADD CONSTRAINT "children_parent_id_parents_id_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."parents"("id") ON DELETE no action ON UPDATE no action;
 --> statement-breakpoint
@@ -168,3 +136,9 @@ ALTER TABLE "profile_update_suggestions" ADD CONSTRAINT "profile_update_suggesti
 ALTER TABLE "profile_update_suggestions" ADD CONSTRAINT "profile_update_suggestions_conversation_id_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") ON DELETE no action ON UPDATE no action;
 --> statement-breakpoint
 ALTER TABLE "recordings" ADD CONSTRAINT "recordings_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;
+```
+
+```sql
+ALTER TABLE "parents" ADD CONSTRAINT "parents_email_unique" UNIQUE("email");
+--> statement-breakpoint
+ALTER TABLE "users" ADD CONSTRAINT "users_username_unique" UNIQUE("username");
