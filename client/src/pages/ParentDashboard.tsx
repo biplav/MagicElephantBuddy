@@ -87,13 +87,17 @@ const ParentDashboard = memo(() => {
     if (conversationFrames[conversationId]) return; // Already fetched
     
     try {
+      console.log(`Fetching frames for conversation ${conversationId}`);
       const response = await fetch(`/api/conversations/${conversationId}/captured-frames`);
       if (response.ok) {
         const frames = await response.json();
+        console.log(`Received ${frames.length} frames for conversation ${conversationId}:`, frames);
         setConversationFrames(prev => ({
           ...prev,
           [conversationId]: frames
         }));
+      } else {
+        console.error(`Failed to fetch frames, status: ${response.status}`);
       }
     } catch (error) {
       console.error('Failed to fetch conversation frames:', error);
@@ -419,14 +423,12 @@ const ParentDashboard = memo(() => {
                                       </div>
 
                                       {/* Frame image */}
-                                      {frame.hasFrameData && (
-                                        <div className="mb-2">
-                                          <CapturedFrameDisplay 
-                                            frameData={`/api/captured-frames/${frame.id}/image`}
-                                            className="max-w-[200px] max-h-[150px] mx-auto"
-                                          />
-                                        </div>
-                                      )}
+                                      <div className="mb-2">
+                                        <CapturedFrameDisplay 
+                                          frameData={`/api/captured-frames/${frame.id}/image`}
+                                          className="max-w-[200px] max-h-[150px] mx-auto rounded-lg overflow-hidden"
+                                        />
+                                      </div>
 
                                       {/* Analysis */}
                                       <div className="bg-white rounded p-2 border border-purple-100">
