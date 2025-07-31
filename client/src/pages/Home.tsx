@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, memo } from "react";
 import { Button } from "@/components/ui/button";
-import { Settings, Bug, Speaker, User, Brain } from "lucide-react";
+import { Settings, Bug, Speaker, User, Brain, Eye, EyeOff } from "lucide-react";
 import { Link } from "wouter";
 import Elephant from "@/components/Elephant";
 import PermissionModal from "@/components/PermissionModal";
@@ -1144,15 +1144,36 @@ const Home = memo(() => {
 
               <div className="w-full px-3 py-2 sm:px-4 sm:py-3 bg-white bg-opacity-80 rounded-t-3xl shadow-lg flex-shrink-0 max-h-40">
                 <div className="flex flex-col items-center space-y-2 sm:space-y-3">
-                  <p className="text-primary font-medium text-base sm:text-lg text-center px-2">
-                    {currentRecorder.isProcessing
-                      ? "Appu is thinking..."
-                      : elephantState === "speaking"
-                        ? "Appu is speaking..."
-                        : currentRecorder.isRecording
-                          ? "Appu is listening..."
-                          : "Appu is getting ready to listen..."}
-                  </p>
+                  <div className="flex items-center justify-center gap-3 mb-2">
+                    <p className="text-primary font-medium text-base sm:text-lg text-center px-2">
+                      {currentRecorder.isProcessing
+                        ? "Appu is thinking..."
+                        : elephantState === "speaking"
+                          ? "Appu is speaking..."
+                          : currentRecorder.isRecording
+                            ? "Appu is listening..."
+                            : "Appu is getting ready to listen..."}
+                    </p>
+                    
+                    {/* Eye Toggle Button */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEnableVideo(!enableVideo)}
+                      className={`p-2 rounded-full transition-colors ${
+                        enableVideo 
+                          ? 'bg-blue-100 hover:bg-blue-200 text-blue-600' 
+                          : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+                      }`}
+                      title={enableVideo ? 'Disable Appu\'s eyes' : 'Enable Appu\'s eyes'}
+                    >
+                      {enableVideo ? (
+                        <Eye className="w-5 h-5" />
+                      ) : (
+                        <EyeOff className="w-5 h-5" />
+                      )}
+                    </Button>
+                  </div>
 
                   {/* Video status indicator when enabled */}
                   {enableVideo && realtimeAudio && (
@@ -1545,29 +1566,7 @@ const Home = memo(() => {
                     </div>
                   </div>
 
-                  <div className="flex flex-row gap-2 mt-2 items-center justify-between bg-gray-700 p-2 rounded">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={`w-3 h-3 rounded-full ${enableVideo ? "bg-blue-500" : "bg-red-500"}`}
-                      ></div>
-                      <span className="text-sm">Enable My Eyes (Video):</span>
-                    </div>
-                    <div className="flex items-center">
-                      <span className="text-xs mr-2">
-                        {enableVideo ? "Enabled" : "Disabled"}
-                      </span>
-                      <Button
-                        onClick={() => setEnableVideo(!enableVideo)}
-                        className={`px-3 py-1 rounded text-xs ${
-                          enableVideo
-                            ? "bg-blue-700 hover:bg-blue-800"
-                            : "bg-gray-500 hover:bg-gray-600"
-                        }`}
-                      >
-                        {enableVideo ? "Disable" : "Enable"}
-                      </Button>
-                    </div>
-                  </div>
+                  
                 </div>
               </div>
             </div>
