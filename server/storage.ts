@@ -36,7 +36,7 @@ export interface IStorage {
   getConversation(conversationId: number): Promise<Conversation | undefined>;
   getConversationsByChild(childId: number, limit?: number): Promise<Conversation[]>;
   getChildConversations(childId: number, limit?: number): Promise<Conversation[]>;
-  getCurrentConversation(childId: number): Promise<Conversation | undefined>;
+  getCurrentConversation(childId: string | number): Promise<Conversation | undefined>;
 
   // Message management
   createMessage(message: InsertMessage): Promise<Message>;
@@ -82,8 +82,8 @@ export interface IStorage {
   // Captured frames
   createCapturedFrame(frame: InsertCapturedFrame): Promise<CapturedFrame>;
   getCapturedFramesByChild(childId: number, limit?: number): Promise<CapturedFrame[]>;
-  getCapturedFramesByConversation(conversationId: number): Promise<CapturedFrame[]>;
-  getCapturedFrame(frameId: number): Promise<CapturedFrame | undefined>;
+  getCapturedFramesByConversation(conversationId: string | number): Promise<CapturedFrame[]>;
+  getCapturedFrame(frameId: string | number): Promise<CapturedFrame | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -172,7 +172,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Get the current active conversation (one without endTime)
-  async getCurrentConversation(childId: number): Promise<Conversation | null> {
+  async getCurrentConversation(childId: string | number): Promise<Conversation | null> {
     const result = await db
       .select()
       .from(conversations)
@@ -505,7 +505,7 @@ export class DatabaseStorage implements IStorage {
       .limit(limit);
   }
 
-  async getCapturedFramesByConversation(conversationId: number): Promise<CapturedFrame[]> {
+  async getCapturedFramesByConversation(conversationId: string | number): Promise<CapturedFrame[]> {
     return await db
       .select()
       .from(capturedFrames)
@@ -516,7 +516,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(capturedFrames.timestamp));
   }
 
-  async getCapturedFrame(frameId: number): Promise<CapturedFrame | undefined> {
+  async getCapturedFrame(frameId: string | number): Promise<CapturedFrame | undefined> {
     const [frame] = await db
       .select()
       .from(capturedFrames)

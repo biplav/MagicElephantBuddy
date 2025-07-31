@@ -612,7 +612,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/children/:childId/conversations",
     async (req: Request, res: Response) => {
       try {
-        const childId = parseInt(req.params.childId);
+        const childId = req.params.childId;
         const limit = parseInt(req.query.limit as string) || 10;
         const conversations = await storage.getConversationsByChild(
           childId,
@@ -844,8 +844,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (childId && analysis) {
         try {
           // Get or create a conversation for this child if none provided
-          let actualConversationId = conversationId ? parseInt(conversationId) : null;
-          
+          let actualConversationId = conversationId;
+
           if (!actualConversationId) {
             // Try to get current active conversation for this child
             const currentConversation = await storage.getCurrentConversation(childId);
@@ -951,7 +951,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           type: "function",
           name: "getEyesTool",
           description:
-            "Use this tool when the child is showing, pointing to, or talking about something visual that you should look at. This tool analyzes what the child is showing through their camera. Take the analysis from the tool to engage or respond the child.",
+            "Use this tool when the child is showing, pointing to, or talking about something visual that youshould look at. This tool analyzes what the child is showing through their camera. Take the analysis from the tool to engage or respond the child.",
           parameters: {
             type: "object",
             properties: {
@@ -1045,7 +1045,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/children/:childId/milestones",
     async (req: Request, res: Response) => {
       try {
-        const childId = parseInt(req.params.childId);
+        const childId = req.params.childId;
         const milestones = await storage.getMilestonesByChild(childId);
         res.json(milestones);
       } catch (error) {
@@ -1919,6 +1919,7 @@ IMPORTANT CAPABILITIES:
 1. Answer questions about children learning progress using authentic data
 2. Analyze conversation topics and learning patterns
 3. Help parents update child profiles when they provide new information
+```
 4. Process profile update requests and return structured data for implementation
 
 PROFILE UPDATE GUIDELINES:
@@ -2066,7 +2067,7 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
   // Captured frames endpoints for parent viewing
   app.get("/api/children/:childId/captured-frames", async (req: Request, res: Response) => {
     try {
-      const childId = parseInt(req.params.childId);
+      const childId = req.params.childId;
       const limit = parseInt(req.query.limit as string) || 20;
 
       const frames = await storage.getCapturedFramesByChild(childId, limit);
@@ -2087,7 +2088,7 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
 
   app.get("/api/conversations/:conversationId/captured-frames", async (req: Request, res: Response) => {
     try {
-      const conversationId = parseInt(req.params.conversationId);
+      const conversationId = req.params.conversationId;
 
       const frames = await storage.getCapturedFramesByConversation(conversationId);
 
@@ -2107,7 +2108,7 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
 
   app.get("/api/captured-frames/:frameId", async (req: Request, res: Response) => {
     try {
-      const frameId = parseInt(req.params.frameId);
+      const frameId = req.params.frameId;
 
       const frame = await storage.getCapturedFrame(frameId);
 
@@ -2122,10 +2123,9 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
     }
   });
 
-  app.get("/api/captured-frames/:frameId/image", async (req: Request, res: Response) => {
+  app.get('/api/captured-frames/:frameId/image', async (req, res) => {
     try {
-      const frameId = parseInt(req.params.frameId);
-
+      const frameId = req.params.frameId;
       const frame = await storage.getCapturedFrame(frameId);
 
       if (!frame || !frame.frameData) {
