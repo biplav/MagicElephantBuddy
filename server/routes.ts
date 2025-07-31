@@ -843,9 +843,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Store the captured frame in database for parent viewing
       if (childId && analysis) {
         try {
+          // Get or create a conversation for this child if none provided
+          let actualConversationId = conversationId ? parseInt(conversationId) : null;
+          
+          if (!actualConversationId) {
+            // Try to get current active conversation for this child
+            const currentConversation = await storage.getCurrentConversation(parseInt(childId));
+            if (currentConversation) {
+              actualConversationId = currentConversation.id;
+              console.log(`📸 Using active conversation ${actualConversationId} for frame storage`);
+            } else {
+              // Create a new conversation if none exists
+              const newConversation = await storage.createConversation({
+                childId: parseInt(childId)
+              });
+              actualConversationId = newConversation.id;
+              console.log(`📸 Created new conversation ${actualConversationId} for frame storage`);
+            }
+          }
+
           const capturedFrame = await storage.createCapturedFrame({
             childId: parseInt(childId),
-            conversationId: conversationId ? parseInt(conversationId) : null,
+            conversationId: actualConversationId,
             frameData: frameData,
             analysis: analysis,
             reason: reason || null,
@@ -854,7 +873,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             isVisible: true
           });
 
-          console.log(`📸 Stored captured frame ${capturedFrame.id} for child ${childId}`);
+          console.log(`📸 Stored captured frame ${capturedFrame.id} for child ${childId} in conversation ${actualConversationId}`);
         } catch (storageError) {
           console.error("❌ Failed to store captured frame:", storageError);
           // Don't fail the analysis if storage fails
