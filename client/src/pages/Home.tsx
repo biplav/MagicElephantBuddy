@@ -360,6 +360,29 @@ const Home = memo(() => {
       disconnect();
     }
 
+    // Clean up camera/video resources
+    if (realtimeAudio) {
+      // For OpenAI connection
+      if (modelType === 'openai' && realtimeAudio.openaiConnection?.mediaCapture) {
+        try {
+          await realtimeAudio.openaiConnection.mediaCapture.cleanup();
+          console.log("✅ OpenAI media capture cleaned up");
+        } catch (error) {
+          console.error("❌ Error cleaning up OpenAI media capture:", error);
+        }
+      }
+      
+      // For Gemini connection
+      if (modelType === 'gemini' && realtimeAudio.mediaCapture) {
+        try {
+          await realtimeAudio.mediaCapture.cleanup();
+          console.log("✅ Gemini media capture cleaned up");
+        } catch (error) {
+          console.error("❌ Error cleaning up Gemini media capture:", error);
+        }
+      }
+    }
+
     // Close conversation in database
     try {
       console.log("Closing conversation in database");
@@ -840,6 +863,29 @@ const Home = memo(() => {
       disconnect();
     }
 
+    // Clean up camera/video resources
+    if (realtimeAudio) {
+      // For OpenAI connection
+      if (modelType === 'openai' && realtimeAudio.openaiConnection?.mediaCapture) {
+        try {
+          await realtimeAudio.openaiConnection.mediaCapture.cleanup();
+          console.log("✅ OpenAI media capture cleaned up");
+        } catch (error) {
+          console.error("❌ Error cleaning up OpenAI media capture:", error);
+        }
+      }
+      
+      // For Gemini connection
+      if (modelType === 'gemini' && realtimeAudio.mediaCapture) {
+        try {
+          await realtimeAudio.mediaCapture.cleanup();
+          console.log("✅ Gemini media capture cleaned up");
+        } catch (error) {
+          console.error("❌ Error cleaning up Gemini media capture:", error);
+        }
+      }
+    }
+
     // Close the current conversation in the database
     try {
       const response = await fetch('/api/close-conversation', {
@@ -861,7 +907,7 @@ const Home = memo(() => {
     } catch (error) {
       console.error("❌ Error closing conversation:", error);
     }
-  }, [realtimeStopRecording, disconnect, selectedChildId]);
+  }, [realtimeStopRecording, disconnect, selectedChildId, realtimeAudio, modelType]);
 
   return (
     <div className="min-h-screen flex flex-col relative">
