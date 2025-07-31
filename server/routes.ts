@@ -612,7 +612,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/children/:childId/conversations",
     async (req: Request, res: Response) => {
       try {
-        const childId = req.params.childId;
+        const childId = parseInt(req.params.childId);
         const limit = parseInt(req.query.limit as string) || 10;
         const conversations = await storage.getConversationsByChild(
           childId,
@@ -1045,7 +1045,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/children/:childId/milestones",
     async (req: Request, res: Response) => {
       try {
-        const childId = req.params.childId;
+        const childId = parseInt(req.params.childId);
         const milestones = await storage.getMilestonesByChild(childId);
         res.json(milestones);
       } catch (error) {
@@ -1109,10 +1109,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/parents/:parentId/notifications",
     async (req: Request, res: Response) => {
       try {
-        const parentId = parseInt(req.params.parentId);
+        const parentId = req.params.parentId;
         const unreadOnly = req.query.unreadOnly === "true";
         const notifications = await storage.getNotificationsByParent(
-          parentId,
+          parseInt(parentId),
           unreadOnly,
         );
         res.json(notifications);
@@ -1154,8 +1154,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/parents/:parentId/notifications/read-all",
     async (req: Request, res: Response) => {
       try {
-        const parentId = parseInt(req.params.parentId);
-        await storage.markAllNotificationsAsRead(parentId);
+        const parentId = req.params.parentId;
+        await storage.markAllNotificationsAsRead(parseInt(parentId));
         res.json({ message: "All notifications marked as read" });
       } catch (error) {
         console.error("Error marking all notifications as read:", error);
@@ -1171,8 +1171,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/parents/:parentId/notification-preferences",
     async (req: Request, res: Response) => {
       try {
-        const parentId = parseInt(req.params.parentId);
-        const preferences = await storage.getNotificationPreferences(parentId);
+        const parentId = req.params.parentId;
+        const preferences = await storage.getNotificationPreferences(parseInt(parentId));
         res.json(preferences);
       } catch (error) {
         console.error("Error fetching notification preferences:", error);
@@ -1263,9 +1263,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/parents/:parentId/notification-preferences",
     async (req: Request, res: Response) => {
       try {
-        const parentId = parseInt(req.params.parentId);
+        const parentId = req.params.parentId;
         const preferences = await storage.updateNotificationPreferences(
-          parentId,
+          parseInt(parentId),
           req.body,
         );
         res.json(preferences);
@@ -1335,11 +1335,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/parents/:parentId/profile-suggestions",
     async (req: Request, res: Response) => {
       try {
-        const parentId = parseInt(req.params.parentId);
+        const parentId = req.params.parentId;
         const status = req.query.status as string;
 
         const suggestions = await storage.getProfileUpdateSuggestionsByParent(
-          parentId,
+          parseInt(parentId),
           status,
         );
         res.json(suggestions);
@@ -1737,7 +1737,7 @@ Answer the parent's question using this data. Be specific, helpful, and encourag
           return res.status(400).json({ error: "Updates object is required" });
         }
 
-        const child = await storage.getChild(childId);
+        const child = await storage.getChild(parseInt(childId));
         if (!child) {
           return res.status(404).json({ error: "Child not found" });
         }
@@ -1791,7 +1791,7 @@ Answer the parent's question using this data. Be specific, helpful, and encourag
         }
 
         // Update the child profile
-        await storage.updateChildProfile(childId, updatedProfile);
+        await storage.updateChildProfile(parseInt(childId), updatedProfile);
 
         res.json({
           message: "Profile updated successfully",
@@ -2066,7 +2066,7 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
   // Captured frames endpoints for parent viewing
   app.get("/api/children/:childId/captured-frames", async (req: Request, res: Response) => {
     try {
-      const childId = req.params.childId;
+      const childId = parseInt(req.params.childId);
       const limit = parseInt(req.query.limit as string) || 20;
 
       const frames = await storage.getCapturedFramesByChild(childId, limit);
@@ -2087,7 +2087,7 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
 
   app.get("/api/conversations/:conversationId/captured-frames", async (req: Request, res: Response) => {
     try {
-      const conversationId = req.params.conversationId;
+      const conversationId = parseInt(req.params.conversationId);
 
       const frames = await storage.getCapturedFramesByConversation(conversationId);
 
