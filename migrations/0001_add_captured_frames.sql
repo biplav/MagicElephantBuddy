@@ -1,5 +1,5 @@
 
--- Add captured frames table for storing analyzed video frames
+-- Add captured frames table for storing analyzed video frames (only if it doesn't exist)
 CREATE TABLE IF NOT EXISTS "captured_frames" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"child_id" integer NOT NULL,
