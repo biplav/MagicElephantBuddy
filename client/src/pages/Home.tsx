@@ -371,7 +371,7 @@ const Home = memo(() => {
           console.error("❌ Error cleaning up OpenAI media capture:", error);
         }
       }
-      
+
       // For Gemini connection
       if (modelType === 'gemini' && realtimeAudio.mediaCapture) {
         try {
@@ -460,8 +460,8 @@ const Home = memo(() => {
     };
   }, [appState, handleStopSession]);
 
-  // Only connect when explicitly requested, not automatically
-  // Removed automatic connection on toggle
+  // Camera initialization will happen when conversation starts
+  // No automatic camera initialization on page load
 
   useEffect(() => {
     if (useRealtimeAPI && isConnected && appState === "interaction") {
@@ -837,77 +837,48 @@ const Home = memo(() => {
   };
 
   // Handle video permissions and initialization
-  useEffect(() => {
-    if (enableVideo && realtimeAudio) {
-      // For OpenAI connection, ensure media capture is properly initialized
-      if (modelType === 'openai' && realtimeAudio.openaiConnection?.mediaCapture && !realtimeAudio.openaiConnection.mediaCapture.hasVideoPermission) {
-        realtimeAudio.openaiConnection.mediaCapture.requestPermissions().catch((error) => {
-          console.error('Failed to request video permission for OpenAI:', error);
-        });
-      }
-      // For Gemini connection, initialize media capture
-      else if (modelType === 'gemini' && !realtimeAudio.mediaCapture?.hasVideoPermission) {
-        realtimeAudio.mediaCapture?.requestPermissions().catch((error) => {
-          console.error('Failed to request video permission for Gemini:', error);
-        });
-      }
-    }
-  }, [enableVideo, realtimeAudio, modelType]);
-
-  const handleStopTalking = useCallback(async () => {
-    console.log("🛑 Stop talking clicked");
-    if (realtimeStopRecording) {
-      realtimeStopRecording();
-    }
-    if (disconnect) {
-      disconnect();
+  const handleStartConversation = useCallback(async () => {
+    if (!selectedChildId) {
+      console.error('Please select a child first');
+      return;
     }
 
-    // Clean up camera/video resources
-    if (realtimeAudio) {
-      // For OpenAI connection
-      if (modelType === 'openai' && realtimeAudio.openaiConnection?.mediaCapture) {
-        try {
-          await realtimeAudio.openaiConnection.mediaCapture.cleanup();
-          console.log("✅ OpenAI media capture cleaned up");
-        } catch (error) {
-          console.error("❌ Error cleaning up OpenAI media capture:", error);
-        }
-      }
-      
-      // For Gemini connection
-      if (modelType === 'gemini' && realtimeAudio.mediaCapture) {
-        try {
-          await realtimeAudio.mediaCapture.cleanup();
-          console.log("✅ Gemini media capture cleaned up");
-        } catch (error) {
-          console.error("❌ Error cleaning up Gemini media capture:", error);
-        }
-      }
-    }
-
-    // Close the current conversation in the database
     try {
-      const response = await fetch('/api/close-conversation', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          childId: selectedChildId || 1
-        }),
-      });
-
-      const result = await response.json();
-      if (response.ok) {
-        console.log("✅ Conversation closed:", result);
-      } else {
-        console.error("❌ Failed to close conversation:", result.error);
+      // Initialize camera when starting conversation
+      if (enableVideo) {
+        try {
+          if (modelType === 'openai') {
+            // For OpenAI, camera will be handled by the realtime connection
+            console.log('Camera will be initialized with OpenAI connection');
+          } else if (modelType === 'gemini') {
+            // For Gemini, use standalone media capture
+            await mediaCapture.requestPermissions();
+            console.log('Gemini camera initialized for conversation');
+          }
+        } catch (cameraError) {
+          console.error('Failed to initialize camera:', cameraError);
+          // Continue with conversation even if camera fails
+        }
       }
     } catch (error) {
-      console.error("❌ Error closing conversation:", error);
+      console.error('Failed to start conversation:', error);
     }
-  }, [realtimeStopRecording, disconnect, selectedChildId, realtimeAudio, modelType]);
+  }, [selectedChildId, enableVideo, modelType, mediaCapture]);
+
+  const handleEndConversation = useCallback(async () => {
+    try {
+      // Cleanup camera when ending conversation
+      if (enableVideo) {
+        if (modelType === 'gemini') {
+          mediaCapture.cleanup();
+          console.log('Gemini camera cleaned up');
+        }
+        // OpenAI camera cleanup is handled by the realtime connection
+      }
+    } catch (error) {
+      console.error('Failed to end conversation:', error);
+    }
+  }, [enableVideo, modelType, mediaCapture]);
 
   return (
     <div className="min-h-screen flex flex-col relative">
@@ -998,7 +969,7 @@ const Home = memo(() => {
       </header>
 
       {/* Main Content - Optimized for mobile with Replit banner and fullscreen */}
-      <main className="flex-1 flex flex-col items-center justify-center p-2 sm:p-4 md:p-6 overflow-hidden relative min-h-0 max-h-screen">
+      <main className="flex-1 flex flex-col items-center justify-center p-2 sm:p-4 md:p-6 overflow-hidden relative min-h-0max-h-screen">
         {/* Decorative blobs in background */}
         <div className="absolute top-1/4 -left-20 w-40 h-40 blob opacity-20 z-0"></div>
         <div className="absolute bottom-1/3 -right-20 w-60 h-60 blob opacity-20 z-0"></div>
@@ -1200,7 +1171,7 @@ const Home = memo(() => {
                             ? "Appu is listening..."
                             : "Appu is getting ready to listen..."}
                     </p>
-                    
+
                     {/* Eye Toggle Button */}
                     <Button
                       variant="ghost"
@@ -1564,7 +1535,7 @@ const Home = memo(() => {
                     </Button>
 
                     <Button
-                      onClick={() => {
+                      onClick={()={() => {
                         fetch("/api/process-text", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
@@ -1612,7 +1583,7 @@ const Home = memo(() => {
                     </div>
                   </div>
 
-                  
+
                 </div>
               </div>
             </div>
