@@ -647,7 +647,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { childId } = req.body;
       const selectedChildId = childId || 1; // Use provided childId or default
-      
+
       const conversation = await storage.getCurrentConversation(selectedChildId);
 
       if (conversation) {
@@ -786,34 +786,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/analyze-frame", async (req: Request, res: Response) => {
     try {
       const { frameData, childId, reason, lookingFor, context, conversationId } = req.body;
-      
+
       if (!frameData) {
         return res.status(400).json({ error: "No frame data provided" });
       }
-      
+
       console.log(`🔍 Analyzing frame for child ${childId}:`, { reason, lookingFor, context, conversationId });
-      
+
       // Build context-aware prompt
       let analysisPrompt = "A child is showing something to their AI companion Appu. Analyze this image and describe what you see.";
-      
+
       if (lookingFor) {
         analysisPrompt += ` Appu is specifically looking for: ${lookingFor}.`;
       }
-      
+
       if (context) {
         analysisPrompt += ` Current conversation context: ${context}.`;
       }
-      
+
       if (reason) {
         analysisPrompt += ` Reason for analysis: ${reason}.`;
       }
-      
+
       analysisPrompt += " Focus on details that are most relevant to what Appu is looking for. Be specific about colors, shapes, numbers, objects, and any educational elements that match the context.";
-      
+
       // Use OpenAI Vision API to analyze the frame
       const OpenAI = (await import('openai')).default;
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      
+
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
@@ -836,10 +836,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         max_tokens: 200,
         temperature: 0.7
       });
-      
+
       const analysis = response.choices[0].message.content;
       console.log(`🔍 Context-aware frame analysis result: ${analysis}`);
-      
+
       // Store the captured frame in database for parent viewing
       if (childId && analysis) {
         try {
@@ -853,16 +853,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             context: context || null,
             isVisible: true
           });
-          
+
           console.log(`📸 Stored captured frame ${capturedFrame.id} for child ${childId}`);
         } catch (storageError) {
           console.error("❌ Failed to store captured frame:", storageError);
           // Don't fail the analysis if storage fails
         }
       }
-      
+
       res.json({ analysis });
-      
+
     } catch (error) {
       console.error("❌ Frame analysis error:", error);
       res.status(500).json({
@@ -1561,7 +1561,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Fetch comprehensive data for all children
-      const childrenData = await Promise.all(
+      const childrenDataRaw = await Promise.all(
         childrenIds.map(async (childId: number) => {
           const [child, milestones, conversations] = await Promise.all([
             storage.getChild(childId),
@@ -1587,6 +1587,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           };
         }),
       );
+
+      const childrenData = childrenDataRaw.filter(Boolean);
 
       // Generate comprehensive data summary for AI analysis
       const dataContext = childrenData
@@ -2047,16 +2049,16 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
     try {
       const childId = parseInt(req.params.childId);
       const limit = parseInt(req.query.limit as string) || 20;
-      
+
       const frames = await storage.getCapturedFramesByChild(childId, limit);
-      
+
       // Return frames without the actual frame data to save bandwidth in list view
       const framesWithoutData = frames.map(frame => ({
         ...frame,
         frameData: undefined, // Remove frame data for list view
         hasFrameData: true
       }));
-      
+
       res.json(framesWithoutData);
     } catch (error) {
       console.error("Error fetching captured frames:", error);
@@ -2067,16 +2069,16 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
   app.get("/api/conversations/:conversationId/captured-frames", async (req: Request, res: Response) => {
     try {
       const conversationId = parseInt(req.params.conversationId);
-      
+
       const frames = await storage.getCapturedFramesByConversation(conversationId);
-      
+
       // Return frames without the actual frame data to save bandwidth in list view
       const framesWithoutData = frames.map(frame => ({
         ...frame,
         frameData: undefined, // Remove frame data for list view
         hasFrameData: true
       }));
-      
+
       res.json(framesWithoutData);
     } catch (error) {
       console.error("Error fetching conversation frames:", error);
@@ -2087,13 +2089,13 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
   app.get("/api/captured-frames/:frameId", async (req: Request, res: Response) => {
     try {
       const frameId = parseInt(req.params.frameId);
-      
+
       const frame = await storage.getCapturedFrame(frameId);
-      
+
       if (!frame) {
         return res.status(404).json({ message: "Frame not found" });
       }
-      
+
       res.json(frame);
     } catch (error) {
       console.error("Error fetching captured frame:", error);
@@ -2104,22 +2106,22 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
   app.get("/api/captured-frames/:frameId/image", async (req: Request, res: Response) => {
     try {
       const frameId = parseInt(req.params.frameId);
-      
+
       const frame = await storage.getCapturedFrame(frameId);
-      
+
       if (!frame || !frame.frameData) {
         return res.status(404).json({ message: "Frame image not found" });
       }
-      
+
       // Convert base64 to buffer and serve as image
       const imageBuffer = Buffer.from(frame.frameData, 'base64');
-      
+
       res.set({
         'Content-Type': 'image/jpeg',
         'Content-Length': imageBuffer.length.toString(),
         'Cache-Control': 'public, max-age=86400' // Cache for 24 hours
       });
-      
+
       res.send(imageBuffer);
     } catch (error) {
       console.error("Error serving captured frame image:", error);
@@ -2130,22 +2132,22 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
   app.get("/api/captured-frames/:frameId/image", async (req: Request, res: Response) => {
     try {
       const frameId = parseInt(req.params.frameId);
-      
+
       const frame = await storage.getCapturedFrame(frameId);
-      
+
       if (!frame || !frame.frameData) {
         return res.status(404).json({ message: "Frame image not found" });
       }
-      
+
       // Convert base64 to buffer and serve as image
       const imageBuffer = Buffer.from(frame.frameData, 'base64');
-      
+
       res.set({
         'Content-Type': 'image/png',
         'Content-Length': imageBuffer.length,
         'Cache-Control': 'public, max-age=86400' // Cache for 24 hours
       });
-      
+
       res.send(imageBuffer);
     } catch (error) {
       console.error("Error serving frame image:", error);
@@ -2375,7 +2377,7 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
   // Set up WebSocket services BEFORE any other middleware to avoid conflicts
   // Set up Gemini Live API WebSocket service
   setupGeminiLiveWebSocket(httpServer);
-  
+
   // Set up OpenAI Realtime API WebSocket service
   setupRealtimeWebSocket(httpServer);
 
