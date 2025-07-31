@@ -1,0 +1,8 @@
+column_name,data_type,is_nullable,column_default,generation_expression,indices,is_hidden
+id,INT8,false,unique_rowid(),,"[""captured_frames_child_id_idx"",""captured_frames_conversation_id_idx"",""captured_frames_created_at_idx"",""captured_frames_pkey""]",false
+child_id,INT8,false,null,,"[""captured_frames_child_id_idx"",""captured_frames_pkey""]",false
+conversation_id,INT8,false,null,,"[""captured_frames_conversation_id_idx"",""captured_frames_pkey""]",false
+frame_data,STRING,false,null,,"[""captured_frames_pkey""]",false
+analysis,JSONB,true,null,,"[""captured_frames_pkey""]",false
+created_at,TIMESTAMP,false,now(),,"[""captured_frames_created_at_idx"",""captured_frames_pkey""]",false
+is_visible,BOOL,false,true,,"[""captured_frames_pkey""]",false
