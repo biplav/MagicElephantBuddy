@@ -35,7 +35,7 @@ const Home = memo(() => {
   const [enableLocalPlayback, setEnableLocalPlayback] =
     useState<boolean>(false); // Default to false for server testing
   const [useRealtimeAPI, setUseRealtimeAPI] = useState<boolean>(true);
-  const [enableVideo, setEnableVideo] = useState<boolean>(false); // Toggle for video capture
+  const [enableVideo, setEnableVideo] = useState<boolean>(true); // Toggle for video capture - enabled by default
   const [aiSettings, setAiSettings] = useState({
     defaultProvider: "standard",
     voiceMode: "openai",
