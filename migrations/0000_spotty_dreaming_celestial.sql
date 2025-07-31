@@ -132,7 +132,7 @@ SELECT CASE
 END AS add_children_fk;
 
 ALTER TABLE "children" 
-ADD CONSTRAINT "children_parent_id_parents_id_fk" 
+ADD CONSTRAINT IF NOT EXISTS "children_parent_id_parents_id_fk" 
 FOREIGN KEY ("parent_id") REFERENCES "public"."parents"("id") 
 ON DELETE no action ON UPDATE no action;
 --> statement-breakpoint
