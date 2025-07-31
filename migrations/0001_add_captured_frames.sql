@@ -1,5 +1,4 @@
-
--- Add captured frames table for storing analyzed video frames (only if it doesn't exist)
+-- Add captured frames table for storing analyzed video frames
 CREATE TABLE IF NOT EXISTS "captured_frames" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"child_id" integer NOT NULL,
@@ -13,46 +12,23 @@ CREATE TABLE IF NOT EXISTS "captured_frames" (
 	"is_visible" boolean DEFAULT true NOT NULL
 );
 
--- Add foreign key constraints only if they don't exist (with better error handling)
-DO $$ 
+-- Add foreign key constraint for child_id if it doesn't exist
+DO $$
 BEGIN
-    -- Add child_id foreign key constraint
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.table_constraints 
-        WHERE constraint_name = 'captured_frames_child_id_children_id_fk'
-        AND table_name = 'captured_frames'
-        AND table_schema = 'public'
-    ) THEN
-        ALTER TABLE "captured_frames" ADD CONSTRAINT "captured_frames_child_id_children_id_fk" 
-        FOREIGN KEY ("child_id") REFERENCES "children"("id") ON DELETE no action ON UPDATE no action;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'captured_frames_child_id_children_id_fk') THEN
+        ALTER TABLE "captured_frames" ADD CONSTRAINT "captured_frames_child_id_children_id_fk" FOREIGN KEY ("child_id") REFERENCES "children"("id") ON DELETE NO ACTION ON UPDATE NO ACTION;
     END IF;
-EXCEPTION
-    WHEN duplicate_object THEN 
-        RAISE NOTICE 'Foreign key constraint captured_frames_child_id_children_id_fk already exists, skipping...';
-    WHEN undefined_table THEN 
-        RAISE NOTICE 'Referenced table does not exist, skipping foreign key creation...';
 END $$;
 
-DO $$ 
+-- Add foreign key constraint for conversation_id if it doesn't exist
+DO $$
 BEGIN
-    -- Add conversation_id foreign key constraint
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.table_constraints 
-        WHERE constraint_name = 'captured_frames_conversation_id_conversations_id_fk'
-        AND table_name = 'captured_frames'
-        AND table_schema = 'public'
-    ) THEN
-        ALTER TABLE "captured_frames" ADD CONSTRAINT "captured_frames_conversation_id_conversations_id_fk" 
-        FOREIGN KEY ("conversation_id") REFERENCES "conversations"("id") ON DELETE no action ON UPDATE no action;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'captured_frames_conversation_id_conversations_id_fk') THEN
+        ALTER TABLE "captured_frames" ADD CONSTRAINT "captured_frames_conversation_id_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "conversations"("id") ON DELETE NO ACTION ON UPDATE NO ACTION;
     END IF;
-EXCEPTION
-    WHEN duplicate_object THEN 
-        RAISE NOTICE 'Foreign key constraint captured_frames_conversation_id_conversations_id_fk already exists, skipping...';
-    WHEN undefined_table THEN 
-        RAISE NOTICE 'Referenced table does not exist, skipping foreign key creation...';
 END $$;
 
--- Add indexes for better query performance only if they don't exist
+-- Add indexes for better query performance
 CREATE INDEX IF NOT EXISTS "captured_frames_child_id_timestamp_idx" ON "captured_frames" ("child_id", "timestamp" DESC);
 CREATE INDEX IF NOT EXISTS "captured_frames_conversation_id_idx" ON "captured_frames" ("conversation_id");
 CREATE INDEX IF NOT EXISTS "captured_frames_visible_idx" ON "captured_frames" ("is_visible");
