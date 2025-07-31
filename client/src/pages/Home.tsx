@@ -792,7 +792,7 @@ const Home = memo(() => {
           );
         } else {
           setElephantState("error");
-          setSpeechText("Oops! Something went wrong. Let's try again.");");
+          setSpeechText("Oops! Something went wrong. Let's try again.");
         }
       } else {
         // Generic error handling
