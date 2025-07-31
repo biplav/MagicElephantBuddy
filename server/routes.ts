@@ -1919,7 +1919,6 @@ IMPORTANT CAPABILITIES:
 1. Answer questions about children learning progress using authentic data
 2. Analyze conversation topics and learning patterns
 3. Help parents update child profiles when they provide new information
-```
 4. Process profile update requests and return structured data for implementation
 
 PROFILE UPDATE GUIDELINES:
