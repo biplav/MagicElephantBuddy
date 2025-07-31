@@ -13,31 +13,43 @@ CREATE TABLE IF NOT EXISTS "captured_frames" (
 	"is_visible" boolean DEFAULT true NOT NULL
 );
 
--- Add foreign key constraints only if they don't exist
-DO $$ BEGIN
- IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'captured_frames_child_id_children_id_fk'
-    AND table_name = 'captured_frames'
- ) THEN
-    ALTER TABLE "captured_frames" ADD CONSTRAINT "captured_frames_child_id_children_id_fk" 
-    FOREIGN KEY ("child_id") REFERENCES "children"("id") ON DELETE no action ON UPDATE no action;
- END IF;
+-- Add foreign key constraints only if they don't exist (with better error handling)
+DO $$ 
+BEGIN
+    -- Add child_id foreign key constraint
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'captured_frames_child_id_children_id_fk'
+        AND table_name = 'captured_frames'
+        AND table_schema = 'public'
+    ) THEN
+        ALTER TABLE "captured_frames" ADD CONSTRAINT "captured_frames_child_id_children_id_fk" 
+        FOREIGN KEY ("child_id") REFERENCES "children"("id") ON DELETE no action ON UPDATE no action;
+    END IF;
 EXCEPTION
- WHEN duplicate_object THEN null;
+    WHEN duplicate_object THEN 
+        RAISE NOTICE 'Foreign key constraint captured_frames_child_id_children_id_fk already exists, skipping...';
+    WHEN undefined_table THEN 
+        RAISE NOTICE 'Referenced table does not exist, skipping foreign key creation...';
 END $$;
 
-DO $$ BEGIN
- IF NOT EXISTS (
-    SELECT 1 FROM information_schema.table_constraints 
-    WHERE constraint_name = 'captured_frames_conversation_id_conversations_id_fk'
-    AND table_name = 'captured_frames'
- ) THEN
-    ALTER TABLE "captured_frames" ADD CONSTRAINT "captured_frames_conversation_id_conversations_id_fk" 
-    FOREIGN KEY ("conversation_id") REFERENCES "conversations"("id") ON DELETE no action ON UPDATE no action;
- END IF;
+DO $$ 
+BEGIN
+    -- Add conversation_id foreign key constraint
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'captured_frames_conversation_id_conversations_id_fk'
+        AND table_name = 'captured_frames'
+        AND table_schema = 'public'
+    ) THEN
+        ALTER TABLE "captured_frames" ADD CONSTRAINT "captured_frames_conversation_id_conversations_id_fk" 
+        FOREIGN KEY ("conversation_id") REFERENCES "conversations"("id") ON DELETE no action ON UPDATE no action;
+    END IF;
 EXCEPTION
- WHEN duplicate_object THEN null;
+    WHEN duplicate_object THEN 
+        RAISE NOTICE 'Foreign key constraint captured_frames_conversation_id_conversations_id_fk already exists, skipping...';
+    WHEN undefined_table THEN 
+        RAISE NOTICE 'Referenced table does not exist, skipping foreign key creation...';
 END $$;
 
 -- Add indexes for better query performance only if they don't exist
