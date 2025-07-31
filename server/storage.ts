@@ -520,6 +520,17 @@ export class DatabaseStorage implements IStorage {
     const [frame] = await db
       .select()
       .from(capturedFrames)
+      .where(and(
+        eq(capturedFrames.id, frameId),
+        eq(capturedFrames.isVisible, true)
+      ));
+    return frame;
+  }
+
+  async getCapturedFrame(frameId: number): Promise<CapturedFrame | undefined> {
+    const [frame] = await db
+      .select()
+      .from(capturedFrames)
       .where(eq(capturedFrames.id, frameId));
     return frame || undefined;
   }

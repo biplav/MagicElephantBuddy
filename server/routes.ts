@@ -2115,6 +2115,32 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
       const imageBuffer = Buffer.from(frame.frameData, 'base64');
       
       res.set({
+        'Content-Type': 'image/jpeg',
+        'Content-Length': imageBuffer.length.toString(),
+        'Cache-Control': 'public, max-age=86400' // Cache for 24 hours
+      });
+      
+      res.send(imageBuffer);
+    } catch (error) {
+      console.error("Error serving captured frame image:", error);
+      res.status(500).json({ message: "Failed to fetch captured frame" });
+    }
+  });
+
+  app.get("/api/captured-frames/:frameId/image", async (req: Request, res: Response) => {
+    try {
+      const frameId = parseInt(req.params.frameId);
+      
+      const frame = await storage.getCapturedFrame(frameId);
+      
+      if (!frame || !frame.frameData) {
+        return res.status(404).json({ message: "Frame image not found" });
+      }
+      
+      // Convert base64 to buffer and serve as image
+      const imageBuffer = Buffer.from(frame.frameData, 'base64');
+      
+      res.set({
         'Content-Type': 'image/png',
         'Content-Length': imageBuffer.length,
         'Cache-Control': 'public, max-age=86400' // Cache for 24 hours

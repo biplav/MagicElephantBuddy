@@ -6,13 +6,14 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Calendar, Clock, MessageSquare, TrendingUp, User, Home, LogOut, ArrowLeft } from "lucide-react";
+import { Calendar, Clock, MessageSquare, TrendingUp, User, Home, LogOut, ArrowLeft, Camera } from "lucide-react";
 import { format } from "date-fns";
 import { Link } from "wouter";
 import NotificationCenter from "@/components/NotificationCenter";
 import MilestoneTracker from "@/components/MilestoneTrackerFixed";
 import { ProfileSuggestions } from "@/components/ProfileSuggestions";
 import ParentChatbot from "@/components/ParentChatbot";
+import { CapturedFrameDisplay } from "@/components/CapturedFrameDisplay";
 
 interface Parent {
   id: number;
@@ -37,6 +38,19 @@ interface Message {
   timestamp: string;
 }
 
+interface CapturedFrame {
+  id: number;
+  childId: number;
+  conversationId: number | null;
+  frameData?: string;
+  analysis: string;
+  reason?: string;
+  lookingFor?: string;
+  context?: string;
+  timestamp: string;
+  hasFrameData: boolean;
+}
+
 interface Conversation {
   id: number;
   childId: number;
@@ -47,6 +61,7 @@ interface Conversation {
   child: Child;
   messages: Message[];
   summary?: string;
+  capturedFrames?: CapturedFrame[];
 }
 
 interface DashboardData {
@@ -64,7 +79,26 @@ const ParentDashboard = memo(() => {
 
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [activeTab, setActiveTab] = useState("conversations");
+  const [conversationFrames, setConversationFrames] = useState<{[key: number]: CapturedFrame[]}>({});
   const queryClient = useQueryClient();
+
+  // Fetch captured frames for a specific conversation
+  const fetchConversationFrames = useCallback(async (conversationId: number) => {
+    if (conversationFrames[conversationId]) return; // Already fetched
+    
+    try {
+      const response = await fetch(`/api/conversations/${conversationId}/captured-frames`);
+      if (response.ok) {
+        const frames = await response.json();
+        setConversationFrames(prev => ({
+          ...prev,
+          [conversationId]: frames
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to fetch conversation frames:', error);
+    }
+  }, [conversationFrames]);
 
   const { data: dashboardData, isLoading, error, refetch } = useQuery<DashboardData>({
     queryKey: [`/api/parents/${currentParent?.id}/dashboard`],
@@ -247,7 +281,10 @@ const ParentDashboard = memo(() => {
                                 ? 'bg-blue-50 border-blue-200'
                                 : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
                             }`}
-                            onClick={() => setSelectedConversation(conversation)}
+                            onClick={() => {
+                              setSelectedConversation(conversation);
+                              fetchConversationFrames(conversation.id);
+                            }}
                           >
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center space-x-2">
@@ -277,6 +314,13 @@ const ParentDashboard = memo(() => {
                               <div className="flex items-center space-x-2">
                                 <MessageSquare className="h-3 w-3" />
                                 <span>{conversation.totalMessages} messages</span>
+                                {conversationFrames[conversation.id] && conversationFrames[conversation.id].length > 0 && (
+                                  <>
+                                    <span>•</span>
+                                    <Camera className="h-3 w-3" />
+                                    <span>{conversationFrames[conversation.id].length} frames</span>
+                                  </>
+                                )}
                               </div>
                               {conversation.summary && (
                                 <div className="mt-2 p-2 bg-white rounded border-l-2 border-blue-300">
@@ -308,31 +352,94 @@ const ParentDashboard = memo(() => {
                     {selectedConversation ? (
                       <ScrollArea className="h-[500px] pr-4">
                         <div className="space-y-4">
-                          {selectedConversation.messages.map((message) => (
-                            <div
-                              key={message.id}
-                              className={`p-3 rounded-lg max-w-[80%] ${
-                                message.type === 'child_input'
-                                  ? 'bg-blue-100 text-blue-900 ml-auto'
-                                  : 'bg-gray-100 text-gray-900'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="text-xs font-medium">
-                                  {message.type === 'child_input' ? selectedConversation.child.name : 'Appu'}
-                                </span>
-                                <span className="text-xs text-gray-500">
-                                  {format(new Date(message.timestamp), 'HH:mm')}
-                                </span>
-                              </div>
-                              <p className="text-sm">{message.content}</p>
-                              {message.transcription && message.transcription !== message.content && (
-                                <p className="text-xs text-gray-600 mt-1 italic">
-                                  Transcribed: {message.transcription}
-                                </p>
-                              )}
-                            </div>
-                          ))}
+                          {/* Messages and captured frames combined and sorted by timestamp */}
+                          {(() => {
+                            const frames = conversationFrames[selectedConversation.id] || [];
+                            const allItems = [
+                              ...selectedConversation.messages.map(msg => ({ ...msg, itemType: 'message' as const })),
+                              ...frames.map(frame => ({ ...frame, itemType: 'frame' as const }))
+                            ].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+                            return allItems.map((item, index) => {
+                              if (item.itemType === 'message') {
+                                const message = item as Message & { itemType: 'message' };
+                                return (
+                                  <div
+                                    key={`message-${message.id}`}
+                                    className={`p-3 rounded-lg max-w-[80%] ${
+                                      message.type === 'child_input'
+                                        ? 'bg-blue-100 text-blue-900 ml-auto'
+                                        : 'bg-gray-100 text-gray-900'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span className="text-xs font-medium">
+                                        {message.type === 'child_input' ? selectedConversation.child.name : 'Appu'}
+                                      </span>
+                                      <span className="text-xs text-gray-500">
+                                        {format(new Date(message.timestamp), 'HH:mm')}
+                                      </span>
+                                    </div>
+                                    <p className="text-sm">{message.content}</p>
+                                    {message.transcription && message.transcription !== message.content && (
+                                      <p className="text-xs text-gray-600 mt-1 italic">
+                                        Transcribed: {message.transcription}
+                                      </p>
+                                    )}
+                                  </div>
+                                );
+                              } else {
+                                const frame = item as CapturedFrame & { itemType: 'frame' };
+                                return (
+                                  <div key={`frame-${frame.id}`} className="max-w-[80%]">
+                                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center space-x-2">
+                                          <Camera className="h-4 w-4 text-purple-600" />
+                                          <span className="text-xs font-medium text-purple-800">
+                                            Appu captured a frame
+                                          </span>
+                                        </div>
+                                        <span className="text-xs text-gray-500">
+                                          {format(new Date(frame.timestamp), 'HH:mm')}
+                                        </span>
+                                      </div>
+                                      
+                                      {/* Frame context info */}
+                                      <div className="text-xs text-purple-700 mb-2 space-y-1">
+                                        {frame.reason && (
+                                          <div><strong>Reason:</strong> {frame.reason}</div>
+                                        )}
+                                        {frame.lookingFor && (
+                                          <div><strong>Looking for:</strong> {frame.lookingFor}</div>
+                                        )}
+                                        {frame.context && (
+                                          <div><strong>Context:</strong> {frame.context}</div>
+                                        )}
+                                      </div>
+
+                                      {/* Frame image */}
+                                      {frame.hasFrameData && (
+                                        <div className="mb-2">
+                                          <CapturedFrameDisplay 
+                                            frameData={`/api/captured-frames/${frame.id}/image`}
+                                            className="max-w-[200px] max-h-[150px] mx-auto"
+                                          />
+                                        </div>
+                                      )}
+
+                                      {/* Analysis */}
+                                      <div className="bg-white rounded p-2 border border-purple-100">
+                                        <p className="text-xs text-gray-700">
+                                          <strong>Analysis:</strong> {frame.analysis}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                            });
+                          })()}
                         </div>
                       </ScrollArea>
                     ) : (

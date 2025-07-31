@@ -18,9 +18,15 @@ export function CapturedFrameDisplay({ frameData, className = "", title }: Captu
       <div className="w-full h-full min-h-[120px] flex items-center justify-center">
         {frameData ? (
           <img 
-            src={frameData.startsWith('data:') ? frameData : `data:image/jpeg;base64,${frameData}`}
+            src={frameData.startsWith('data:') ? frameData : 
+                 frameData.startsWith('/api/') ? frameData : 
+                 `data:image/jpeg;base64,${frameData}`}
             alt="Captured frame"
             className="w-full h-full object-cover"
+            onError={(e) => {
+              console.error('Failed to load frame image:', frameData);
+              e.currentTarget.style.display = 'none';
+            }}
           />
         ) : (
           <div className="text-gray-500 text-sm">No frame captured</div>
