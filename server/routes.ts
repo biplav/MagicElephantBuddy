@@ -226,7 +226,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/debug/enhanced-prompt/:childId?",
     async (req: Request, res: Response) => {
       try {
-        const childId = parseInt(req.params.childId) || 1;
+        const childId = req.params.childId || 1;
         const enhancedPrompt = await createEnhancedSystemPrompt(childId);
 
         res.json({
@@ -612,7 +612,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/children/:childId/conversations",
     async (req: Request, res: Response) => {
       try {
-        const childId = parseInt(req.params.childId);
+        const childId = req.params.childId;
         const limit = parseInt(req.query.limit as string) || 10;
         const conversations = await storage.getConversationsByChild(
           childId,
@@ -848,14 +848,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           if (!actualConversationId) {
             // Try to get current active conversation for this child
-            const currentConversation = await storage.getCurrentConversation(parseInt(childId));
+            const currentConversation = await storage.getCurrentConversation(childId);
             if (currentConversation) {
               actualConversationId = currentConversation.id;
               console.log(`📸 Using active conversation ${actualConversationId} for frame storage`);
             } else {
               // Create a new conversation if none exists
               const newConversation = await storage.createConversation({
-                childId: parseInt(childId)
+                childId: childId
               });
               actualConversationId = newConversation.id;
               console.log(`📸 Created new conversation ${actualConversationId} for frame storage`);
@@ -863,7 +863,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           const capturedFrame = await storage.createCapturedFrame({
-            childId: parseInt(childId),
+            childId: childId,
             conversationId: actualConversationId,
             frameData: frameData,
             analysis: analysis,
@@ -1045,7 +1045,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/children/:childId/milestones",
     async (req: Request, res: Response) => {
       try {
-        const childId = parseInt(req.params.childId);
+        const childId = req.params.childId;
         const milestones = await storage.getMilestonesByChild(childId);
         res.json(milestones);
       } catch (error) {
@@ -1737,7 +1737,7 @@ Answer the parent's question using this data. Be specific, helpful, and encourag
           return res.status(400).json({ error: "Updates object is required" });
         }
 
-        const child = await storage.getChild(parseInt(childId));
+        const child = await storage.getChild(childId);
         if (!child) {
           return res.status(404).json({ error: "Child not found" });
         }
@@ -1791,7 +1791,7 @@ Answer the parent's question using this data. Be specific, helpful, and encourag
         }
 
         // Update the child profile
-        await storage.updateChildProfile(parseInt(childId), updatedProfile);
+        await storage.updateChildProfile(childId, updatedProfile);
 
         res.json({
           message: "Profile updated successfully",
@@ -2066,7 +2066,7 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
   // Captured frames endpoints for parent viewing
   app.get("/api/children/:childId/captured-frames", async (req: Request, res: Response) => {
     try {
-      const childId = parseInt(req.params.childId);
+      const childId = req.params.childId;
       const limit = parseInt(req.query.limit as string) || 20;
 
       const frames = await storage.getCapturedFramesByChild(childId, limit);
