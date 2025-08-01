@@ -385,6 +385,7 @@ export const books = pgTable("books", {
   genre: text("genre"),
   ageRange: text("age_range"), // e.g., "3-5", "4-6"
   description: text("description"),
+  summary: text("summary"), // AI-generated book summary
   coverImageUrl: text("cover_image_url"),
   totalPages: integer("total_pages").default(0).notNull(),
   isActive: boolean("is_active").default(true).notNull(),
@@ -400,6 +401,7 @@ export const pages = pgTable("pages", {
   pageNumber: integer("page_number").notNull(),
   imageUrl: text("image_url").notNull(),
   pageText: text("page_text").notNull(),
+  imageDescription: text("image_description"), // AI-generated description of the image
   audioUrl: text("audio_url"), // Optional audio narration
   metadata: json("metadata"), // Additional page metadata
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -434,6 +436,7 @@ export const insertBookSchema = createInsertSchema(books).pick({
   genre: true,
   ageRange: true,
   description: true,
+  summary: true,
   coverImageUrl: true,
   totalPages: true,
   isActive: true,
@@ -445,6 +448,7 @@ export const insertPageSchema = createInsertSchema(pages).pick({
   pageNumber: true,
   imageUrl: true,
   pageText: true,
+  imageDescription: true,
   audioUrl: true,
   metadata: true,
 });

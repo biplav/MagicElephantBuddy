@@ -1,14 +1,15 @@
 import { 
   users, parents, children, conversations, messages, conversationInsights,
   learningMilestones, notifications, notificationPreferences, profileUpdateSuggestions,
-  capturedFrames,
+  capturedFrames, books, pages,
   type User, type InsertUser, type Parent, type InsertParent, 
   type Child, type InsertChild, type Conversation, type InsertConversation,
   type Message, type InsertMessage, type ConversationInsight, type InsertConversationInsight,
   type LearningMilestone, type InsertLearningMilestone, type Notification, type InsertNotification,
   type NotificationPreferences, type InsertNotificationPreferences,
   type ProfileUpdateSuggestion, type InsertProfileUpdateSuggestion,
-  type CapturedFrame, type InsertCapturedFrame
+  type CapturedFrame, type InsertCapturedFrame, type Book, type InsertBook,
+  type Page, type InsertPage
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, inArray, isNull, isNotNull, gte } from "drizzle-orm";
@@ -78,6 +79,15 @@ export interface IStorage {
   // Conversation analysis
   getUnanalyzedConversations(): Promise<Conversation[]>;
   getConversationsWithoutSummary(): Promise<Conversation[]>;
+
+  // Book management
+  createBook(book: InsertBook): Promise<Book>;
+  getBookByTitleAndMetadata(title: string, metadata: any): Promise<Book | undefined>;
+  updateBook(bookId: number, updates: Partial<InsertBook>): Promise<Book>;
+  createPage(page: InsertPage): Promise<Page>;
+  getPagesByBook(bookId: number): Promise<Page[]>;
+  deletePagesByBook(bookId: number): Promise<void>;
+  getAllBooks(): Promise<Book[]>;
 
   // Captured frames
   createCapturedFrame(frame: InsertCapturedFrame): Promise<CapturedFrame>;
@@ -485,6 +495,56 @@ export class DatabaseStorage implements IStorage {
       .where(isNull(conversationInsights.id))
       .orderBy(desc(conversations.startTime));
     return results;
+  }
+
+  // Book management methods
+  async createBook(insertBook: InsertBook): Promise<Book> {
+    const [book] = await db.insert(books).values(insertBook).returning();
+    return book;
+  }
+
+  async getBookByTitleAndMetadata(title: string, metadata: any): Promise<Book | undefined> {
+    // Simple similarity check based on title
+    const existingBooks = await db
+      .select()
+      .from(books)
+      .where(eq(books.title, title));
+    
+    return existingBooks[0] || undefined;
+  }
+
+  async updateBook(bookId: number, updates: Partial<InsertBook>): Promise<Book> {
+    const [book] = await db
+      .update(books)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(books.id, bookId))
+      .returning();
+    return book;
+  }
+
+  async createPage(insertPage: InsertPage): Promise<Page> {
+    const [page] = await db.insert(pages).values(insertPage).returning();
+    return page;
+  }
+
+  async getPagesByBook(bookId: number): Promise<Page[]> {
+    return await db
+      .select()
+      .from(pages)
+      .where(eq(pages.bookId, bookId))
+      .orderBy(pages.pageNumber);
+  }
+
+  async deletePagesByBook(bookId: number): Promise<void> {
+    await db.delete(pages).where(eq(pages.bookId, bookId));
+  }
+
+  async getAllBooks(): Promise<Book[]> {
+    return await db
+      .select()
+      .from(books)
+      .where(eq(books.isActive, true))
+      .orderBy(desc(books.createdAt));
   }
 
   // Captured frames methods

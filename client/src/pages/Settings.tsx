@@ -6,7 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { Settings as SettingsIcon, Brain, Mic, Volume2, Save, ArrowLeft } from 'lucide-react';
+import { Settings as SettingsIcon, Brain, Mic, Volume2, Save, ArrowLeft, Upload } from 'lucide-react';
 import { Link } from 'wouter';
 
 interface AIProviderSettings {
@@ -84,24 +84,24 @@ export default function Settings() {
   // Auto-update voice processing mode based on AI provider selection
   const handleProviderChange = (value: string) => {
     const newSettings = { ...settings, defaultProvider: value };
-    
+
     // Auto-select voice processing based on provider
     if (value.startsWith('gemini')) {
       newSettings.voiceMode = 'gemini';
     } else {
       newSettings.voiceMode = 'openai';
     }
-    
+
     setSettings(newSettings);
   };
 
   const handleSaveSettings = async () => {
     setIsLoading(true);
-    
+
     try {
       // Save settings to localStorage
       localStorage.setItem('appuAISettings', JSON.stringify(settings));
-      
+
       // Test the selected configuration
       const testResponse = await fetch('/api/process-with-config', {
         method: 'POST',
@@ -114,7 +114,7 @@ export default function Settings() {
           useCreative: settings.creativeMode
         }),
       });
-      
+
       if (testResponse.ok) {
         toast({
           title: "Settings Saved Successfully",
@@ -210,7 +210,7 @@ export default function Settings() {
                       ))}
                   </SelectContent>
                 </Select>
-                
+
                 {selectedConfig && (
                   <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
                     <div className="flex items-center justify-between">

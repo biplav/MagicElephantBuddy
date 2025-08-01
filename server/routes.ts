@@ -1461,6 +1461,109 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Book upload and management endpoints
+  app.post("/api/admin/upload-book", upload.single("pdf"), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No PDF file provided" });
+      }
+
+      console.log(`Processing uploaded PDF: ${req.file.originalname}`);
+
+      const { PDFProcessor } = await import("./pdf-processor");
+      const pdfProcessor = new PDFProcessor();
+
+      // Process the PDF
+      const processedBook = await pdfProcessor.processPDF(req.file.buffer, req.file.originalname);
+
+      // Check for duplicates
+      const existingBook = await storage.getBookByTitleAndMetadata(
+        processedBook.title, 
+        processedBook.metadata
+      );
+
+      let book;
+      if (existingBook) {
+        console.log(`Updating existing book: ${existingBook.title}`);
+        
+        // Delete existing pages
+        await storage.deletePagesByBook(existingBook.id);
+        
+        // Update book metadata
+        book = await storage.updateBook(existingBook.id, {
+          author: processedBook.author,
+          totalPages: processedBook.totalPages,
+          summary: processedBook.summary,
+          metadata: processedBook.metadata,
+        });
+      } else {
+        console.log(`Creating new book: ${processedBook.title}`);
+        
+        // Create new book
+        book = await storage.createBook({
+          title: processedBook.title,
+          author: processedBook.author,
+          genre: processedBook.metadata?.genre,
+          ageRange: processedBook.metadata?.ageRange,
+          description: `A children's book with ${processedBook.totalPages} pages`,
+          summary: processedBook.summary,
+          totalPages: processedBook.totalPages,
+          metadata: processedBook.metadata,
+        });
+      }
+
+      // Create pages
+      const createdPages = [];
+      for (const pageData of processedBook.pages) {
+        const page = await storage.createPage({
+          bookId: book.id,
+          pageNumber: pageData.pageNumber,
+          imageUrl: pageData.imageUrl,
+          pageText: pageData.text,
+          imageDescription: pageData.imageDescription,
+        });
+        createdPages.push(page);
+      }
+
+      res.json({
+        success: true,
+        book: {
+          ...book,
+          pages: createdPages
+        },
+        message: existingBook ? 'Book updated successfully' : 'Book created successfully'
+      });
+
+    } catch (error: any) {
+      console.error("Error processing book upload:", error);
+      res.status(500).json({ 
+        error: "Failed to process book upload",
+        details: error.message 
+      });
+    }
+  });
+
+  app.get("/api/admin/books", async (req: Request, res: Response) => {
+    try {
+      const books = await storage.getAllBooks();
+      res.json(books);
+    } catch (error) {
+      console.error("Error fetching books:", error);
+      res.status(500).json({ error: "Failed to fetch books" });
+    }
+  });
+
+  app.get("/api/admin/books/:bookId/pages", async (req: Request, res: Response) => {
+    try {
+      const bookId = parseInt(req.params.bookId);
+      const pages = await storage.getPagesByBook(bookId);
+      res.json(pages);
+    } catch (error) {
+      console.error("Error fetching book pages:", error);
+      res.status(500).json({ error: "Failed to fetch book pages" });
+    }
+  });
+
   // Test LangGraph workflow endpoint
   app.post("/api/admin/test-workflow", async (req: Request, res: Response) => {
     try {
