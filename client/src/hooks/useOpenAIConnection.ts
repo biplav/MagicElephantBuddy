@@ -54,7 +54,10 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
-  const conversationIdRef = useRef<string | null>(null); // Add conversationIdRef
+  const conversationIdRef = useRef<string | null>(null);
+  // Book tracking refs - moved to top level to avoid hook call in callback
+  const selectedBookRef = useRef<any>(null);
+  const currentPageRef = useRef<number>(1);
 
   // Use the media capture instance passed from parent - store in ref to avoid dependency issues
   // const mediaCaptureRef = useRef(options.mediaCapture);
@@ -171,7 +174,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
       try {
         logger.info(
           "Fetching enhanced prompt from backend for child:",
-          childId,
+          { childId },
         );
         const promptResponse = await fetch(
           `/api/debug/enhanced-prompt/${childId}`,
@@ -229,7 +232,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         logger.info("Data channel ready state changed", {
           readyState: channel.readyState,
           readyStateLabel:
-            ["connecting", "open", "closing", "closed"][channel.readyState] ||
+            ["connecting", "open", "closing", "closed"][channel.readyState as number] ||
             "unknown",
         });
       };
@@ -317,9 +320,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         }
       };
 
-      // Store the current selected book for display
-      const selectedBookRef = useRef<any>(null);
-      const currentPageRef = useRef<number>(1);
+      // Book refs are now available at hook level
 
       const handleBookSearchTool = async (callId: string, args: any) => {
         logger.info("bookSearchTool was called!", { callId, args });
@@ -802,7 +803,7 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
           error,
           readyState: channel.readyState,
           readyStateLabel:
-            ["connecting", "open", "closing", "closed"][channel.readyState] ||
+            ["connecting", "open", "closing", "closed"][channel.readyState as number] ||
             "unknown",
         });
         setState((prev) => ({ ...prev, error: "Data channel error occurred" }));
@@ -810,11 +811,12 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
       };
 
       channel.onclose = (event) => {
+        const closeEvent = event as CloseEvent;
         logger.info("Data channel closed", {
           readyState: channel.readyState,
-          wasClean: event?.wasClean,
-          code: event?.code,
-          reason: event?.reason,
+          wasClean: closeEvent?.wasClean,
+          code: closeEvent?.code,
+          reason: closeEvent?.reason,
         });
         clearInterval(stateCheckInterval);
         setState((prev) => ({
@@ -964,7 +966,7 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
         logger.error("Failed to read response text", {
           error: textError.message,
         });
-        throw newError(`Failed to read response: ${textError.message}`);
+        throw new Error(`Failed to read response: ${textError.message}`);
       });
 
       await pc
