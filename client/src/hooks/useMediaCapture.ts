@@ -38,8 +38,11 @@ export const useMediaCapture = ({ enableVideo }: MediaCaptureOptions) => {
     return constraints;
   }, []);
 
+  // Stabilize enableVideo to prevent unnecessary re-renders
+  const stableEnableVideo = useMemo(() => enableVideo, [enableVideo]);
+
   const setupVideoElements = useCallback((stream: MediaStream) => {
-    if (!enableVideo || stream.getVideoTracks().length === 0) {
+    if (!stableEnableVideo || stream.getVideoTracks().length === 0) {
       return;
     }
 
@@ -119,7 +122,7 @@ export const useMediaCapture = ({ enableVideo }: MediaCaptureOptions) => {
     }
 
     setState(prev => ({ ...prev, videoEnabled: true }));
-  }, [enableVideo]);
+  }, [stableEnableVideo]);
 
   const captureFrame = useCallback((): string | null => {
     const video = videoRef.current;
@@ -182,7 +185,7 @@ export const useMediaCapture = ({ enableVideo }: MediaCaptureOptions) => {
 
   const requestPermissions = useCallback(async () => {
     try {
-      const constraints = createMediaConstraints(enableVideo);
+      const constraints = createMediaConstraints(stableEnableVideo);
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
       streamRef.current = stream;
@@ -195,7 +198,7 @@ export const useMediaCapture = ({ enableVideo }: MediaCaptureOptions) => {
       }));
 
       // Wait for video to be ready
-      if (enableVideo && videoRef.current) {
+      if (stableEnableVideo && videoRef.current) {
         await new Promise<void>((resolve) => {
           const video = videoRef.current!;
           if (video.readyState >= 2) {
@@ -211,7 +214,7 @@ export const useMediaCapture = ({ enableVideo }: MediaCaptureOptions) => {
       logger.error("Failed to get media permissions", { error });
       throw error;
     }
-  }, [enableVideo, createMediaConstraints, setupVideoElements]);
+  }, [stableEnableVideo, createMediaConstraints, setupVideoElements]);
 
   const cleanup = useCallback(() => {
     if (videoRef.current && document.body.contains(videoRef.current)) {

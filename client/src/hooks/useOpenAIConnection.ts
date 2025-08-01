@@ -833,13 +833,8 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
       getSelectedChildId,
       fetchEnhancedPrompt,
       sendFunctionCallOutput,
-      options.onTranscriptionReceived,
-      options.onResponseReceived,
-      options.onAudioResponseReceived,
-      options.onError,
-      options.hasVideoPermission,
-      options.captureFrame,
-      options.requestMediaPermissions,
+      // Remove function dependencies that change on every render
+      // These will be accessed via options parameter
     ],
   );
 
@@ -1008,8 +1003,7 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
     setupPeerConnection,
     setupDataChannel,
     options.enableVideo,
-    options.onError,
-    options.requestMediaPermissions,
+    // Remove function dependencies that are accessed via options
   ]);
 
   const disconnect = useCallback(() => {

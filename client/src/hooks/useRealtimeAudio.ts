@@ -40,39 +40,38 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
 
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
 
-  // Memoize connection options to prevent unnecessary re-renders
-  const openaiOptions = useMemo(() => ({
+  // Stabilize callback references to prevent unnecessary re-renders
+  const stableCallbacks = useMemo(() => ({
     onTranscriptionReceived: options.onTranscriptionReceived,
     onResponseReceived: options.onResponseReceived,
     onAudioResponseReceived: options.onAudioResponseReceived,
-    onError: options.onError,
-    enableVideo: options.enableVideo
-  }), [options.onTranscriptionReceived, options.onResponseReceived, options.onAudioResponseReceived, options.onError, options.enableVideo]);
-
-  const geminiOptions = useMemo(() => ({
-    onTranscriptionReceived: options.onTranscriptionReceived,
-    onResponseReceived: options.onResponseReceived,
     onError: options.onError
-  }), [options.onTranscriptionReceived, options.onResponseReceived, options.onError]);
+  }), [options.onTranscriptionReceived, options.onResponseReceived, options.onAudioResponseReceived, options.onError]);
 
-  const mediaCaptureOptions = useMemo(() => ({
-    enableVideo: options.enableVideo
-  }), [options.enableVideo]);
+  // Initialize media capture at the top level with stable options
+  const mediaCapture = useMediaCapture({ enableVideo: options.enableVideo || false });
 
-  // Initialize media capture at the top level
-  const mediaCapture = useMediaCapture(mediaCaptureOptions);
-
-  // Create stable media functions to pass down
-  const mediaFunctions = useMemo(() => ({
+  // Create stable connection options that don't change unless truly necessary
+  const connectionOptions = useMemo(() => ({
+    ...stableCallbacks,
+    enableVideo: options.enableVideo,
+    // Pass media functions directly to avoid circular dependencies
     requestMediaPermissions: mediaCapture.requestPermissions,
     captureFrame: mediaCapture.captureFrame,
     cleanupMedia: mediaCapture.cleanup,
     hasVideoPermission: mediaCapture.hasVideoPermission
-  }), [mediaCapture.requestPermissions, mediaCapture.captureFrame, mediaCapture.cleanup, mediaCapture.hasVideoPermission]);
+  }), [
+    stableCallbacks, 
+    options.enableVideo,
+    mediaCapture.requestPermissions,
+    mediaCapture.captureFrame,
+    mediaCapture.cleanup,
+    mediaCapture.hasVideoPermission
+  ]);
 
-  // Initialize connection hooks with memoized options and media functions
-  const openaiConnection = useOpenAIConnection({ ...openaiOptions, ...mediaFunctions });
-  const geminiConnection = useGeminiConnection(geminiOptions);
+  // Initialize connection hooks with stable options
+  const openaiConnection = useOpenAIConnection(connectionOptions);
+  const geminiConnection = useGeminiConnection(stableCallbacks);
 
   // Get the active connection based on model type
   const activeConnection = modelType === 'openai' ? openaiConnection : geminiConnection;

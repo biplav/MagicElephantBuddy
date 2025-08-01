@@ -174,69 +174,88 @@ const Home = memo(() => {
   // const [useRealtimeAPI, setUseRealtimeAPI] = useState<boolean>(true); // Already declared above
   // const [selectedModel, setSelectedModel] = useState<'openai' | 'gemini'>('openai'); // Need to use aiProvider instead
 
+  // Stabilize all callback functions to prevent hook recreation
+  const handleTranscription = useCallback((transcription: string) => {
+    console.log('🎤 HOME: Transcription callback received:', transcription);
+    setTranscribedText(transcription);
+  }, []);
+
+  const handleResponse = useCallback((text: string) => {
+    setElephantState("speaking");
+    setSpeechText(text);
+
+    // Return to idle state after speaking
+    setTimeout(() => {
+      setElephantState("idle");
+      setTimeout(() => {
+        setSpeechText(undefined);
+      }, 1000);
+    }, 4000);
+  }, []);
+
+  const handleAudioResponse = useCallback((audioData: string) => {
+    if (enableLocalPlayback) {
+      try {
+        // Convert base64 to blob and play
+        const audioBlob = base64ToBlob(audioData, "audio/pcm");
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+        };
+
+        audio.play();
+        console.log("Playing realtime audio response");
+      } catch (audioError) {
+        console.error("Error playing realtime audio:", audioError);
+      }
+    }
+  }, [enableLocalPlayback]);
+
+  const handleError = useCallback((error: string) => {
+    console.error("Realtime API error:", error);
+    setElephantState("error");
+    setSpeechText(
+      "Something went wrong with the connection. Let's try again.",
+    );
+
+    setTimeout(() => {
+      setElephantState("idle");
+      setSpeechText(undefined);
+    }, 3000);
+  }, []);
+
+  const handleStorybookPageDisplay = useCallback((pageData: {
+    pageImageUrl: string;
+    pageText: string;
+    pageNumber: number;
+    totalPages: number;
+    bookTitle: string;
+  }) => {
+    console.log("Storybook page display callback received:", pageData);
+    setCurrentStorybookPage(pageData);
+    setIsStorybookVisible(true);
+  }, []);
+
   // Initialize realtime audio hook with stable options
   const realtimeOptions = useMemo(() => ({
-    onTranscriptionReceived: (transcription: string) => {
-      console.log('🎤 HOME: Transcription callback received:', transcription);
-      setTranscribedText(transcription);
-    },
-    onResponseReceived: (text: string) => {
-      setElephantState("speaking");
-      setSpeechText(text);
-
-      // Return to idle state after speaking
-      setTimeout(() => {
-        setElephantState("idle");
-        setTimeout(() => {
-          setSpeechText(undefined);
-        }, 1000);
-      }, 4000);
-    },
-    onAudioResponseReceived: (audioData: string) => {
-      if (enableLocalPlayback) {
-        try {
-          // Convert base64 to blob and play
-          const audioBlob = base64ToBlob(audioData, "audio/pcm");
-          const audioUrl = URL.createObjectURL(audioBlob);
-          const audio = new Audio(audioUrl);
-
-          audio.onended = () => {
-            URL.revokeObjectURL(audioUrl);
-          };
-
-          audio.play();
-          console.log("Playing realtime audio response");
-        } catch (audioError) {
-          console.error("Error playing realtime audio:", audioError);
-        }
-      }
-    },
-    onError: (error: string) => {
-      console.error("Realtime API error:", error);
-      setElephantState("error");
-      setSpeechText(
-        "Something went wrong with the connection. Let's try again.",
-      );
-
-      setTimeout(() => {
-        setElephantState("idle");
-        setSpeechText(undefined);
-      }, 3000);
-    },
-    onStorybookPageDisplay: (pageData: {
-      pageImageUrl: string;
-      pageText: string;
-      pageNumber: number;
-      totalPages: number;
-      bookTitle: string;
-    }) => {
-      console.log("Storybook page display callback received:", pageData);
-      setCurrentStorybookPage(pageData);
-      setIsStorybookVisible(true);
-    },
+    onTranscriptionReceived: handleTranscription,
+    onResponseReceived: handleResponse,
+    onAudioResponseReceived: handleAudioResponse,
+    onError: handleError,
+    onStorybookPageDisplay: handleStorybookPageDisplay,
     enableVideo: enableVideo,
     modelType: aiProvider,
-  }), [enableLocalPlayback, enableVideo, aiProvider]);
+  }), [
+    handleTranscription,
+    handleResponse, 
+    handleAudioResponse,
+    handleError,
+    handleStorybookPageDisplay,
+    enableVideo, 
+    aiProvider
+  ]);
 
   const realtimeAudio = useRealtimeAudio(realtimeOptions);
 
