@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, Book, Volume2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Book } from 'lucide-react';
 
 interface StorybookPage {
   pageImageUrl: string;
@@ -64,16 +64,16 @@ export default function StorybookDisplay({
 
         {/* Main Content */}
         <CardContent className="flex-1 p-6 overflow-hidden">
-          <div className="h-full flex flex-col lg:flex-row gap-6">
+          <div className="h-full flex flex-col gap-4">
             
-            {/* Image Section */}
-            <div className="flex-1 flex items-center justify-center bg-white rounded-lg shadow-inner p-4">
-              <div className="relative w-full h-full max-w-2xl">
+            {/* Image Section - Now takes full available space */}
+            <div className="flex-1 flex items-center justify-center bg-white rounded-lg shadow-inner p-6">
+              <div className="relative w-full h-full max-w-5xl">
                 {!imageLoaded && (
                   <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg">
                     <div className="text-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-2"></div>
-                      <p className="text-gray-500">Loading page...</p>
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+                      <p className="text-gray-500 text-lg">Loading page...</p>
                     </div>
                   </div>
                 )}
@@ -89,52 +89,35 @@ export default function StorybookDisplay({
               </div>
             </div>
 
-            {/* Text Section */}
-            <div className="lg:w-80 flex flex-col">
-              <div className="bg-white rounded-lg p-4 shadow-sm border-2 border-purple-200 flex-1">
-                <div className="flex items-center gap-2 mb-3">
-                  <Volume2 className="h-4 w-4 text-purple-600" />
-                  <span className="text-sm font-medium text-purple-700">
-                    Appu is reading...
-                  </span>
-                </div>
-                <div className="prose prose-sm max-w-none">
-                  <p className="text-gray-800 leading-relaxed text-base whitespace-pre-wrap">
-                    {currentPage.pageText}
-                  </p>
-                </div>
-              </div>
+            {/* Controls - Now at the bottom */}
+            <div className="flex justify-between items-center px-4">
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => {
+                  onPreviousPage();
+                  onPageNavigation?.('previous');
+                }}
+                disabled={currentPage.pageNumber <= 1}
+                className="flex items-center gap-2"
+              >
+                <ChevronLeft className="h-5 w-5" />
+                Previous
+              </Button>
               
-              {/* Controls */}
-              <div className="flex justify-between items-center mt-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    onPreviousPage();
-                    onPageNavigation?.('previous');
-                  }}
-                  disabled={currentPage.pageNumber <= 1}
-                  className="flex items-center gap-2"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  Previous
-                </Button>
-                
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={() => {
-                    onNextPage();
-                    onPageNavigation?.('next');
-                  }}
-                  disabled={currentPage.pageNumber >= currentPage.totalPages}
-                  className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700"
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
+              <Button
+                variant="default"
+                size="lg"
+                onClick={() => {
+                  onNextPage();
+                  onPageNavigation?.('next');
+                }}
+                disabled={currentPage.pageNumber >= currentPage.totalPages}
+                className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700"
+              >
+                Next
+                <ChevronRight className="h-5 w-5" />
+              </Button>
             </div>
           </div>
         </CardContent>
