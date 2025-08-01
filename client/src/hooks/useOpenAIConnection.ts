@@ -824,7 +824,6 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
     [
       getSelectedChildId,
       fetchEnhancedPrompt,
-      mediaCapture,
       sendFunctionCallOutput,
       options.onTranscriptionReceived,
       options.onResponseReceived,
@@ -838,7 +837,7 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
       logger.info("Starting OpenAI WebRTC connection");
 
       // If video is enabled, ensure media capture is initialized first
-      if (options.enableVideo) {
+      if (options.enableVideo && mediaCapture) {
         logger.info("Video enabled, requesting media permissions first");
         try {
           await mediaCapture.requestPermissions();
@@ -996,7 +995,6 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
     setupDataChannel,
     options.enableVideo,
     options.onError,
-    mediaCapture,
   ]);
 
   const disconnect = useCallback(() => {
@@ -1018,7 +1016,9 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
     }
 
     // Clean up media capture resources
-    mediaCapture.cleanup();
+    if (mediaCapture) {
+      mediaCapture.cleanup();
+    }
 
     setState((prev) => ({
       ...prev,
