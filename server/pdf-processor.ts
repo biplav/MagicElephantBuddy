@@ -87,6 +87,8 @@ export class PDFProcessor {
       for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
         console.log(`Processing page ${pageNum}/${totalPages}`);
 
+        let imageBuffer: Buffer;
+
         try {
           // Convert page to image with explicit buffer response
           console.log(`Converting page ${pageNum} to image...`);
@@ -101,11 +103,11 @@ export class PDFProcessor {
             resultKeys: Object.keys(result),
           });
 
-          let imageBuffer = result.buffer;
+          imageBuffer = result.buffer;
           // Validate the image buffer
           if (!imageBuffer || Buffer.byteLength(imageBuffer) === 0) {
             console.warn(`Empty image buffer for page ${pageNum}, skipping...`);
-            throw new Error(`Image Buffer is empty: ${imageBuffer.length}`);
+            throw new Error(`Image Buffer is empty: ${imageBuffer ? imageBuffer.length : 0}`);
           }
           console.log(
             `Successfully generated image buffer for page ${pageNum}: ${imageBuffer.length} bytes`,
