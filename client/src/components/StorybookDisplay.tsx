@@ -49,7 +49,7 @@ export default function StorybookDisplay({
         onNextPage();
         onPageNavigation?.('next');
         setIsFlipping(false);
-      }, 300);
+      }, 500);
     }
   };
 
@@ -61,7 +61,7 @@ export default function StorybookDisplay({
         onPreviousPage();
         onPageNavigation?.('previous');
         setIsFlipping(false);
-      }, 300);
+      }, 500);
     }
   };
 
