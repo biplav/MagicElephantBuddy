@@ -1,6 +1,3 @@
-` tags.
-</tool_code>
-<replit_final_file>
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
@@ -945,8 +942,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ 
           error: "This endpoint is for OpenAI only. Gemini uses WebSocket connection." 
         });
-```tool_code
-
       }
 
       // Generate enhanced prompt and ensure it's a string
@@ -1920,7 +1915,7 @@ app.get('/api/books/:bookId/page/:pageNumber', async (req, res) => {
   // Test LangGraph workflow endpoint
   app.post("/api/admin/test-workflow", async (req: Request, res: Response) => {
     try {
-      const { textInput, childId = 1 } = req.body;
+      const { textInput, childId = 1 }       } = req.body;
 
       if (!textInput) {
         return res.status(400).json({ error: "textInput is required" });
