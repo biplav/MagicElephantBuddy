@@ -27,18 +27,27 @@ export class PDFProcessor {
   private objectStorage = new Client();
 
   async processPDF(pdfBuffer: Buffer, fileName: string): Promise<ProcessedBook> {
-    console.log(`Processing PDF: ${fileName}`);
+    console.log(`Processing PDF: ${fileName} (${pdfBuffer.length} bytes)`);
 
     // Create temporary directory for processing
     const tempDir = path.join(process.cwd(), 'temp', Date.now().toString());
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
     }
+    console.log(`Created temp directory: ${tempDir}`);
 
     try {
       // Save PDF to temporary file
       const pdfPath = path.join(tempDir, fileName);
       fs.writeFileSync(pdfPath, pdfBuffer);
+      
+      // Validate the saved PDF file
+      const savedFileSize = fs.statSync(pdfPath).size;
+      console.log(`Saved PDF to: ${pdfPath} (${savedFileSize} bytes)`);
+      
+      if (savedFileSize !== pdfBuffer.length) {
+        throw new Error(`File size mismatch: expected ${pdfBuffer.length}, got ${savedFileSize}`);
+      }
 
       // Extract text from PDF
       console.log(`Extracting text from PDF buffer of size: ${pdfBuffer.length} bytes`);
@@ -49,14 +58,15 @@ export class PDFProcessor {
       const fullText = pdfData.text;
       console.log(`Extracted ${fullText.length} characters of text`);
 
-      // Convert PDF pages to images
+      // Convert PDF pages to images with better configuration
       const convert = pdf2pic.fromPath(pdfPath, {
-        density: 100,
+        density: 150,           // Higher density for better quality
         saveFilename: "page",
         savePath: tempDir,
         format: "png",
-        width: 800,
-        height: 1000
+        width: 1200,           // Higher resolution
+        height: 1600,
+        quality: 100           // Maximum quality
       });
 
       // Get total pages
@@ -69,13 +79,54 @@ export class PDFProcessor {
       for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
         console.log(`Processing page ${pageNum}/${totalPages}`);
 
-        // Convert page to image
-        const result = await convert(pageNum, { responseType: "buffer" });
-        const imageBuffer = result.buffer as Buffer;
+        try {
+          // Convert page to image with explicit buffer response
+          console.log(`Converting page ${pageNum} to image...`);
+          const result = await convert(pageNum, { responseType: "buffer" });
+          
+          console.log(`Conversion result for page ${pageNum}:`, {
+            hasBuffer: !!result.buffer,
+            bufferLength: result.buffer ? result.buffer.length : 0,
+            resultKeys: Object.keys(result)
+          });
 
-        // Validate the image buffer
-        if (!imageBuffer || imageBuffer.length === 0) {
-          console.warn(`Empty image buffer for page ${pageNum}, skipping...`);
+          let imageBuffer: Buffer;
+          
+          // Handle different response formats from pdf2pic
+          if (result.buffer) {
+            imageBuffer = result.buffer as Buffer;
+          } else if (result.base64) {
+            imageBuffer = Buffer.from(result.base64, 'base64');
+          } else {
+            // Fallback: try to read the generated file
+            const expectedFilePath = path.join(tempDir, `page.${pageNum}.png`);
+            if (fs.existsSync(expectedFilePath)) {
+              console.log(`Reading image from file: ${expectedFilePath}`);
+              imageBuffer = fs.readFileSync(expectedFilePath);
+            } else {
+              console.warn(`No image buffer or file found for page ${pageNum}, trying alternative approach...`);
+              
+              // Alternative: try different page numbering
+              const altFilePath = path.join(tempDir, `page.${pageNum - 1}.png`);
+              if (fs.existsSync(altFilePath)) {
+                console.log(`Reading image from alternative file: ${altFilePath}`);
+                imageBuffer = fs.readFileSync(altFilePath);
+              } else {
+                console.error(`Could not generate image for page ${pageNum}, skipping...`);
+                continue;
+              }
+            }
+          }
+
+          // Validate the image buffer
+          if (!imageBuffer || imageBuffer.length === 0) {
+            console.warn(`Empty image buffer for page ${pageNum}, skipping...`);
+            continue;
+          }
+
+          console.log(`Successfully generated image buffer for page ${pageNum}: ${imageBuffer.length} bytes`);
+        } catch (conversionError) {
+          console.error(`Error converting page ${pageNum} to image:`, conversionError);
           continue;
         }
 
