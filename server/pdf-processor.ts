@@ -78,7 +78,10 @@ export class PDFProcessor {
 
         let imageUrl: string;
         try {
-          const uploadResult = await this.objectStorage.uploadFromBuffer(imageFileName, imageBuffer);
+          // Convert buffer to base64 for upload
+          const base64Image = imageBuffer.toString('base64');
+          const uploadResult = await this.objectStorage.uploadFromText(imageFileName, base64Image);
+          
           if (!uploadResult.ok) {
             console.error('Failed to upload image to object storage:', uploadResult.error);
             throw new Error(`Failed to upload image: ${uploadResult.error}`);
@@ -96,14 +99,14 @@ export class PDFProcessor {
           console.error('Object storage error, falling back to local storage:', storageError);
 
           // Fallback to local storage
-          const publicDir = path.join(process.cwd(), 'public');
+          const publicDir = path.join(process.cwd(), 'public', 'books');
           if (!fs.existsSync(publicDir)) {
             fs.mkdirSync(publicDir, { recursive: true });
           }
 
-          const localImagePath = path.join(publicDir, imageFileName);
+          const localImagePath = path.join(publicDir, `${fileName.replace('.pdf', '')}-page-${pageNum}.png`);
           fs.writeFileSync(localImagePath, imageBuffer);
-          imageUrl = `/${imageFileName}`;
+          imageUrl = `/books/${fileName.replace('.pdf', '')}-page-${pageNum}.png`;
         }
 
         // Extract text for this specific page using OCR via OpenAI Vision
