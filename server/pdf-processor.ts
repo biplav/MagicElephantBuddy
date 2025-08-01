@@ -2,7 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import pdf2pic from 'pdf2pic';
-const pdfParse = require('pdf-parse');
+import pdfParse from 'pdf-parse';
 import { createAIService } from './ai-service';
 import { Client } from '@replit/object-storage';
 
