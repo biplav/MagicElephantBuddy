@@ -1,9 +1,9 @@
-import fs from 'fs';
-import path from 'path';
-import pdf2pic from 'pdf2pic';
-import pdfParse from 'pdf-parse';
-import { createAIService } from './ai-service';
-import { Client } from '@replit/object-storage';
+import fs from "fs";
+import path from "path";
+import pdf2pic from "pdf2pic";
+import pdfParse from "pdf-parse";
+import { createAIService } from "./ai-service";
+import { Client } from "@replit/object-storage";
 
 export interface ProcessedPage {
   pageNumber: number;
@@ -23,14 +23,17 @@ export interface ProcessedBook {
 }
 
 export class PDFProcessor {
-  private aiService = createAIService('standard');
+  private aiService = createAIService("standard");
   private objectStorage = new Client();
 
-  async processPDF(pdfBuffer: Buffer, fileName: string): Promise<ProcessedBook> {
+  async processPDF(
+    pdfBuffer: Buffer,
+    fileName: string,
+  ): Promise<ProcessedBook> {
     console.log(`Processing PDF: ${fileName} (${pdfBuffer.length} bytes)`);
 
     // Create temporary directory for processing
-    const tempDir = path.join(process.cwd(), 'temp', Date.now().toString());
+    const tempDir = path.join(process.cwd(), "temp", Date.now().toString());
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
     }
@@ -40,33 +43,37 @@ export class PDFProcessor {
       // Save PDF to temporary file
       const pdfPath = path.join(tempDir, fileName);
       fs.writeFileSync(pdfPath, pdfBuffer);
-      
+
       // Validate the saved PDF file
       const savedFileSize = fs.statSync(pdfPath).size;
       console.log(`Saved PDF to: ${pdfPath} (${savedFileSize} bytes)`);
-      
+
       if (savedFileSize !== pdfBuffer.length) {
-        throw new Error(`File size mismatch: expected ${pdfBuffer.length}, got ${savedFileSize}`);
+        throw new Error(
+          `File size mismatch: expected ${pdfBuffer.length}, got ${savedFileSize}`,
+        );
       }
 
       // Extract text from PDF
-      console.log(`Extracting text from PDF buffer of size: ${pdfBuffer.length} bytes`);
+      console.log(
+        `Extracting text from PDF buffer of size: ${pdfBuffer.length} bytes`,
+      );
       const pdfData = await pdfParse(pdfBuffer, {
         // Ensure we're working with the buffer, not trying to read a file
-        max: 0 // No page limit
+        max: 0, // No page limit
       });
       const fullText = pdfData.text;
       console.log(`Extracted ${fullText.length} characters of text`);
 
       // Convert PDF pages to images with better configuration
       const convert = pdf2pic.fromPath(pdfPath, {
-        density: 150,           // Higher density for better quality
+        density: 100, // Higher density for better quality
         saveFilename: "page",
         savePath: tempDir,
         format: "png",
-        width: 1200,           // Higher resolution
-        height: 1600,
-        quality: 100           // Maximum quality
+        width: 600, // Higher resolution
+        height: 600,
+        quality: 100, // Maximum quality
       });
 
       // Get total pages
@@ -82,63 +89,48 @@ export class PDFProcessor {
         try {
           // Convert page to image with explicit buffer response
           console.log(`Converting page ${pageNum} to image...`);
-          const result = await convert(pageNum, { responseType: "buffer" });
-          
+          const result = await convert(pageNum, { responseType: "image" });
+
           console.log(`Conversion result for page ${pageNum}:`, {
             hasBuffer: !!result.buffer,
-            bufferLength: result.buffer ? result.buffer.length : 0,
-            resultKeys: Object.keys(result)
+            bufferLength: result.size,
+            buffer: result.buffer,
+            page: result.page,
+            size: Buffer.byteLength(result.buffer),
+            resultKeys: Object.keys(result),
           });
 
-          let imageBuffer: Buffer;
-          
-          // Handle different response formats from pdf2pic
-          if (result.buffer) {
-            imageBuffer = result.buffer as Buffer;
-          } else if (result.base64) {
-            imageBuffer = Buffer.from(result.base64, 'base64');
-          } else {
-            // Fallback: try to read the generated file
-            const expectedFilePath = path.join(tempDir, `page.${pageNum}.png`);
-            if (fs.existsSync(expectedFilePath)) {
-              console.log(`Reading image from file: ${expectedFilePath}`);
-              imageBuffer = fs.readFileSync(expectedFilePath);
-            } else {
-              console.warn(`No image buffer or file found for page ${pageNum}, trying alternative approach...`);
-              
-              // Alternative: try different page numbering
-              const altFilePath = path.join(tempDir, `page.${pageNum - 1}.png`);
-              if (fs.existsSync(altFilePath)) {
-                console.log(`Reading image from alternative file: ${altFilePath}`);
-                imageBuffer = fs.readFileSync(altFilePath);
-              } else {
-                console.error(`Could not generate image for page ${pageNum}, skipping...`);
-                continue;
-              }
-            }
-          }
-
+          let imageBuffer = result.buffer;
           // Validate the image buffer
-          if (!imageBuffer || imageBuffer.length === 0) {
+          if (!imageBuffer || Buffer.byteLength(imageBuffer) === 0) {
             console.warn(`Empty image buffer for page ${pageNum}, skipping...`);
-            continue;
+            throw new Error(`Image Buffer is empty: ${imageBuffer.length}`);
           }
-
-          console.log(`Successfully generated image buffer for page ${pageNum}: ${imageBuffer.length} bytes`);
+          console.log(
+            `Successfully generated image buffer for page ${pageNum}: ${imageBuffer.length} bytes`,
+          );
         } catch (conversionError) {
-          console.error(`Error converting page ${pageNum} to image:`, conversionError);
+          console.error(
+            `Error converting page ${pageNum} to image:`,
+            conversionError,
+          );
           continue;
         }
 
         // Store image in object storage only
-        const imageFileName = `books/${fileName.replace('.pdf', '')}-page-${pageNum}.png`;
-        
+        const imageFileName = `books/${fileName.replace(".pdf", "")}-page-${pageNum}.png`;
+
         // Convert buffer to base64 for upload to object storage
-        const base64Image = imageBuffer.toString('base64');
-        const uploadResult = await this.objectStorage.uploadFromText(imageFileName, base64Image);
+        const base64Image = imageBuffer.toString("base64");
+        const uploadResult = await this.objectStorage.uploadFromText(
+          imageFileName,
+          base64Image,
+        );
 
         if (!uploadResult.ok) {
-          console.error(`Failed to upload image to object storage: ${uploadResult.error}`);
+          console.error(
+            `Failed to upload image to object storage: ${uploadResult.error}`,
+          );
           throw new Error(`Failed to upload image: ${uploadResult.error}`);
         }
 
@@ -147,20 +139,26 @@ export class PDFProcessor {
         console.log(`Stored image in object storage: ${imageUrl}`);
 
         // Extract text for this specific page using OCR via OpenAI Vision with retry
-        let pageText = '';
+        let pageText = "";
         try {
           pageText = await this.extractTextFromImage(imageBuffer);
         } catch (error) {
-          console.warn(`Failed to extract text from page ${pageNum}:`, error.message);
+          console.warn(
+            `Failed to extract text from page ${pageNum}:`,
+            error.message,
+          );
           // Continue processing without text extraction
         }
 
         // Generate image description using AI with retry
-        let imageDescription = '';
+        let imageDescription = "";
         try {
           imageDescription = await this.generateImageDescription(imageBuffer);
         } catch (error) {
-          console.warn(`Failed to generate description for page ${pageNum}:`, error.message);
+          console.warn(
+            `Failed to generate description for page ${pageNum}:`,
+            error.message,
+          );
           // Continue processing without description
         }
 
@@ -169,12 +167,12 @@ export class PDFProcessor {
           imageBuffer,
           text: pageText,
           imageDescription,
-          imageUrl
+          imageUrl,
         });
 
         // Add delay between pages to avoid rate limits (100ms delay)
         if (pageNum < totalPages) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise((resolve) => setTimeout(resolve, 100));
         }
       }
 
@@ -193,9 +191,8 @@ export class PDFProcessor {
         totalPages,
         pages,
         summary,
-        metadata
+        metadata,
       };
-
     } catch (error) {
       // Clean up on error
       if (fs.existsSync(tempDir)) {
@@ -209,20 +206,20 @@ export class PDFProcessor {
     try {
       // Validate buffer before processing
       if (!imageBuffer || imageBuffer.length === 0) {
-        console.warn('Empty image buffer provided for text extraction');
-        return '';
+        console.warn("Empty image buffer provided for text extraction");
+        return "";
       }
 
       // Ensure we have a valid PNG buffer
-      const base64Image = imageBuffer.toString('base64');
-      
+      const base64Image = imageBuffer.toString("base64");
+
       // Validate base64 string
       if (!base64Image || base64Image.length === 0) {
-        console.warn('Failed to generate base64 from image buffer');
-        return '';
+        console.warn("Failed to generate base64 from image buffer");
+        return "";
       }
 
-      const OpenAI = (await import('openai')).default;
+      const OpenAI = (await import("openai")).default;
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
       const response = await openai.chat.completions.create({
@@ -233,26 +230,26 @@ export class PDFProcessor {
             content: [
               {
                 type: "text",
-                text: "Extract all text from this book page image. Return only the text content, no explanations."
+                text: "Extract all text from this book page image. Return only the text content, no explanations.",
               },
               {
                 type: "image_url",
                 image_url: {
                   url: `data:image/png;base64,${base64Image}`,
-                  detail: "high"
-                }
-              }
-            ]
-          }
+                  detail: "high",
+                },
+              },
+            ],
+          },
         ],
         max_tokens: 1000,
-        temperature: 0.1
+        temperature: 0.1,
       });
 
-      return response.choices[0].message.content || '';
+      return response.choices[0].message.content || "";
     } catch (error) {
-      console.error('Error extracting text from image:', error);
-      return '';
+      console.error("Error extracting text from image:", error);
+      return "";
     }
   }
 
@@ -260,20 +257,20 @@ export class PDFProcessor {
     try {
       // Validate buffer before processing
       if (!imageBuffer || imageBuffer.length === 0) {
-        console.warn('Empty image buffer provided for description generation');
-        return '';
+        console.warn("Empty image buffer provided for description generation");
+        return "";
       }
 
       // Ensure we have a valid PNG buffer
-      const base64Image = imageBuffer.toString('base64');
-      
+      const base64Image = imageBuffer.toString("base64");
+
       // Validate base64 string
       if (!base64Image || base64Image.length === 0) {
-        console.warn('Failed to generate base64 from image buffer');
-        return '';
+        console.warn("Failed to generate base64 from image buffer");
+        return "";
       }
 
-      const OpenAI = (await import('openai')).default;
+      const OpenAI = (await import("openai")).default;
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
       const response = await openai.chat.completions.create({
@@ -284,30 +281,33 @@ export class PDFProcessor {
             content: [
               {
                 type: "text",
-                text: "Provide a detailed description of this children's book page image. Focus on characters, objects, colors, actions, and scenes that would help a parent or child understand what's happening in the illustration. Keep it appropriate for young children."
+                text: "Provide a detailed description of this children's book page image. Focus on characters, objects, colors, actions, and scenes that would help a parent or child understand what's happening in the illustration. Keep it appropriate for young children.",
               },
               {
                 type: "image_url",
                 image_url: {
                   url: `data:image/png;base64,${base64Image}`,
-                  detail: "high"
-                }
-              }
-            ]
-          }
+                  detail: "high",
+                },
+              },
+            ],
+          },
         ],
         max_tokens: 300,
-        temperature: 0.7
+        temperature: 0.7,
       });
 
-      return response.choices[0].message.content || '';
+      return response.choices[0].message.content || "";
     } catch (error) {
-      console.error('Error generating image description:', error);
-      return '';
+      console.error("Error generating image description:", error);
+      return "";
     }
   }
 
-  private async generateBookSummary(fullText: string, fileName: string): Promise<string> {
+  private async generateBookSummary(
+    fullText: string,
+    fileName: string,
+  ): Promise<string> {
     try {
       const prompt = `Generate a comprehensive summary of this children's book. Include the main characters, plot, themes, and educational value. Keep it engaging for parents choosing books for their children.
 
@@ -317,12 +317,15 @@ ${fullText.substring(0, 5000)}...`;
       const summary = await this.aiService.generateResponse(prompt);
       return summary;
     } catch (error) {
-      console.error('Error generating book summary:', error);
-      return '';
+      console.error("Error generating book summary:", error);
+      return "";
     }
   }
 
-  private async extractMetadata(fullText: string, fileName: string): Promise<any> {
+  private async extractMetadata(
+    fullText: string,
+    fileName: string,
+  ): Promise<any> {
     try {
       const prompt = `Analyze this children's book and extract metadata in JSON format:
 
@@ -350,22 +353,22 @@ ${fullText.substring(0, 3000)}...`;
         return {
           genre: "children's book",
           extractedFromFile: fileName,
-          processingDate: new Date().toISOString()
+          processingDate: new Date().toISOString(),
         };
       }
     } catch (error) {
-      console.error('Error extracting metadata:', error);
+      console.error("Error extracting metadata:", error);
       return {
         genre: "children's book",
         extractedFromFile: fileName,
-        processingDate: new Date().toISOString()
+        processingDate: new Date().toISOString(),
       };
     }
   }
 
   private extractTitle(fileName: string, fullText: string): string {
     // Try to extract title from the first few lines of text
-    const lines = fullText.split('\n').filter(line => line.trim().length > 0);
+    const lines = fullText.split("\n").filter((line) => line.trim().length > 0);
     if (lines.length > 0) {
       const firstLine = lines[0].trim();
       if (firstLine.length > 3 && firstLine.length < 100) {
@@ -374,7 +377,7 @@ ${fullText.substring(0, 3000)}...`;
     }
 
     // Fallback to filename without extension
-    return fileName.replace('.pdf', '').replace(/[-_]/g, ' ');
+    return fileName.replace(".pdf", "").replace(/[-_]/g, " ");
   }
 
   private extractAuthor(fullText: string): string | undefined {
@@ -382,7 +385,7 @@ ${fullText.substring(0, 3000)}...`;
     const authorPatterns = [
       /by\s+([A-Za-z\s]+)/i,
       /author[:\s]+([A-Za-z\s]+)/i,
-      /written by\s+([A-Za-z\s]+)/i
+      /written by\s+([A-Za-z\s]+)/i,
     ];
 
     for (const pattern of authorPatterns) {
