@@ -946,7 +946,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Generate enhanced prompt and ensure it's a string
       console.log(`Starting enhanced prompt generation for child ${selectedChildId}...`);
-      ```text
+      
       let enhancedInstructions;
 
       try {
@@ -1905,8 +1905,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }))
         }
       });
-
-```text
 
     } catch (error) {
       console.error("Error fetching full book:", error);
