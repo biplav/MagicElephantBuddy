@@ -1,7 +1,5 @@
 import { useState, useRef, useCallback } from "react";
 import { createServiceLogger } from "@/lib/logger";
-import { useMediaCapture } from "./useMediaCapture";
-
 interface OpenAIConnectionOptions {
   onTranscriptionReceived?: (transcription: string) => void;
   onResponseReceived?: (text: string) => void;

@@ -9,9 +9,6 @@ import { CapturedFrameDisplay } from "@/components/CapturedFrameDisplay";
 import { motion, AnimatePresence } from "framer-motion";
 import useAudioRecorder from "@/hooks/useAudioRecorder";
 import useRealtimeAudio from "@/hooks/useRealtimeAudio";
-// Import error messages when needed
-import { useOpenAIConnection } from "../hooks/useOpenAIConnection";
-import { useMediaCapture } from "../hooks/useMediaCapture";
 import StorybookDisplay from "../components/StorybookDisplay";
 import { CheckCircle, Mic, MicOff, Video, VideoOff } from "lucide-react";
 

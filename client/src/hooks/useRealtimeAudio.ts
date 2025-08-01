@@ -29,14 +29,14 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
   const logger = useMemo(() => createServiceLogger('realtime-audio'), []);
   const modelType = options.modelType || 'openai';
 
-  // Only log initialization once per component mount, not on every render
-  const [hasInitialized, setHasInitialized] = useState(false);
+  // Initialize once per mount with useRef to avoid state updates
+  const hasInitialized = useRef(false);
   useEffect(() => {
-    if (!hasInitialized) {
+    if (!hasInitialized.current) {
       logger.info('Initializing hook', { modelType, enableVideo: options.enableVideo });
-      setHasInitialized(true);
+      hasInitialized.current = true;
     }
-  }, [hasInitialized, logger, modelType, options.enableVideo]);
+  }, [logger, modelType, options.enableVideo]);
 
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
 
