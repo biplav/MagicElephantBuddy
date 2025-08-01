@@ -10,6 +10,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import useAudioRecorder from "@/hooks/useAudioRecorder";
 import useRealtimeAudio from "@/hooks/useRealtimeAudio";
 // Import error messages when needed
+import { useOpenAIConnection } from "../hooks/useOpenAIConnection";
+import { useMediaCapture } from "../hooks/useMediaCapture";
+import StorybookDisplay from "../components/StorybookDisplay";
+import { CheckCircle, Mic, MicOff, Video, VideoOff } from "lucide-react";
 
 type AppState = "welcome" | "interaction";
 
@@ -462,6 +466,14 @@ const Home = memo(() => {
 
   // Camera initialization will happen when conversation starts
   // No automatic camera initialization on page load
+  // Add debug info to see what's happening
+  const [debugMode, setDebugMode] = useState(false);
+  const [capturedFrames, setCapturedFrames] = useState<any[]>([]);
+
+  // Storybook state
+  const [currentBook, setCurrentBook] = useState<any>(null);
+  const [currentStorybookPage, setCurrentStorybookPage] = useState<any>(null);
+  const [isStorybookVisible, setIsStorybookVisible] = useState(false);
 
   useEffect(() => {
     if (useRealtimeAPI && isConnected && appState === "interaction") {
@@ -879,6 +891,21 @@ const Home = memo(() => {
       console.error('Failed to end conversation:', error);
     }
   }, [enableVideo, modelType, mediaCapture]);
+
+  const handleNextPage = () => {
+    console.log("Next page requested");
+    // Implement logic to fetch the next page and update state
+  };
+
+  const handlePreviousPage = () => {
+    console.log("Previous page requested");
+    // Implement logic to fetch the previous page and update state
+  };
+
+  const handleCloseStorybook = () => {
+    console.log("Closing storybook");
+    setIsStorybookVisible(false);
+  };
 
   return (
     <div className="min-h-screen flex flex-col relative">
@@ -1601,6 +1628,15 @@ const Home = memo(() => {
           </div>
         </div>
       )}
+
+      {/* Storybook Display */}
+      <StorybookDisplay
+        currentPage={currentStorybookPage}
+        onNextPage={handleNextPage}
+        onPreviousPage={handlePreviousPage}
+        onClose={handleCloseStorybook}
+        isVisible={isStorybookVisible}
+      />
     </div>
   );
 });

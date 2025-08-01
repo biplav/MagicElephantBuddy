@@ -1,3 +1,6 @@
+` tags.
+</tool_code>
+<replit_final_file>
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
@@ -942,6 +945,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ 
           error: "This endpoint is for OpenAI only. Gemini uses WebSocket connection." 
         });
+```tool_code
+
       }
 
       // Generate enhanced prompt and ensure it's a string
@@ -982,60 +987,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Define the enhanced tools for OpenAI Realtime API
       const tools = [
-        {
-          type: "function",
-          name: "getEyesTool",
-          description:
-            "Use this tool when the child is showing, pointing to, or talking about something visual that youshould look at. This tool analyzes what the child is showing through their camera. Take the analysis from the tool to engage or respond the child.",
-          parameters: {
-            type: "object",
-            properties: {
-              reason: {
-                type: "string",
-                description:
-                  "Why you want to look at what the child is showing",
-              },
-              lookingFor: {
-                type: "string",
-                description: "What specifically you're trying to see or identify (e.g., 'counting objects', 'identifying colors', 'looking at drawing', 'checking food', 'finding shapes')"
-              },
-              context: {
-                type: "string", 
-                description: "Current conversation context or learning activity (e.g., 'practicing counting', 'learning colors', 'story time', 'meal time')"
-              }
-            },
-            required: ["reason"],
+    {
+      type: "function",
+      name: "getEyesTool",
+      description: "Use this tool to capture and analyze what the child is looking at through their camera. Perfect for interactive learning!",
+      parameters: {
+        type: "object",
+        properties: {
+          lookingFor: {
+            type: "string",
+            description: "What you want to look for or analyze in the image (e.g., 'toys on the table', 'child drawing', 'counting objects')"
           },
+          context: {
+            type: "string", 
+            description: "Context about why you're looking (e.g., 'child mentioned drawing', 'practicing counting', 'showing me something')"
+          }
         },
-        {
-          type: "function",
-          name: "bookSearchTool",
-          description:
-            "Use this tool to find and retrieve children's books for storytelling. Call this when a child asks for a story, mentions a book title, or when you want to suggest a story based on their interests. This tool can search by book title, keywords, themes, or topics.",
-          parameters: {
-            type: "object",
-            properties: {
-              bookTitle: {
-                type: "string",
-                description: "Exact book title if the child mentioned a specific book"
-              },
-              keywords: {
-                type: "string",
-                description: "Keywords or themes to search for (e.g., 'dragon', 'princess', 'adventure', 'counting', 'colors')"
-              },
-              context: {
-                type: "string",
-                description: "Why you're searching for books (e.g., 'child asked for dragon story', 'bedtime story request', 'learning about colors')"
-              },
-              ageRange: {
-                type: "string",
-                description: "Age range filter (e.g., '3-5', '4-6') based on the child's age"
-              }
-            },
-            required: ["context"],
+        required: ["lookingFor", "context"]
+      }
+    },
+    {
+      type: "function",
+      name: "bookSearchTool",
+      description: "Use this tool to find and retrieve children's books for storytelling. Search by title, keywords, or themes. Perfect for bedtime stories, educational content, or when child asks for books.",
+      parameters: {
+        type: "object",
+        properties: {
+          bookTitle: {
+            type: "string",
+            description: "Specific book title if the child mentions one"
           },
+          keywords: {
+            type: "string", 
+            description: "Keywords or themes to search for (e.g., 'dragon adventure', 'counting numbers', 'friendship story')"
+          },
+          ageRange: {
+            type: "string",
+            description: "Age range filter (e.g., '3-5', '4-6') - optional"
+          },
+          context: {
+            type: "string",
+            description: "Why you're searching for books (e.g., 'child asked for bedtime story', 'teaching about animals')"
+          }
         },
-      ];
+        required: ["context"]
+      }
+    },
+    {
+      type: "function",
+      name: "display_book_page",
+      description: "Display a specific page from a storybook with image and text. Use this to show pages during story reading sessions.",
+      parameters: {
+        type: "object",
+        properties: {
+          pageImageUrl: {
+            type: "string",
+            description: "URL of the page image to display"
+          },
+          pageText: {
+            type: "string",
+            description: "Text content of the page to read aloud"
+          },
+          pageNumber: {
+            type: "number",
+            description: "Current page number"
+          },
+          totalPages: {
+            type: "number", 
+            description: "Total number of pages in the book"
+          },
+          bookTitle: {
+            type: "string",
+            description: "Title of the book being read"
+          }
+        },
+        required: ["pageImageUrl", "pageText", "pageNumber", "totalPages", "bookTitle"]
+      }
+    }
+  ];
 
       console.log("Enhanced Instructions:", enhancedInstructions);
 
@@ -1675,7 +1704,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/admin/books/:bookId", async (req: Request, res: Response) => {
     try {
       const bookId = parseInt(req.params.bookId);
-      
+
       if (isNaN(bookId)) {
         return res.status(400).json({ error: "Invalid book ID" });
       }
@@ -1752,7 +1781,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Get all pages for the book
         const pages = await storage.getPagesByBook(book.id.toString());
-        
+
         return res.json({
           success: true,
           message: `I found "${book.title}"! This looks like a wonderful story.`,
@@ -1812,7 +1841,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/books/:bookId/full", async (req: Request, res: Response) => {
     try {
       const bookId = parseInt(req.params.bookId);
-      
+
       if (isNaN(bookId)) {
         return res.status(400).json({ error: "Invalid book ID" });
       }
@@ -1826,7 +1855,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const pages = await storage.getPagesByBook(bookId.toString());
-      
+
       res.json({
         success: true,
         message: `Here's the complete story of "${book.title}"!`,
@@ -1850,6 +1879,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
+
+// Get a specific page from a book
+app.get('/api/books/:bookId/page/:pageNumber', async (req, res) => {
+  try {
+    const bookId = parseInt(req.params.bookId);
+    const pageNumber = parseInt(req.params.pageNumber);
+
+    const book = await storage.getBook(bookId);
+    if (!book) {
+      return res.status(404).json({ error: 'Book not found' });
+    }
+
+    const pages = await storage.getPagesByBook(bookId);
+    const page = pages.find(p => p.pageNumber === pageNumber);
+
+    if (!page) {
+      return res.status(404).json({ error: 'Page not found' });
+    }
+
+    res.json({
+      success: true,
+      page: {
+        id: page.id,
+        pageNumber: page.pageNumber,
+        pageImageUrl: page.imageUrl,
+        pageText: page.pageText,
+        imageDescription: page.imageDescription,
+        totalPages: book.totalPages,
+        bookTitle: book.title
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching book page:', error);
+    res.status(500).json({ error: 'Failed to fetch book page' });
+  }
+});
 
   // Test LangGraph workflow endpoint
   app.post("/api/admin/test-workflow", async (req: Request, res: Response) => {
