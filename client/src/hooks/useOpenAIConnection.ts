@@ -24,6 +24,20 @@ interface OpenAIConnectionState {
   lastCapturedFrame: string | null;
 }
 
+interface UseOpenAIConnectionOptions {
+  onTranscriptionReceived?: (transcription: string) => void;
+  onResponseReceived?: (response: string) => void;
+  onFrameCaptured?: (frameData: string, analysis: string) => void;
+  onStorybookPageDisplay?: (pageData: {
+    pageImageUrl: string;
+    pageText: string;
+    pageNumber: number;
+    totalPages: number;
+    bookTitle: string;
+  }) => void;
+  onBookSelected?: (book: any) => void;
+}
+
 export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
   const logger = createServiceLogger("openai-connection");
 
@@ -301,22 +315,22 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
 
       const handleBookSearchTool = async (callId: string, args: any) => {
         logger.info("bookSearchTool was called!", { callId, args });
-        
+
         const argsJson = JSON.parse(args);
         logger.info("Parsed JSON arguments", { callId, argsJson });
-        
+
         try {
           // Build search parameters
           const searchParams = new URLSearchParams();
-          
+
           if (argsJson.bookTitle) {
             searchParams.append('title', argsJson.bookTitle);
           }
-          
+
           if (argsJson.keywords) {
             searchParams.append('keywords', argsJson.keywords);
           }
-          
+
           if (argsJson.ageRange) {
             searchParams.append('ageRange', argsJson.ageRange);
           }
@@ -336,7 +350,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
             },
             body: JSON.stringify(searchBody),
           });
-          
+
           if (!response.ok) {
             throw new Error(`Book search failed: ${response.status}`);
           }

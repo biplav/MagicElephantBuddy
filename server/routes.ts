@@ -1828,6 +1828,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // If only one book found, return full content like exact title match
+      if (books.length === 1) {
+        const book = books[0];
+        const pages = await storage.getPagesByBook(book.id.toString());
+        
+        return res.json({
+          success: true,
+          message: `I found "${book.title}"! This looks like a wonderful story.`,
+          books: [{
+            ...book,
+            pages: pages.map(page => ({
+              pageNumber: page.pageNumber,
+              imageUrl: page.imageUrl,
+              pageText: page.pageText,
+              imageDescription: page.imageDescription
+            }))
+          }]
+        });
+      }
+
       // For multiple results, return book summaries without full page content
       const bookSummaries = books.map(book => ({
         id: book.id,
@@ -1842,7 +1862,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({
         success: true,
-        message: `I found ${books.length} book${books.length > 1 ? 's' : ''} that might interest you!`,
+        message: `I found ${books.length} books that might interest you! Which one would you like to read?`,
         books: bookSummaries
       });
 

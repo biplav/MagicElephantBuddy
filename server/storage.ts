@@ -538,7 +538,7 @@ export class DatabaseStorage implements IStorage {
 
   async searchBooks(searchTerms: string, ageRange?: string): Promise<Book[]> {
     // Split search terms into individual words for better matching
-    const terms = searchTerms.toLowerCase().split(' ').filter(term => term.length > 2);
+    const terms = searchTerms.toLowerCase().split(' ').filter(term => term.length > 1);
     
     let query = db
       .select()
@@ -555,31 +555,70 @@ export class DatabaseStorage implements IStorage {
 
     const allBooks = await query.orderBy(desc(books.createdAt));
 
-    // Filter books by search terms (title, author, genre, description, summary)
-    const matchingBooks = allBooks.filter(book => {
-      const searchableText = [
-        book.title || '',
-        book.author || '',
-        book.genre || '',
-        book.description || '',
-        book.summary || '',
-        JSON.stringify(book.metadata || {})
-      ].join(' ').toLowerCase();
-
-      // Check if any search term matches
-      return terms.some(term => searchableText.includes(term));
-    });
-
-    // Sort by relevance (number of matching terms)
-    return matchingBooks.sort((a, b) => {
-      const aText = [a.title, a.author, a.genre, a.description, a.summary].join(' ').toLowerCase();
-      const bText = [b.title, b.author, b.genre, b.description, b.summary].join(' ').toLowerCase();
+    // Enhanced matching with scoring
+    const matchingBooks = allBooks.map(book => {
+      const title = (book.title || '').toLowerCase();
+      const author = (book.author || '').toLowerCase();
+      const genre = (book.genre || '').toLowerCase();
+      const description = (book.description || '').toLowerCase();
+      const summary = (book.summary || '').toLowerCase();
+      const metadata = JSON.stringify(book.metadata || {}).toLowerCase();
       
-      const aMatches = terms.filter(term => aText.includes(term)).length;
-      const bMatches = terms.filter(term => bText.includes(term)).length;
+      let score = 0;
+      let titleMatches = 0;
+      let exactTitleMatch = false;
       
-      return bMatches - aMatches; // Sort by most matches first
-    }).slice(0, 10); // Limit to top 10 results
+      // Check for exact title match (highest priority)
+      if (title === searchTerms.toLowerCase()) {
+        exactTitleMatch = true;
+        score += 1000;
+      }
+      
+      // Check each search term
+      terms.forEach(term => {
+        // Title matches get highest weight
+        if (title.includes(term)) {
+          titleMatches++;
+          score += 10;
+        }
+        // Author matches get high weight
+        if (author.includes(term)) {
+          score += 8;
+        }
+        // Genre matches get medium weight
+        if (genre.includes(term)) {
+          score += 6;
+        }
+        // Description/summary matches get lower weight
+        if (description.includes(term) || summary.includes(term)) {
+          score += 3;
+        }
+        // Metadata matches get lowest weight
+        if (metadata.includes(term)) {
+          score += 1;
+        }
+      });
+      
+      // Bonus for multiple title word matches
+      if (titleMatches > 1) {
+        score += titleMatches * 5;
+      }
+      
+      return { ...book, searchScore: score, exactTitleMatch };
+    })
+    .filter(book => book.searchScore > 0) // Only include books with some match
+    .sort((a, b) => {
+      // Exact title matches always come first
+      if (a.exactTitleMatch && !b.exactTitleMatch) return -1;
+      if (!a.exactTitleMatch && b.exactTitleMatch) return 1;
+      
+      // Then sort by score
+      return b.searchScore - a.searchScore;
+    })
+    .slice(0, 10) // Limit to top 10 results
+    .map(({ searchScore, exactTitleMatch, ...book }) => book); // Remove scoring fields
+
+    return matchingBooks;
   }
 
   async updateBook(bookId: number, updates: Partial<InsertBook>): Promise<Book> {
