@@ -50,12 +50,16 @@ export class PDFProcessor {
       // Process each page
       const pages = await this.processPages(pdfPath, totalPages, fileName, tempDir);
       
-      // Generate book metadata
-      const summary = await this.generateBookSummary(fullText, fileName);
-      const metadata = await this.extractMetadata(fullText, fileName);
+      // Extract book title early for use in metadata generation
+      const bookTitle = this.extractTitle(fileName, fullText, pages);
+      
+      // Generate enhanced book metadata using first 5 pages
+      const first5Pages = pages.slice(0, 5);
+      const summary = await this.generateEnhancedBookSummary(fullText, first5Pages, bookTitle);
+      const metadata = await this.extractEnhancedMetadata(fullText, first5Pages, bookTitle);
 
       return {
-        title: this.extractTitle(fileName, fullText),
+        title: bookTitle,
         author: this.extractAuthor(fullText),
         totalPages,
         pages,
@@ -335,26 +339,55 @@ export class PDFProcessor {
     return imageBuffer && imageBuffer.length > 0;
   }
 
-  private async generateBookSummary(fullText: string, fileName: string): Promise<string> {
+  private async generateEnhancedBookSummary(
+    fullText: string, 
+    first5Pages: ProcessedPage[], 
+    bookTitle: string
+  ): Promise<string> {
     try {
-      const prompt = `Generate a comprehensive summary of this children's book. Include the main characters, plot, themes, and educational value. Keep it engaging for parents choosing books for their children.
+      // Prepare content from first 5 pages
+      const first5PagesContent = first5Pages.map(page => ({
+        pageNumber: page.pageNumber,
+        text: page.text,
+        imageDescription: page.imageDescription
+      }));
 
-Book content:
-${fullText.substring(0, 5000)}...`;
+      const prompt = `Generate a comprehensive summary of this children's book titled "${bookTitle}". 
+Include the main characters, plot, themes, and educational value. Keep it engaging for parents choosing books for their children.
+
+First 5 pages content:
+${JSON.stringify(first5PagesContent, null, 2)}
+
+Full book text (excerpt):
+${fullText.substring(0, 3000)}...
+
+Focus on what makes this book special and what children can learn from it.`;
 
       const summary = await this.aiService.generateResponse(prompt);
       return summary;
     } catch (error) {
-      console.error("Error generating book summary:", error);
+      console.error("Error generating enhanced book summary:", error);
       return "Summary generation failed";
     }
   }
 
-  private async extractMetadata(fullText: string, fileName: string): Promise<any> {
+  private async extractEnhancedMetadata(
+    fullText: string, 
+    first5Pages: ProcessedPage[], 
+    bookTitle: string
+  ): Promise<any> {
     try {
-      const prompt = `Analyze this children's book and extract metadata in JSON format:
+      // Prepare content from first 5 pages
+      const first5PagesContent = first5Pages.map(page => ({
+        pageNumber: page.pageNumber,
+        text: page.text,
+        imageDescription: page.imageDescription
+      }));
+
+      const prompt = `Analyze this children's book titled "${bookTitle}" and extract metadata in JSON format:
 
 {
+  "title": "${bookTitle}",
   "genre": "adventure/educational/fantasy/etc",
   "ageRange": "3-5 years",
   "themes": ["friendship", "learning", "adventure"],
@@ -362,37 +395,62 @@ ${fullText.substring(0, 5000)}...`;
   "characters": ["character1", "character2"],
   "setting": "description of where the story takes place",
   "language": "English/bilingual/etc",
-  "illustration_style": "cartoon/realistic/watercolor/etc"
+  "illustration_style": "cartoon/realistic/watercolor/etc",
+  "keyElements": ["key story elements from images and text"],
+  "readingLevel": "beginner/intermediate/advanced"
 }
 
-Book content:
-${fullText.substring(0, 3000)}...`;
+First 5 pages with text and image descriptions:
+${JSON.stringify(first5PagesContent, null, 2)}
+
+Full book text (excerpt):
+${fullText.substring(0, 2000)}...
+
+Please analyze both the text content and image descriptions to provide comprehensive metadata.`;
 
       const response = await this.aiService.generateResponse(prompt);
 
       // Try to parse JSON response
       try {
-        return JSON.parse(response);
+        const metadata = JSON.parse(response);
+        // Ensure title is included in metadata
+        metadata.title = bookTitle;
+        return metadata;
       } catch {
-        // If JSON parsing fails, return a basic metadata object
-        return this.createFallbackMetadata(fileName);
+        // If JSON parsing fails, return a basic metadata object with title
+        return this.createFallbackMetadata(bookTitle);
       }
     } catch (error) {
-      console.error("Error extracting metadata:", error);
-      return this.createFallbackMetadata(fileName);
+      console.error("Error extracting enhanced metadata:", error);
+      return this.createFallbackMetadata(bookTitle);
     }
   }
 
-  private createFallbackMetadata(fileName: string): any {
+  private createFallbackMetadata(titleOrFileName: string): any {
     return {
+      title: titleOrFileName,
       genre: "children's book",
-      extractedFromFile: fileName,
+      extractedFromFile: titleOrFileName,
       processingDate: new Date().toISOString(),
     };
   }
 
-  private extractTitle(fileName: string, fullText: string): string {
-    // Try to extract title from the first few lines of text
+  private extractTitle(fileName: string, fullText: string, pages?: ProcessedPage[]): string {
+    // First try to extract from processed pages text (more accurate)
+    if (pages && pages.length > 0) {
+      for (const page of pages.slice(0, 3)) { // Check first 3 pages
+        const pageLines = page.text.split("\n").filter((line) => line.trim().length > 0);
+        if (pageLines.length > 0) {
+          const firstLine = pageLines[0].trim();
+          // Look for title-like text (not too short, not too long, proper casing)
+          if (firstLine.length > 3 && firstLine.length < 100 && /^[A-Z]/.test(firstLine)) {
+            return firstLine;
+          }
+        }
+      }
+    }
+
+    // Fallback to extracting from full text
     const lines = fullText.split("\n").filter((line) => line.trim().length > 0);
     if (lines.length > 0) {
       const firstLine = lines[0].trim();
@@ -401,7 +459,7 @@ ${fullText.substring(0, 3000)}...`;
       }
     }
 
-    // Fallback to filename without extension
+    // Final fallback to filename without extension
     return fileName.replace(".pdf", "").replace(/[-_]/g, " ");
   }
 
