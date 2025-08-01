@@ -83,7 +83,9 @@ export interface IStorage {
   // Book management
   createBook(book: InsertBook): Promise<Book>;
   getBook(bookId: number): Promise<Book | undefined>;
+  getBookByTitle(title: string): Promise<Book | undefined>;
   getBookByTitleAndMetadata(title: string, metadata: any): Promise<Book | undefined>;
+  searchBooks(searchTerms: string, ageRange?: string): Promise<Book[]>;
   updateBook(bookId: number, updates: Partial<InsertBook>): Promise<Book>;
   deleteBook(bookId: number): Promise<void>;
   createPage(page: InsertPage): Promise<Page>;
@@ -513,6 +515,17 @@ export class DatabaseStorage implements IStorage {
     return book || undefined;
   }
 
+  async getBookByTitle(title: string): Promise<Book | undefined> {
+    const [book] = await db
+      .select()
+      .from(books)
+      .where(and(
+        eq(books.title, title),
+        eq(books.isActive, true)
+      ));
+    return book || undefined;
+  }
+
   async getBookByTitleAndMetadata(title: string, metadata: any): Promise<Book | undefined> {
     // Simple similarity check based on title
     const existingBooks = await db
@@ -521,6 +534,52 @@ export class DatabaseStorage implements IStorage {
       .where(eq(books.title, title));
     
     return existingBooks[0] || undefined;
+  }
+
+  async searchBooks(searchTerms: string, ageRange?: string): Promise<Book[]> {
+    // Split search terms into individual words for better matching
+    const terms = searchTerms.toLowerCase().split(' ').filter(term => term.length > 2);
+    
+    let query = db
+      .select()
+      .from(books)
+      .where(eq(books.isActive, true));
+
+    // If age range is specified, filter by it
+    if (ageRange) {
+      query = query.where(and(
+        eq(books.isActive, true),
+        eq(books.ageRange, ageRange)
+      ));
+    }
+
+    const allBooks = await query.orderBy(desc(books.createdAt));
+
+    // Filter books by search terms (title, author, genre, description, summary)
+    const matchingBooks = allBooks.filter(book => {
+      const searchableText = [
+        book.title || '',
+        book.author || '',
+        book.genre || '',
+        book.description || '',
+        book.summary || '',
+        JSON.stringify(book.metadata || {})
+      ].join(' ').toLowerCase();
+
+      // Check if any search term matches
+      return terms.some(term => searchableText.includes(term));
+    });
+
+    // Sort by relevance (number of matching terms)
+    return matchingBooks.sort((a, b) => {
+      const aText = [a.title, a.author, a.genre, a.description, a.summary].join(' ').toLowerCase();
+      const bText = [b.title, b.author, b.genre, b.description, b.summary].join(' ').toLowerCase();
+      
+      const aMatches = terms.filter(term => aText.includes(term)).length;
+      const bMatches = terms.filter(term => bText.includes(term)).length;
+      
+      return bMatches - aMatches; // Sort by most matches first
+    }).slice(0, 10); // Limit to top 10 results
   }
 
   async updateBook(bookId: number, updates: Partial<InsertBook>): Promise<Book> {

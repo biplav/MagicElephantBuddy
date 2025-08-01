@@ -980,7 +980,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
       }
 
-      // Define the enhanced getEyesTool for OpenAI Realtime API
+      // Define the enhanced tools for OpenAI Realtime API
       const tools = [
         {
           type: "function",
@@ -1005,6 +1005,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
             },
             required: ["reason"],
+          },
+        },
+        {
+          type: "function",
+          name: "bookSearchTool",
+          description:
+            "Use this tool to find and retrieve children's books for storytelling. Call this when a child asks for a story, mentions a book title, or when you want to suggest a story based on their interests. This tool can search by book title, keywords, themes, or topics.",
+          parameters: {
+            type: "object",
+            properties: {
+              bookTitle: {
+                type: "string",
+                description: "Exact book title if the child mentioned a specific book"
+              },
+              keywords: {
+                type: "string",
+                description: "Keywords or themes to search for (e.g., 'dragon', 'princess', 'adventure', 'counting', 'colors')"
+              },
+              context: {
+                type: "string",
+                description: "Why you're searching for books (e.g., 'child asked for dragon story', 'bedtime story request', 'learning about colors')"
+              },
+              ageRange: {
+                type: "string",
+                description: "Age range filter (e.g., '3-5', '4-6') based on the child's age"
+              }
+            },
+            required: ["context"],
           },
         },
       ];
@@ -1700,6 +1728,125 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ 
         error: "Failed to delete book",
         details: error.message 
+      });
+    }
+  });
+
+  // Book search and retrieval endpoint for OpenAI tool
+  app.post("/api/books/search", async (req: Request, res: Response) => {
+    try {
+      const { context, bookTitle, keywords, ageRange } = req.body;
+
+      console.log(`📚 Book search request:`, { context, bookTitle, keywords, ageRange });
+
+      // If specific book title is provided, search for exact match
+      if (bookTitle) {
+        const book = await storage.getBookByTitle(bookTitle);
+        if (!book) {
+          return res.json({
+            success: false,
+            message: `I couldn't find a book titled "${bookTitle}". Let me suggest some other books!`,
+            books: []
+          });
+        }
+
+        // Get all pages for the book
+        const pages = await storage.getPagesByBook(book.id.toString());
+        
+        return res.json({
+          success: true,
+          message: `I found "${book.title}"! This looks like a wonderful story.`,
+          books: [{
+            ...book,
+            pages: pages.map(page => ({
+              pageNumber: page.pageNumber,
+              imageUrl: page.imageUrl,
+              pageText: page.pageText,
+              imageDescription: page.imageDescription
+            }))
+          }]
+        });
+      }
+
+      // Search by keywords or context
+      const searchTerms = keywords || context || '';
+      const books = await storage.searchBooks(searchTerms, ageRange);
+
+      if (books.length === 0) {
+        return res.json({
+          success: false,
+          message: `I couldn't find any books matching "${searchTerms}". Would you like me to suggest some popular books instead?`,
+          books: []
+        });
+      }
+
+      // For multiple results, return book summaries without full page content
+      const bookSummaries = books.map(book => ({
+        id: book.id,
+        title: book.title,
+        author: book.author,
+        genre: book.genre,
+        ageRange: book.ageRange,
+        summary: book.summary,
+        totalPages: book.totalPages,
+        metadata: book.metadata
+      }));
+
+      res.json({
+        success: true,
+        message: `I found ${books.length} book${books.length > 1 ? 's' : ''} that might interest you!`,
+        books: bookSummaries
+      });
+
+    } catch (error) {
+      console.error("Error in book search:", error);
+      res.status(500).json({ 
+        success: false,
+        error: "Failed to search books",
+        message: "I'm having trouble finding books right now. Let's try again in a moment!"
+      });
+    }
+  });
+
+  // Get specific book with all pages
+  app.get("/api/books/:bookId/full", async (req: Request, res: Response) => {
+    try {
+      const bookId = parseInt(req.params.bookId);
+      
+      if (isNaN(bookId)) {
+        return res.status(400).json({ error: "Invalid book ID" });
+      }
+
+      const book = await storage.getBook(bookId);
+      if (!book) {
+        return res.status(404).json({ 
+          success: false,
+          message: "I couldn't find that book. Let me help you find another one!"
+        });
+      }
+
+      const pages = await storage.getPagesByBook(bookId.toString());
+      
+      res.json({
+        success: true,
+        message: `Here's the complete story of "${book.title}"!`,
+        book: {
+          ...book,
+          pages: pages.map(page => ({
+            pageNumber: page.pageNumber,
+            imageUrl: page.imageUrl,
+            pageText: page.pageText,
+            imageDescription: page.imageDescription
+          }))
+        }
+      });
+
+    } catch (error) {
+      console.error("Error fetching full book:", error);
+      res.status(500).json({ 
+        success: false,
+        error: "Failed to fetch book",
+        message: "I'm having trouble getting that book right now. Let's try a different one!"
       });
     }
   });
