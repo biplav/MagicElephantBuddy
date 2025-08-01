@@ -1797,6 +1797,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const books = await storage.searchBooks(searchTerms, ageRange);
 
       if (books.length === 0) {
+        // If no books found, get a random book from the database
+        const randomBooks = await storage.getAllBooks();
+        if (randomBooks.length > 0) {
+          const randomIndex = Math.floor(Math.random() * randomBooks.length);
+          const randomBook = randomBooks[randomIndex];
+          
+          // Get all pages for the random book
+          const pages = await storage.getPagesByBook(randomBook.id.toString());
+          
+          return res.json({
+            success: true,
+            message: `I couldn't find books matching "${searchTerms}", but here's a wonderful story I think you'll love!`,
+            books: [{
+              ...randomBook,
+              pages: pages.map(page => ({
+                pageNumber: page.pageNumber,
+                imageUrl: page.imageUrl,
+                pageText: page.pageText,
+                imageDescription: page.imageDescription
+              }))
+            }]
+          });
+        }
+        
         return res.json({
           success: false,
           message: `I couldn't find any books matching "${searchTerms}". Would you like me to suggest some popular books instead?`,
