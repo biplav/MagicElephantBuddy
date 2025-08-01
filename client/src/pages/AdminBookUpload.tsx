@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Upload, FileText, Image, BookOpen, CheckCircle, AlertCircle } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Upload, FileText, Image, BookOpen, CheckCircle, AlertCircle, Trash2 } from 'lucide-react';
 
 interface Book {
   id: number;
@@ -36,6 +37,7 @@ export default function AdminBookUpload() {
   const [books, setBooks] = useState<Book[]>([]);
   const [selectedBookPages, setSelectedBookPages] = useState<Page[]>([]);
   const [showPages, setShowPages] = useState<number | null>(null);
+  const [deletingBookId, setDeletingBookId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -112,6 +114,35 @@ export default function AdminBookUpload() {
       }
     } catch (err) {
       console.error('Failed to fetch book pages:', err);
+    }
+  };
+
+  const deleteBook = async (bookId: number) => {
+    setDeletingBookId(bookId);
+    try {
+      const response = await fetch(`/api/admin/books/${bookId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        // Remove book from local state
+        setBooks(books.filter(book => book.id !== bookId));
+        
+        // Close pages view if this book was being viewed
+        if (showPages === bookId) {
+          setShowPages(null);
+          setSelectedBookPages([]);
+        }
+        
+        setError(null);
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Failed to delete book');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete book');
+    } finally {
+      setDeletingBookId(null);
     }
   };
 
@@ -224,15 +255,47 @@ export default function AdminBookUpload() {
                     <p className="text-sm text-gray-700 mb-3 line-clamp-2">{book.summary}</p>
                   )}
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => fetchBookPages(book.id)}
-                    disabled={showPages === book.id}
-                  >
-                    <Image className="h-4 w-4 mr-1" />
-                    {showPages === book.id ? 'Loading...' : 'View Pages'}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fetchBookPages(book.id)}
+                      disabled={showPages === book.id}
+                    >
+                      <Image className="h-4 w-4 mr-1" />
+                      {showPages === book.id ? 'Loading...' : 'View Pages'}
+                    </Button>
+
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          disabled={deletingBookId === book.id}
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          {deletingBookId === book.id ? 'Deleting...' : 'Delete'}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete Book</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to delete "{book.title}"? This will permanently remove the book and all its pages from both the database and object storage. This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => deleteBook(book.id)}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            Delete Book
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
                 </div>
               ))}
             </div>

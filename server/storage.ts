@@ -82,8 +82,10 @@ export interface IStorage {
 
   // Book management
   createBook(book: InsertBook): Promise<Book>;
+  getBook(bookId: number): Promise<Book | undefined>;
   getBookByTitleAndMetadata(title: string, metadata: any): Promise<Book | undefined>;
   updateBook(bookId: number, updates: Partial<InsertBook>): Promise<Book>;
+  deleteBook(bookId: number): Promise<void>;
   createPage(page: InsertPage): Promise<Page>;
   getPagesByBook(bookId: number): Promise<Page[]>;
   deletePagesByBook(bookId: number): Promise<void>;
@@ -503,6 +505,14 @@ export class DatabaseStorage implements IStorage {
     return book;
   }
 
+  async getBook(bookId: number): Promise<Book | undefined> {
+    const [book] = await db
+      .select()
+      .from(books)
+      .where(eq(books.id, bookId));
+    return book || undefined;
+  }
+
   async getBookByTitleAndMetadata(title: string, metadata: any): Promise<Book | undefined> {
     // Simple similarity check based on title
     const existingBooks = await db
@@ -537,6 +547,10 @@ export class DatabaseStorage implements IStorage {
 
   async deletePagesByBook(bookId: number): Promise<void> {
     await db.delete(pages).where(eq(pages.bookId, bookId));
+  }
+
+  async deleteBook(bookId: number): Promise<void> {
+    await db.delete(books).where(eq(books.id, bookId));
   }
 
   async getAllBooks(): Promise<Book[]> {

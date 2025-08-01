@@ -1644,6 +1644,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/admin/books/:bookId", async (req: Request, res: Response) => {
+    try {
+      const bookId = parseInt(req.params.bookId);
+      
+      if (isNaN(bookId)) {
+        return res.status(400).json({ error: "Invalid book ID" });
+      }
+
+      console.log(`Deleting book ${bookId}...`);
+
+      // Get book and pages first to extract object storage file names
+      const book = await storage.getBook(bookId);
+      if (!book) {
+        return res.status(404).json({ error: "Book not found" });
+      }
+
+      const pages = await storage.getPagesByBook(bookId.toString());
+
+      // Delete images from object storage
+      const { Client } = await import('@replit/object-storage');
+      const objectStorage = new Client();
+
+      for (const page of pages) {
+        if (page.imageUrl && page.imageUrl.startsWith('/api/object-storage/')) {
+          const fileName = decodeURIComponent(page.imageUrl.replace('/api/object-storage/', ''));
+          try {
+            console.log(`Deleting image from object storage: ${fileName}`);
+            const deleteResult = await objectStorage.delete(fileName);
+            if (!deleteResult.ok) {
+              console.warn(`Failed to delete image ${fileName}:`, deleteResult.error);
+            }
+          } catch (error) {
+            console.warn(`Error deleting image ${fileName}:`, error);
+          }
+        }
+      }
+
+      // Delete pages from database
+      await storage.deletePagesByBook(bookId);
+      console.log(`Deleted ${pages.length} pages for book ${bookId}`);
+
+      // Delete book from database
+      await storage.deleteBook(bookId);
+      console.log(`Deleted book ${bookId}: ${book.title}`);
+
+      res.json({
+        success: true,
+        message: `Book "${book.title}" deleted successfully`,
+        deletedPages: pages.length
+      });
+
+    } catch (error: any) {
+      console.error("Error deleting book:", error);
+      res.status(500).json({ 
+        error: "Failed to delete book",
+        details: error.message 
+      });
+    }
+  });
+
   // Test LangGraph workflow endpoint
   app.post("/api/admin/test-workflow", async (req: Request, res: Response) => {
     try {
