@@ -226,6 +226,17 @@ const Home = memo(() => {
         setSpeechText(undefined);
       }, 3000);
     },
+    onStorybookPageDisplay: (pageData: {
+      pageImageUrl: string;
+      pageText: string;
+      pageNumber: number;
+      totalPages: number;
+      bookTitle: string;
+    }) => {
+      console.log("Storybook page display callback received:", pageData);
+      setCurrentStorybookPage(pageData);
+      setIsStorybookVisible(true);
+    },
     enableVideo: enableVideo,
     modelType: aiProvider,
   }), [enableLocalPlayback, enableVideo, aiProvider]);
