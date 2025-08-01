@@ -2,7 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import pdf2pic from 'pdf2pic';
-import pdfParse from 'pdf-parse';
+import * as pdfParse from 'pdf-parse';
 import { createAIService } from './ai-service';
 import { Client } from '@replit/object-storage';
 
@@ -43,7 +43,7 @@ export class PDFProcessor {
 
       // Extract text from PDF
       console.log(`Extracting text from PDF buffer of size: ${pdfBuffer.length} bytes`);
-      const pdfData = await pdfParse(pdfBuffer, {
+      const pdfData = await (pdfParse as any)(pdfBuffer, {
         // Ensure we're working with the buffer, not trying to read a file
         max: 0 // No page limit
       });
