@@ -67,13 +67,14 @@ export class PDFProcessor {
 
       // Convert PDF pages to images with better configuration
       const convert = pdf2pic.fromPath(pdfPath, {
-        density: 100, // Higher density for better quality
+        density: 150,
         saveFilename: "page",
         savePath: tempDir,
         format: "png",
-        width: 600, // Higher resolution
-        height: 600,
-        quality: 100, // Maximum quality
+        width: 800,
+        height: 1000,
+        quality: 85,
+        preserveAspectRatio: true,
       });
 
       // Get total pages
@@ -89,7 +90,7 @@ export class PDFProcessor {
         try {
           // Convert page to image with explicit buffer response
           console.log(`Converting page ${pageNum} to image...`);
-          const result = await convert(pageNum, { responseType: "image" });
+          const result = await convert(pageNum, { responseType: "buffer" });
 
           console.log(`Conversion result for page ${pageNum}:`, {
             hasBuffer: !!result.buffer,
