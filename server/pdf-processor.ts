@@ -79,37 +79,21 @@ export class PDFProcessor {
           continue;
         }
 
-        // Store image in object storage and provide fallback to local storage
+        // Store image in object storage only
         const imageFileName = `books/${fileName.replace('.pdf', '')}-page-${pageNum}.png`;
-        let imageUrl: string;
+        
+        // Convert buffer to base64 for upload to object storage
+        const base64Image = imageBuffer.toString('base64');
+        const uploadResult = await this.objectStorage.uploadFromText(imageFileName, base64Image);
 
-        try {
-          // Convert buffer to base64 for upload to object storage
-          const base64Image = imageBuffer.toString('base64');
-          const uploadResult = await this.objectStorage.uploadFromText(imageFileName, base64Image);
-
-          if (uploadResult.ok) {
-            // Use custom route to serve from object storage
-            imageUrl = `/api/object-storage/${encodeURIComponent(imageFileName)}`;
-            console.log(`Stored image in object storage: ${imageUrl}`);
-          } else {
-            throw new Error(`Upload failed: ${uploadResult.error}`);
-          }
-        } catch (storageError) {
-          console.error('Object storage failed, using local fallback:', storageError);
-
-          // Fallback to local storage
-          const publicDir = path.join(process.cwd(), 'public', 'books');
-          if (!fs.existsSync(publicDir)) {
-            fs.mkdirSync(publicDir, { recursive: true });
-          }
-
-          const localImageFileName = `${fileName.replace('.pdf', '')}-page-${pageNum}.png`;
-          const localImagePath = path.join(publicDir, localImageFileName);
-          fs.writeFileSync(localImagePath, imageBuffer);
-          imageUrl = `/books/${localImageFileName}`;
-          console.log(`Saved image locally: ${imageUrl}`);
+        if (!uploadResult.ok) {
+          console.error(`Failed to upload image to object storage: ${uploadResult.error}`);
+          throw new Error(`Failed to upload image: ${uploadResult.error}`);
         }
+
+        // Use custom route to serve from object storage
+        const imageUrl = `/api/object-storage/${encodeURIComponent(imageFileName)}`;
+        console.log(`Stored image in object storage: ${imageUrl}`);
 
         // Extract text for this specific page using OCR via OpenAI Vision with retry
         let pageText = '';
