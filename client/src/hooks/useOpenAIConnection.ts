@@ -8,6 +8,13 @@ interface OpenAIConnectionOptions {
   onAudioResponseReceived?: (audioData: string) => void;
   onError?: (error: string) => void;
   enableVideo?: boolean;
+  onStorybookPageDisplay?: (pageData: {
+    pageImageUrl: string;
+    pageText: string;
+    pageNumber: number;
+    totalPages: number;
+    bookTitle: string;
+  }) => void;
 }
 
 interface OpenAIConnectionState {
@@ -292,6 +299,119 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         }
       };
 
+      const handleBookSearchTool = async (callId: string, args: any) => {
+        logger.info("bookSearchTool was called!", { callId, args });
+
+        try {
+          // Build search parameters
+          const searchParams = new URLSearchParams();
+          
+          if (args.bookTitle) {
+            searchParams.append('title', args.bookTitle);
+          }
+          
+          if (args.keywords) {
+            searchParams.append('keywords', args.keywords);
+          }
+          
+          if (args.ageRange) {
+            searchParams.append('ageRange', args.ageRange);
+          }
+
+          // Search for books
+          const response = await fetch(`/api/books/search?${searchParams}`);
+          
+          if (!response.ok) {
+            throw new Error(`Book search failed: ${response.status}`);
+          }
+
+          const searchResults = await response.json();
+          logger.info("Book search completed", { 
+            resultsCount: searchResults.books?.length || 0,
+            searchParams: args 
+          });
+
+          // Return search results to OpenAI
+          const resultMessage = searchResults.books?.length > 0 
+            ? `Found ${searchResults.books.length} book(s):\n\n${searchResults.books.map((book: any) => 
+                `**${book.title}** by ${book.author || 'Unknown Author'}\n` +
+                `Age Range: ${book.ageRange || 'All ages'}\n` +
+                `Genre: ${book.genre || 'General'}\n` +
+                `Summary: ${book.summary || book.description || 'No summary available'}\n` +
+                `Pages: ${book.totalPages}\n` +
+                `Book ID: ${book.id}\n`
+              ).join('\n')}\n\nTo read a book, ask me to get the full content by mentioning the book title or saying "Let's read [book title]"`
+            : `No books found matching your search criteria. Try different keywords or ask for a different type of story.`;
+
+          sendFunctionCallOutput(callId, resultMessage);
+
+          // Trigger model response
+          dataChannelRef.current?.send(JSON.stringify({
+            type: 'response.create'
+          }));
+
+        } catch (error: any) {
+          logger.error("Error handling bookSearchTool", {
+            error: error.message,
+            args
+          });
+
+          sendFunctionCallOutput(
+            callId,
+            "I'm having trouble searching for books right now. Can you try asking for a story in a different way?"
+          );
+
+          // Trigger model response after error
+          dataChannelRef.current?.send(JSON.stringify({
+            type: 'response.create'
+          }));
+        }
+      };
+
+      const handleDisplayBookPage = async (callId: string, args: any) => {
+        logger.info("display_book_page was called!", { callId, args });
+
+        try {
+          // Trigger the storybook display component
+          if (options.onStorybookPageDisplay) {
+            options.onStorybookPageDisplay({
+              pageImageUrl: args.pageImageUrl,
+              pageText: args.pageText,
+              pageNumber: args.pageNumber,
+              totalPages: args.totalPages,
+              bookTitle: args.bookTitle
+            });
+          }
+
+          // Confirm the page display to OpenAI
+          sendFunctionCallOutput(
+            callId, 
+            `Page ${args.pageNumber} of "${args.bookTitle}" is now displayed. I can see the image and will read the text aloud.`
+          );
+
+          // Trigger model response
+          dataChannelRef.current?.send(JSON.stringify({
+            type: 'response.create'
+          }));
+
+        } catch (error: any) {
+          logger.error("Error handling display_book_page", {
+            error: error.message,
+            args
+          });
+
+          sendFunctionCallOutput(
+            callId,
+            "I'm having trouble displaying the book page right now. Let me try to continue with the story."
+          );
+
+          // Trigger model response after error
+          dataChannelRef.current?.send(JSON.stringify({
+            type: 'response.create'
+          }));
+        }
+      };
+
       const handleGetEyesTool = async (callId: string, args: any) => {
         logger.info("getEyesTool was called!", { callId, args });
 
@@ -527,9 +647,13 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
                 arguments: message.arguments,
                 fullMessage: message,
               });
-              // When getEyesTool is called, handle it here
+              // Handle different tool calls
               if (message.name === "getEyesTool") {
                 await handleGetEyesTool(message.call_id, message.arguments);
+              } else if (message.name === "bookSearchTool") {
+                await handleBookSearchTool(message.call_id, message.arguments);
+              } else if (message.name === "display_book_page") {
+                await handleDisplayBookPage(message.call_id, message.arguments);
               }
               break;
             case "response.done":
