@@ -301,21 +301,24 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
 
       const handleBookSearchTool = async (callId: string, args: any) => {
         logger.info("bookSearchTool was called!", { callId, args });
-
+        
+        const argsJson = JSON.parse(args);
+        logger.info("Parsed JSON arguments", { callId, argsJson });
+        
         try {
           // Build search parameters
           const searchParams = new URLSearchParams();
           
-          if (args.bookTitle) {
-            searchParams.append('title', args.bookTitle);
+          if (argsJson.bookTitle) {
+            searchParams.append('title', argsJson.bookTitle);
           }
           
-          if (args.keywords) {
-            searchParams.append('keywords', args.keywords);
+          if (argsJson.keywords) {
+            searchParams.append('keywords', argsJson.keywords);
           }
           
-          if (args.ageRange) {
-            searchParams.append('ageRange', args.ageRange);
+          if (argsJson.ageRange) {
+            searchParams.append('ageRange', argsJson.ageRange);
           }
 
           // Search for books
