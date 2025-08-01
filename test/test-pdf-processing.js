@@ -1,6 +1,10 @@
 
-const pdfParse = require('pdf-parse');
-const fs = require('fs');
+import pdfParse from 'pdf-parse';
+import fs from 'fs';
+import { createRequire } from 'module';
+
+// Create require function for importing package.json
+const require = createRequire(import.meta.url);
 
 // Test if pdf-parse works with a simple buffer
 console.log('Testing pdf-parse library...');
