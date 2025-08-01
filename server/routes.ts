@@ -232,7 +232,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const objectStorage = new Client();
 
       // Download the base64 image data from object storage
-      const downloadResult = await objectStorage.downloadToText(fileName);
+      const downloadResult = await objectStorage.downloadAsText(fileName);
 
       if (!downloadResult.ok) {
         console.error(`Failed to download ${fileName}:`, downloadResult.error);
@@ -1635,7 +1635,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/books/:bookId/pages", async (req: Request, res: Response) => {
     try {
-      const bookId = parseInt(req.params.bookId);
+      const bookId = req.params.bookId;
       const pages = await storage.getPagesByBook(bookId);
       res.json(pages);
     } catch (error) {

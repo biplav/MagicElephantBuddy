@@ -527,7 +527,7 @@ export class DatabaseStorage implements IStorage {
     return page;
   }
 
-  async getPagesByBook(bookId: number): Promise<Page[]> {
+  async getPagesByBook(bookId: string): Promise<Page[]> {
     return await db
       .select()
       .from(pages)
