@@ -1912,7 +1912,7 @@ Answer the parent's question using this data. Be specific, helpful, and encourag
 
         if (updates.preferredLanguages) {
           updatedProfile.preferredLanguages = Array.isArray(
-            updates.preferredgeneration>
+            updates.preferredLanguages
           )
             ? updates.preferredLanguages
             : [
