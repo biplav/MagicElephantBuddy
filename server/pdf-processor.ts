@@ -50,13 +50,11 @@ export class PDFProcessor {
       // Process each page
       const pages = await this.processPages(pdfPath, totalPages, fileName, tempDir);
       
-      // Extract book title early for use in metadata generation
-      const bookTitle = this.extractTitle(fileName, fullText, pages);
-      
-      // Generate enhanced book metadata using first 5 pages
+      // Generate enhanced book metadata using first 5 pages - let OpenAI extract title
       const first5Pages = pages.slice(0, 5);
+      const metadata = await this.extractEnhancedMetadata(fullText, first5Pages, fileName);
+      const bookTitle = metadata.title || fileName.replace(".pdf", "").replace(/[-_]/g, " ");
       const summary = await this.generateEnhancedBookSummary(fullText, first5Pages, bookTitle);
-      const metadata = await this.extractEnhancedMetadata(fullText, first5Pages, bookTitle);
 
       return {
         title: bookTitle,
@@ -374,7 +372,7 @@ Focus on what makes this book special and what children can learn from it.`;
   private async extractEnhancedMetadata(
     fullText: string, 
     first5Pages: ProcessedPage[], 
-    bookTitle: string
+    fileName: string
   ): Promise<any> {
     try {
       // Prepare content from first 5 pages
@@ -384,10 +382,10 @@ Focus on what makes this book special and what children can learn from it.`;
         imageDescription: page.imageDescription
       }));
 
-      const prompt = `Analyze this children's book titled "${bookTitle}" and extract metadata in JSON format:
+      const prompt = `Analyze this children's book and extract metadata in JSON format. Extract the actual title from the book content, not the filename:
 
 {
-  "title": "${bookTitle}",
+  "title": "Extract the actual book title from the content",
   "genre": "adventure/educational/fantasy/etc",
   "ageRange": "3-5 years",
   "themes": ["friendship", "learning", "adventure"],
@@ -413,55 +411,32 @@ Please analyze both the text content and image descriptions to provide comprehen
       // Try to parse JSON response
       try {
         const metadata = JSON.parse(response);
-        // Ensure title is included in metadata
-        metadata.title = bookTitle;
+        // Ensure title exists, fallback to filename if not extracted
+        if (!metadata.title) {
+          metadata.title = fileName.replace(".pdf", "").replace(/[-_]/g, " ");
+        }
         return metadata;
       } catch {
-        // If JSON parsing fails, return a basic metadata object with title
-        return this.createFallbackMetadata(bookTitle);
+        // If JSON parsing fails, return a basic metadata object
+        return this.createFallbackMetadata(fileName);
       }
     } catch (error) {
       console.error("Error extracting enhanced metadata:", error);
-      return this.createFallbackMetadata(bookTitle);
+      return this.createFallbackMetadata(fileName);
     }
   }
 
-  private createFallbackMetadata(titleOrFileName: string): any {
+  private createFallbackMetadata(fileName: string): any {
+    const title = fileName.replace(".pdf", "").replace(/[-_]/g, " ");
     return {
-      title: titleOrFileName,
+      title: title,
       genre: "children's book",
-      extractedFromFile: titleOrFileName,
+      extractedFromFile: fileName,
       processingDate: new Date().toISOString(),
     };
   }
 
-  private extractTitle(fileName: string, fullText: string, pages?: ProcessedPage[]): string {
-    // First try to extract from processed pages text (more accurate)
-    if (pages && pages.length > 0) {
-      for (const page of pages.slice(0, 3)) { // Check first 3 pages
-        const pageLines = page.text.split("\n").filter((line) => line.trim().length > 0);
-        if (pageLines.length > 0) {
-          const firstLine = pageLines[0].trim();
-          // Look for title-like text (not too short, not too long, proper casing)
-          if (firstLine.length > 3 && firstLine.length < 100 && /^[A-Z]/.test(firstLine)) {
-            return firstLine;
-          }
-        }
-      }
-    }
-
-    // Fallback to extracting from full text
-    const lines = fullText.split("\n").filter((line) => line.trim().length > 0);
-    if (lines.length > 0) {
-      const firstLine = lines[0].trim();
-      if (firstLine.length > 3 && firstLine.length < 100) {
-        return firstLine;
-      }
-    }
-
-    // Final fallback to filename without extension
-    return fileName.replace(".pdf", "").replace(/[-_]/g, " ");
-  }
+  
 
   private extractAuthor(fullText: string): string | undefined {
     // Simple pattern matching for author
