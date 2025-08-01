@@ -53,8 +53,9 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const conversationIdRef = useRef<string | null>(null); // Add conversationIdRef
 
-  // Add media capture for frame analysis - moved to top level
-  const mediaCapture = useMediaCapture({ enableVideo: options.enableVideo });
+  // Use the media capture instance passed from parent - store in ref to avoid dependency issues
+  const mediaCaptureRef = useRef(options.mediaCapture);
+  mediaCaptureRef.current = options.mediaCapture;
 
   const getSelectedChildId = useCallback((): string => {
     const selectedChildId = localStorage.getItem("selectedChildId");
@@ -356,7 +357,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
             // Store the first book for later display
             selectedBookRef.current = searchResults.books[0];
             currentPageRef.current = 1;
-            
+
             logger.info("Stored book for display", { 
               bookTitle: selectedBookRef.current.title,
               totalPages: selectedBookRef.current.pages?.length || selectedBookRef.current.totalPages
@@ -409,7 +410,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
               callId,
               "I need to search for a book first before I can display pages. What kind of story would you like to read?"
             );
-            
+
             dataChannelRef.current?.send(JSON.stringify({
               type: 'response.create'
             }));
@@ -418,7 +419,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
 
           // Parse the page request (could be "first", "next", "previous", or a number)
           let targetPageNumber = currentPageRef.current;
-          
+
           if (args.pageRequest) {
             const request = args.pageRequest.toLowerCase();
             if (request === 'first' || request === 'start') {
@@ -435,13 +436,13 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
           // Get the page data from stored book
           const pages = selectedBookRef.current.pages || [];
           const targetPage = pages.find((p: any) => p.pageNumber === targetPageNumber);
-          
+
           if (!targetPage) {
             sendFunctionCallOutput(
               callId,
               `I couldn't find page ${targetPageNumber} in "${selectedBookRef.current.title}". This book has ${pages.length} pages. Would you like me to show you page 1 instead?`
             );
-            
+
             dataChannelRef.current?.send(JSON.stringify({
               type: 'response.create'
             }));
@@ -521,7 +522,8 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
           }
 
           // Check if we already have camera permission and can capture
-          if (mediaCapture.hasVideoPermission && mediaCapture.captureFrame) {
+          const mediaCapture = mediaCaptureRef.current;
+          if (mediaCapture && mediaCapture.hasVideoPermission && mediaCapture.captureFrame) {
             // Try capturing frame with retry mechanism
             let attempts = 0;
             const maxAttempts = 3;
@@ -552,22 +554,25 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
             // Request camera permission if not already granted
             logger.info("Requesting camera permission for frame capture");
             try {
-              await mediaCapture.requestPermissions();
-              // Wait a bit for video to initialize
-              await new Promise((resolve) => setTimeout(resolve, 1000));
-              // Try capturing after permission granted
-              if (mediaCapture.captureFrame) {
-                frameData = mediaCapture.captureFrame();
-                logger.info("Captured frame after permission request", {
-                  hasFrame: !!frameData,
-                });
+              const mediaCapture = mediaCaptureRef.current;
+              if (mediaCapture) {
+                await mediaCapture.requestPermissions();
+                // Wait a bit for video to initialize
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+                // Try capturing after permission granted
+                if (mediaCapture.captureFrame) {
+                  frameData = mediaCapture.captureFrame();
+                  logger.info("Captured frame after permission request", {
+                    hasFrame: !!frameData,
+                  });
 
-                // Store the captured frame for UI display
-                if (frameData) {
-                  setState((prev) => ({
-                    ...prev,
-                    lastCapturedFrame: frameData,
-                  }));
+                  // Store the captured frame for UI display
+                  if (frameData) {
+                    setState((prev) => ({
+                      ...prev,
+                      lastCapturedFrame: frameData,
+                    }));
+                  }
                 }
               }
             } catch (permissionError) {
@@ -837,6 +842,7 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
       logger.info("Starting OpenAI WebRTC connection");
 
       // If video is enabled, ensure media capture is initialized first
+      const mediaCapture = mediaCaptureRef.current;
       if (options.enableVideo && mediaCapture) {
         logger.info("Video enabled, requesting media permissions first");
         try {
@@ -965,7 +971,7 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
             error: remoteDescError.message,
           });
           throw new Error(
-            `Set remote description failed: ${remoteDescError.message}`,
+`Set remote description failed: ${remoteDescError.message}`,
           );
         });
 
@@ -1016,6 +1022,7 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
     }
 
     // Clean up media capture resources
+    const mediaCapture = mediaCaptureRef.current;
     if (mediaCapture) {
       mediaCapture.cleanup();
     }
@@ -1026,12 +1033,12 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
       isRecording: false,
       lastCapturedFrame: null,
     }));
-  }, [mediaCapture]);
+  }, []);
 
   return {
     ...state,
     connect,
     disconnect,
-    mediaCapture,
+    mediaCapture: mediaCaptureRef.current,
   };
 }
