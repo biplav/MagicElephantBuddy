@@ -1,3 +1,4 @@
+
 import fs from "fs";
 import path from "path";
 import pdf2pic from "pdf2pic";
@@ -22,171 +23,36 @@ export interface ProcessedBook {
   metadata: any;
 }
 
+interface ConversionResult {
+  buffer: Buffer;
+  size: string;
+  page: number;
+}
+
 export class PDFProcessor {
   private aiService = createAIService("standard");
   private objectStorage = new Client();
 
-  async processPDF(
-    pdfBuffer: Buffer,
-    fileName: string,
-  ): Promise<ProcessedBook> {
+  async processPDF(pdfBuffer: Buffer, fileName: string): Promise<ProcessedBook> {
     console.log(`Processing PDF: ${fileName} (${pdfBuffer.length} bytes)`);
 
     // Create temporary directory for processing
-    const tempDir = path.join(process.cwd(), "temp", Date.now().toString());
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true });
-    }
+    const tempDir = this.createTempDirectory();
     console.log(`Created temp directory: ${tempDir}`);
 
     try {
-      // Save PDF to temporary file
-      const pdfPath = path.join(tempDir, fileName);
-      fs.writeFileSync(pdfPath, pdfBuffer);
-
-      // Validate the saved PDF file
-      const savedFileSize = fs.statSync(pdfPath).size;
-      console.log(`Saved PDF to: ${pdfPath} (${savedFileSize} bytes)`);
-
-      if (savedFileSize !== pdfBuffer.length) {
-        throw new Error(
-          `File size mismatch: expected ${pdfBuffer.length}, got ${savedFileSize}`,
-        );
-      }
-
-      // Extract text from PDF
-      console.log(
-        `Extracting text from PDF buffer of size: ${pdfBuffer.length} bytes`,
-      );
-      const pdfData = await pdfParse(pdfBuffer, {
-        // Ensure we're working with the buffer, not trying to read a file
-        max: 0, // No page limit
-      });
-      const fullText = pdfData.text;
-      console.log(`Extracted ${fullText.length} characters of text`);
-
-      // Convert PDF pages to images with better configuration
-      const convert = pdf2pic.fromPath(pdfPath, {
-        density: 150,
-        saveFilename: "page",
-        savePath: tempDir,
-        format: "png",
-        width: 800,
-        height: 1000,
-        quality: 85,
-        preserveAspectRatio: true,
-      });
-
-      // Get total pages
-      const totalPages = pdfData.numpages;
-      console.log(`PDF has ${totalPages} pages`);
-
-      const pages: ProcessedPage[] = [];
-
-      // Process each page with rate limiting
-      for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
-        console.log(`Processing page ${pageNum}/${totalPages}`);
-
-        let imageBuffer: Buffer;
-
-        try {
-          // Convert page to image with explicit buffer response
-          console.log(`Converting page ${pageNum} to image...`);
-          const result = await convert(pageNum, { responseType: "buffer" });
-
-          console.log(`Conversion result for page ${pageNum}:`, {
-            hasBuffer: !!result.buffer,
-            bufferLength: result.size,
-            buffer: result.buffer,
-            page: result.page,
-            size: Buffer.byteLength(result.buffer),
-            resultKeys: Object.keys(result),
-          });
-
-          imageBuffer = result.buffer;
-          // Validate the image buffer
-          if (!imageBuffer || Buffer.byteLength(imageBuffer) === 0) {
-            console.warn(`Empty image buffer for page ${pageNum}, skipping...`);
-            throw new Error(`Image Buffer is empty: ${imageBuffer ? imageBuffer.length : 0}`);
-          }
-          console.log(
-            `Successfully generated image buffer for page ${pageNum}: ${imageBuffer.length} bytes`,
-          );
-        } catch (conversionError) {
-          console.error(
-            `Error converting page ${pageNum} to image:`,
-            conversionError,
-          );
-          continue;
-        }
-
-        // Store image in object storage only
-        const imageFileName = `books/${fileName.replace(".pdf", "")}-page-${pageNum}.png`;
-
-        // Convert buffer to base64 for upload to object storage
-        const base64Image = imageBuffer.toString("base64");
-        const uploadResult = await this.objectStorage.uploadFromText(
-          imageFileName,
-          base64Image,
-        );
-
-        if (!uploadResult.ok) {
-          console.error(
-            `Failed to upload image to object storage: ${uploadResult.error}`,
-          );
-          throw new Error(`Failed to upload image: ${uploadResult.error}`);
-        }
-
-        // Use custom route to serve from object storage
-        const imageUrl = `/api/object-storage/${encodeURIComponent(imageFileName)}`;
-        console.log(`Stored image in object storage: ${imageUrl}`);
-
-        // Extract text for this specific page using OCR via OpenAI Vision with retry
-        let pageText = "";
-        try {
-          pageText = await this.extractTextFromImage(imageBuffer);
-        } catch (error) {
-          console.warn(
-            `Failed to extract text from page ${pageNum}:`,
-            error.message,
-          );
-          // Continue processing without text extraction
-        }
-
-        // Generate image description using AI with retry
-        let imageDescription = "";
-        try {
-          imageDescription = await this.generateImageDescription(imageBuffer);
-        } catch (error) {
-          console.warn(
-            `Failed to generate description for page ${pageNum}:`,
-            error.message,
-          );
-          // Continue processing without description
-        }
-
-        pages.push({
-          pageNumber: pageNum,
-          imageBuffer,
-          text: pageText,
-          imageDescription,
-          imageUrl,
-        });
-
-        // Add delay between pages to avoid rate limits (100ms delay)
-        if (pageNum < totalPages) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        }
-      }
-
-      // Generate book summary
+      // Save and validate PDF file
+      const pdfPath = await this.savePDFFile(pdfBuffer, fileName, tempDir);
+      
+      // Extract text and metadata from PDF
+      const { fullText, totalPages } = await this.extractPDFData(pdfBuffer);
+      
+      // Process each page
+      const pages = await this.processPages(pdfPath, totalPages, fileName, tempDir);
+      
+      // Generate book metadata
       const summary = await this.generateBookSummary(fullText, fileName);
-
-      // Extract metadata
       const metadata = await this.extractMetadata(fullText, fileName);
-
-      // Clean up temporary files
-      fs.rmSync(tempDir, { recursive: true, force: true });
 
       return {
         title: this.extractTitle(fileName, fullText),
@@ -197,26 +63,188 @@ export class PDFProcessor {
         metadata,
       };
     } catch (error) {
-      // Clean up on error
+      console.error(`Error processing PDF ${fileName}:`, error);
+      throw error;
+    } finally {
+      // Always clean up temporary files
+      this.cleanupTempDirectory(tempDir);
+    }
+  }
+
+  private createTempDirectory(): string {
+    const tempDir = path.join(process.cwd(), "temp", Date.now().toString());
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+    return tempDir;
+  }
+
+  private async savePDFFile(pdfBuffer: Buffer, fileName: string, tempDir: string): Promise<string> {
+    const pdfPath = path.join(tempDir, fileName);
+    fs.writeFileSync(pdfPath, pdfBuffer);
+
+    // Validate the saved PDF file
+    const savedFileSize = fs.statSync(pdfPath).size;
+    console.log(`Saved PDF to: ${pdfPath} (${savedFileSize} bytes)`);
+
+    if (savedFileSize !== pdfBuffer.length) {
+      throw new Error(
+        `File size mismatch: expected ${pdfBuffer.length}, got ${savedFileSize}`,
+      );
+    }
+
+    return pdfPath;
+  }
+
+  private async extractPDFData(pdfBuffer: Buffer): Promise<{ fullText: string; totalPages: number }> {
+    console.log(`Extracting text from PDF buffer of size: ${pdfBuffer.length} bytes`);
+    
+    const pdfData = await pdfParse(pdfBuffer, {
+      max: 0, // No page limit
+    });
+    
+    const fullText = pdfData.text;
+    const totalPages = pdfData.numpages;
+    
+    console.log(`Extracted ${fullText.length} characters of text`);
+    console.log(`PDF has ${totalPages} pages`);
+    
+    return { fullText, totalPages };
+  }
+
+  private async processPages(
+    pdfPath: string, 
+    totalPages: number, 
+    fileName: string, 
+    tempDir: string
+  ): Promise<ProcessedPage[]> {
+    const convert = this.createPDFConverter(pdfPath, tempDir);
+    const pages: ProcessedPage[] = [];
+
+    for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+      console.log(`Processing page ${pageNum}/${totalPages}`);
+
+      try {
+        const page = await this.processPage(convert, pageNum, fileName);
+        pages.push(page);
+
+        // Add delay between pages to avoid rate limits
+        if (pageNum < totalPages) {
+          await this.addProcessingDelay();
+        }
+      } catch (error) {
+        console.error(`Failed to process page ${pageNum}:`, error);
+        // Continue processing other pages instead of failing completely
+        continue;
+      }
+    }
+
+    return pages;
+  }
+
+  private createPDFConverter(pdfPath: string, tempDir: string) {
+    return pdf2pic.fromPath(pdfPath, {
+      density: 150,
+      saveFilename: "page",
+      savePath: tempDir,
+      format: "png",
+      width: 800,
+      height: 1000,
+      quality: 85,
+      preserveAspectRatio: true,
+    });
+  }
+
+  private async processPage(
+    convert: any, 
+    pageNum: number, 
+    fileName: string
+  ): Promise<ProcessedPage> {
+    // Convert page to image
+    const imageBuffer = await this.convertPageToImage(convert, pageNum);
+    
+    // Store image in object storage
+    const imageUrl = await this.storeImageInObjectStorage(imageBuffer, fileName, pageNum);
+    
+    // Extract text and generate description in parallel for better performance
+    const [pageText, imageDescription] = await Promise.allSettled([
+      this.extractTextFromImage(imageBuffer),
+      this.generateImageDescription(imageBuffer),
+    ]);
+
+    return {
+      pageNumber: pageNum,
+      imageBuffer,
+      text: pageText.status === 'fulfilled' ? pageText.value : '',
+      imageDescription: imageDescription.status === 'fulfilled' ? imageDescription.value : '',
+      imageUrl,
+    };
+  }
+
+  private async convertPageToImage(convert: any, pageNum: number): Promise<Buffer> {
+    console.log(`Converting page ${pageNum} to image...`);
+    
+    const result: ConversionResult = await convert(pageNum, { responseType: "buffer" });
+
+    console.log(`Conversion result for page ${pageNum}:`, {
+      hasBuffer: !!result.buffer,
+      bufferLength: result.size,
+      page: result.page,
+      size: result.buffer ? Buffer.byteLength(result.buffer) : 0,
+    });
+
+    if (!result.buffer || Buffer.byteLength(result.buffer) === 0) {
+      throw new Error(`Empty image buffer for page ${pageNum}`);
+    }
+
+    console.log(`Successfully generated image buffer for page ${pageNum}: ${result.buffer.length} bytes`);
+    return result.buffer;
+  }
+
+  private async storeImageInObjectStorage(
+    imageBuffer: Buffer, 
+    fileName: string, 
+    pageNum: number
+  ): Promise<string> {
+    const imageFileName = `books/${fileName.replace(".pdf", "")}-page-${pageNum}.png`;
+    const base64Image = imageBuffer.toString("base64");
+    
+    const uploadResult = await this.objectStorage.uploadFromText(imageFileName, base64Image);
+
+    if (!uploadResult.ok) {
+      throw new Error(`Failed to upload image to object storage: ${uploadResult.error}`);
+    }
+
+    const imageUrl = `/api/object-storage/${encodeURIComponent(imageFileName)}`;
+    console.log(`Stored image in object storage: ${imageUrl}`);
+    
+    return imageUrl;
+  }
+
+  private async addProcessingDelay(): Promise<void> {
+    // 100ms delay between pages to avoid rate limits
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  private cleanupTempDirectory(tempDir: string): void {
+    try {
       if (fs.existsSync(tempDir)) {
         fs.rmSync(tempDir, { recursive: true, force: true });
+        console.log(`Cleaned up temp directory: ${tempDir}`);
       }
-      throw error;
+    } catch (error) {
+      console.warn(`Failed to cleanup temp directory ${tempDir}:`, error);
     }
   }
 
   private async extractTextFromImage(imageBuffer: Buffer): Promise<string> {
     try {
-      // Validate buffer before processing
-      if (!imageBuffer || imageBuffer.length === 0) {
-        console.warn("Empty image buffer provided for text extraction");
+      if (!this.isValidImageBuffer(imageBuffer)) {
+        console.warn("Invalid image buffer provided for text extraction");
         return "";
       }
 
-      // Ensure we have a valid PNG buffer
       const base64Image = imageBuffer.toString("base64");
-
-      // Validate base64 string
       if (!base64Image || base64Image.length === 0) {
         console.warn("Failed to generate base64 from image buffer");
         return "";
@@ -258,16 +286,12 @@ export class PDFProcessor {
 
   private async generateImageDescription(imageBuffer: Buffer): Promise<string> {
     try {
-      // Validate buffer before processing
-      if (!imageBuffer || imageBuffer.length === 0) {
-        console.warn("Empty image buffer provided for description generation");
+      if (!this.isValidImageBuffer(imageBuffer)) {
+        console.warn("Invalid image buffer provided for description generation");
         return "";
       }
 
-      // Ensure we have a valid PNG buffer
       const base64Image = imageBuffer.toString("base64");
-
-      // Validate base64 string
       if (!base64Image || base64Image.length === 0) {
         console.warn("Failed to generate base64 from image buffer");
         return "";
@@ -307,10 +331,11 @@ export class PDFProcessor {
     }
   }
 
-  private async generateBookSummary(
-    fullText: string,
-    fileName: string,
-  ): Promise<string> {
+  private isValidImageBuffer(imageBuffer: Buffer): boolean {
+    return imageBuffer && imageBuffer.length > 0;
+  }
+
+  private async generateBookSummary(fullText: string, fileName: string): Promise<string> {
     try {
       const prompt = `Generate a comprehensive summary of this children's book. Include the main characters, plot, themes, and educational value. Keep it engaging for parents choosing books for their children.
 
@@ -321,14 +346,11 @@ ${fullText.substring(0, 5000)}...`;
       return summary;
     } catch (error) {
       console.error("Error generating book summary:", error);
-      return "";
+      return "Summary generation failed";
     }
   }
 
-  private async extractMetadata(
-    fullText: string,
-    fileName: string,
-  ): Promise<any> {
+  private async extractMetadata(fullText: string, fileName: string): Promise<any> {
     try {
       const prompt = `Analyze this children's book and extract metadata in JSON format:
 
@@ -353,20 +375,20 @@ ${fullText.substring(0, 3000)}...`;
         return JSON.parse(response);
       } catch {
         // If JSON parsing fails, return a basic metadata object
-        return {
-          genre: "children's book",
-          extractedFromFile: fileName,
-          processingDate: new Date().toISOString(),
-        };
+        return this.createFallbackMetadata(fileName);
       }
     } catch (error) {
       console.error("Error extracting metadata:", error);
-      return {
-        genre: "children's book",
-        extractedFromFile: fileName,
-        processingDate: new Date().toISOString(),
-      };
+      return this.createFallbackMetadata(fileName);
     }
+  }
+
+  private createFallbackMetadata(fileName: string): any {
+    return {
+      genre: "children's book",
+      extractedFromFile: fileName,
+      processingDate: new Date().toISOString(),
+    };
   }
 
   private extractTitle(fileName: string, fullText: string): string {
