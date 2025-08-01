@@ -74,19 +74,19 @@ async function createEnhancedSystemPrompt(
       let result = "";
 
       for (const [key, value] of Object.entries(obj)) {
-        const displayKey =
-          key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, " $1");
+        const displayKey = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, " $1");
 
         if (Array.isArray(value)) {
-          result += `- ${displayKey}: ${value.join(", ")}\n`;
+          // Limit array items to reduce tokens
+          const limitedItems = value.slice(0, 3);
+          result += `- ${displayKey}: ${limitedItems.join(", ")}${value.length > 3 ? ', ...' : ''}\n`;
         } else if (typeof value === "object" && value !== null) {
-          result += `- ${displayKey}:\n`;
-          const subItems = generateProfileSection(value);
-          result +=
-            subItems
-              .split("\n")
-              .map((line) => (line ? `  ${line}` : ""))
-              .join("\n") + "\n";
+          // Only include essential nested objects
+          if (key === 'favoriteThings' || key === 'dailyRoutine') {
+            result += `- ${displayKey}: ${JSON.stringify(value).substring(0, 100)}...\n`;
+          }
+        } else if (typeof value === "string" && value.length > 50) {
+          result += `- ${displayKey}: ${value.substring(0, 50)}...\n`;
         } else {
           result += `- ${displayKey}: ${value}\n`;
         }
@@ -1005,25 +1005,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     {
       type: "function",
       name: "bookSearchTool",
-      description: "Use this tool to find and retrieve children's books for storytelling. Search by title, keywords, or themes. Perfect for bedtime stories, educational content, or when child asks for books.",
+      description: "Find children's books for storytelling",
       parameters: {
         type: "object",
         properties: {
           bookTitle: {
             type: "string",
-            description: "Specific book title if the child mentions one"
+            description: "Specific book title"
           },
           keywords: {
             type: "string", 
-            description: "Keywords or themes to search for (e.g., 'dragon adventure', 'counting numbers', 'friendship story')"
-          },
-          ageRange: {
-            type: "string",
-            description: "Age range filter (e.g., '3-5', '4-6') - optional"
+            description: "Search keywords"
           },
           context: {
             type: "string",
-            description: "Why you're searching for books (e.g., 'child asked for bedtime story', 'teaching about animals')"
+            description: "Search context"
           }
         },
         required: ["context"]
@@ -1845,16 +1841,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // For multiple results, return book summaries without full page content
+      // For multiple results, return minimal book data to reduce tokens
       const bookSummaries = books.map(book => ({
         id: book.id,
         title: book.title,
         author: book.author,
-        genre: book.genre,
-        ageRange: book.ageRange,
-        summary: book.summary,
         totalPages: book.totalPages,
-        metadata: book.metadata
+        summary: book.summary ? book.summary.substring(0, 150) + "..." : "", // Truncate summary
+        genre: book.genre,
+        ageRange: book.ageRange
       }));
 
       res.json({
@@ -1921,6 +1916,7 @@ app.get('/api/books/:bookId/page/:pageNumber', async (req, res) => {
   try {
     const bookId = parseInt(req.params.bookId);
     const pageNumber = parseInt(req.params.pageNumber);
+    const minimal = req.query.minimal === 'true'; // Add minimal mode
 
     const book = await storage.getBook(bookId);
     if (!book) {
@@ -1934,18 +1930,24 @@ app.get('/api/books/:bookId/page/:pageNumber', async (req, res) => {
       return res.status(404).json({ error: 'Page not found' });
     }
 
-    res.json({
+    const responseData = {
       success: true,
       page: {
         id: page.id,
         pageNumber: page.pageNumber,
         pageImageUrl: page.imageUrl,
-        pageText: page.pageText,
-        imageDescription: page.imageDescription,
+        pageText: minimal ? page.pageText?.substring(0, 200) : page.pageText,
         totalPages: book.totalPages,
         bookTitle: book.title
       }
-    });
+    };
+
+    // Only include image description if not in minimal mode
+    if (!minimal) {
+      responseData.page.imageDescription = page.imageDescription;
+    }
+
+    res.json(responseData);
 
   } catch (error) {
     console.error('Error fetching book page:', error);
