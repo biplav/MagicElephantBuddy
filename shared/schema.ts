@@ -377,6 +377,35 @@ export const capturedFrames = pgTable("captured_frames", {
   isVisible: boolean("is_visible").default(true).notNull(), // Allow hiding frames if needed
 });
 
+// Books table for storybook feature
+export const books = pgTable("books", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  author: text("author"),
+  genre: text("genre"),
+  ageRange: text("age_range"), // e.g., "3-5", "4-6"
+  description: text("description"),
+  coverImageUrl: text("cover_image_url"),
+  totalPages: integer("total_pages").default(0).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  metadata: json("metadata"), // Additional book metadata
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Pages table for individual book pages
+export const pages = pgTable("pages", {
+  id: serial("id").primaryKey(),
+  bookId: integer("book_id").notNull().references(() => books.id),
+  pageNumber: integer("page_number").notNull(),
+  imageUrl: text("image_url").notNull(),
+  pageText: text("page_text").notNull(),
+  audioUrl: text("audio_url"), // Optional audio narration
+  metadata: json("metadata"), // Additional page metadata
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -399,6 +428,27 @@ export const insertCapturedFrameSchema = createInsertSchema(capturedFrames).pick
   isVisible: true,
 });
 
+export const insertBookSchema = createInsertSchema(books).pick({
+  title: true,
+  author: true,
+  genre: true,
+  ageRange: true,
+  description: true,
+  coverImageUrl: true,
+  totalPages: true,
+  isActive: true,
+  metadata: true,
+});
+
+export const insertPageSchema = createInsertSchema(pages).pick({
+  bookId: true,
+  pageNumber: true,
+  imageUrl: true,
+  pageText: true,
+  audioUrl: true,
+  metadata: true,
+});
+
 export const insertMemorySchema = createInsertSchema(memories).pick({
   id: true,
   childId: true,
@@ -417,6 +467,12 @@ export type Recording = typeof recordings.$inferSelect;
 
 export type InsertCapturedFrame = z.infer<typeof insertCapturedFrameSchema>;
 export type CapturedFrame = typeof capturedFrames.$inferSelect;
+
+export type InsertBook = z.infer<typeof insertBookSchema>;
+export type Book = typeof books.$inferSelect;
+
+export type InsertPage = z.infer<typeof insertPageSchema>;
+export type Page = typeof pages.$inferSelect;
 
 // Memory types
 export type InsertMemory = z.infer<typeof insertMemorySchema>;
@@ -450,5 +506,16 @@ export const capturedFramesRelations = relations(capturedFrames, ({ one }) => ({
   conversation: one(conversations, {
     fields: [capturedFrames.conversationId],
     references: [conversations.id],
+  }),
+}));
+
+export const booksRelations = relations(books, ({ many }) => ({
+  pages: many(pages),
+}));
+
+export const pagesRelations = relations(pages, ({ one }) => ({
+  book: one(books, {
+    fields: [pages.bookId],
+    references: [books.id],
   }),
 }));
