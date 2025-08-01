@@ -232,7 +232,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         logger.info("Data channel ready state changed", {
           readyState: channel.readyState,
           readyStateLabel:
-            ["connecting", "open", "closing", "closed"][channel.readyState as number] ||
+            ["connecting", "open", "closing", "closed"][channel.readyState as unknown as number] ||
             "unknown",
         });
       };
@@ -803,7 +803,7 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
           error,
           readyState: channel.readyState,
           readyStateLabel:
-            ["connecting", "open", "closing", "closed"][channel.readyState as number] ||
+            ["connecting", "open", "closing", "closed"][channel.readyState as unknown as number] ||
             "unknown",
         });
         setState((prev) => ({ ...prev, error: "Data channel error occurred" }));

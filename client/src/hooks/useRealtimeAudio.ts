@@ -11,6 +11,14 @@ interface UseRealtimeAudioOptions {
   onError?: (error: string) => void;
   enableVideo?: boolean;
   onVideoFrame?: (frameData: string) => void;
+  onStorybookPageDisplay?: (pageData: {
+    pageImageUrl: string;
+    pageText: string;
+    pageNumber: number;
+    totalPages: number;
+    bookTitle: string;
+  }) => void;
+  onBookSelected?: (book: any) => void;
   modelType?: 'openai' | 'gemini';
 }
 
@@ -45,8 +53,10 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     onTranscriptionReceived: options.onTranscriptionReceived,
     onResponseReceived: options.onResponseReceived,
     onAudioResponseReceived: options.onAudioResponseReceived,
-    onError: options.onError
-  }), [options.onTranscriptionReceived, options.onResponseReceived, options.onAudioResponseReceived, options.onError]);
+    onError: options.onError,
+    onStorybookPageDisplay: options.onStorybookPageDisplay,
+    onBookSelected: options.onBookSelected
+  }), [options.onTranscriptionReceived, options.onResponseReceived, options.onAudioResponseReceived, options.onError, options.onStorybookPageDisplay, options.onBookSelected]);
 
   // Initialize media capture at the top level with stable options
   const mediaCapture = useMediaCapture({ enableVideo: options.enableVideo || false });
