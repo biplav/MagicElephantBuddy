@@ -73,18 +73,41 @@ export class PDFProcessor {
         const result = await convert(pageNum, { responseType: "buffer" });
         const imageBuffer = result.buffer as Buffer;
 
-        // Save image to local storage (public directory)
-        const imageFileName = `${fileName.replace('.pdf', '')}-page-${pageNum}.png`;
-        const publicDir = path.join(process.cwd(), 'public', 'books');
-        if (!fs.existsSync(publicDir)) {
-          fs.mkdirSync(publicDir, { recursive: true });
-        }
+        // Upload image to object storage using the correct API
+        const imageFileName = `books/${fileName.replace('.pdf', '')}-page-${pageNum}.png`;
 
-        const localImagePath = path.join(publicDir, imageFileName);
-        fs.writeFileSync(localImagePath, imageBuffer);
-        const imageUrl = `/books/${imageFileName}`;
-        
-        console.log(`Saved image: ${imageUrl}`);
+        let imageUrl: string;
+        try {
+          // Convert buffer to base64 for upload
+          const base64Image = imageBuffer.toString('base64');
+          const uploadResult = await this.objectStorage.uploadFromText(imageFileName, base64Image);
+          
+          if (!uploadResult.ok) {
+            console.error('Failed to upload image to object storage:', uploadResult.error);
+            throw new Error(`Failed to upload image: ${uploadResult.error}`);
+          }
+
+          // Get public URL for the uploaded image
+          const urlResult = await this.objectStorage.getPublicUrl(imageFileName);
+          if (!urlResult.ok) {
+            console.error('Failed to get public URL:', urlResult.error);
+            throw new Error(`Failed to get public URL: ${urlResult.error}`);
+          }
+
+          imageUrl = urlResult.value;
+        } catch (storageError) {
+          console.error('Object storage error, falling back to local storage:', storageError);
+
+          // Fallback to local storage
+          const publicDir = path.join(process.cwd(), 'public', 'books');
+          if (!fs.existsSync(publicDir)) {
+            fs.mkdirSync(publicDir, { recursive: true });
+          }
+
+          const localImagePath = path.join(publicDir, `${fileName.replace('.pdf', '')}-page-${pageNum}.png`);
+          fs.writeFileSync(localImagePath, imageBuffer);
+          imageUrl = `/books/${fileName.replace('.pdf', '')}-page-${pageNum}.png`;
+        }
 
         // Extract text for this specific page using OCR via OpenAI Vision
         const pageText = await this.extractTextFromImage(imageBuffer);
