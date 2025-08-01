@@ -1915,7 +1915,7 @@ app.get('/api/books/:bookId/page/:pageNumber', async (req, res) => {
   // Test LangGraph workflow endpoint
   app.post("/api/admin/test-workflow", async (req: Request, res: Response) => {
     try {
-      const { textInput, childId = 1 }       } = req.body;
+      const { textInput, childId = 1 } = req.body;
 
       if (!textInput) {
         return res.status(400).json({ error: "textInput is required" });
