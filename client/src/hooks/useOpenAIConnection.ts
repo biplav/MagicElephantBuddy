@@ -15,6 +15,11 @@ interface OpenAIConnectionOptions {
     totalPages: number;
     bookTitle: string;
   }) => void;
+  // Media capture functions passed from parent
+  requestMediaPermissions?: () => Promise<MediaStream>;
+  captureFrame?: () => string | null;
+  cleanupMedia?: () => void;
+  hasVideoPermission?: boolean;
 }
 
 interface OpenAIConnectionState {
@@ -54,8 +59,8 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
   const conversationIdRef = useRef<string | null>(null); // Add conversationIdRef
 
   // Use the media capture instance passed from parent - store in ref to avoid dependency issues
-  const mediaCaptureRef = useRef(options.mediaCapture);
-  mediaCaptureRef.current = options.mediaCapture;
+  // const mediaCaptureRef = useRef(options.mediaCapture);
+  // mediaCaptureRef.current = options.mediaCapture;
 
   const getSelectedChildId = useCallback((): string => {
     const selectedChildId = localStorage.getItem("selectedChildId");
@@ -522,8 +527,8 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
           }
 
           // Check if we already have camera permission and can capture
-          const mediaCapture = mediaCaptureRef.current;
-          if (mediaCapture && mediaCapture.hasVideoPermission && mediaCapture.captureFrame) {
+          // const mediaCapture = mediaCaptureRef.current;
+          if (options.hasVideoPermission && options.captureFrame) {
             // Try capturing frame with retry mechanism
             let attempts = 0;
             const maxAttempts = 3;
@@ -532,7 +537,7 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
               attempts++;
               logger.info(`Frame capture attempt ${attempts}/${maxAttempts}`);
 
-              frameData = mediaCapture.captureFrame();
+              frameData = options.captureFrame();
 
               if (!frameData && attempts < maxAttempts) {
                 // Wait a bit before retrying
@@ -554,14 +559,14 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
             // Request camera permission if not already granted
             logger.info("Requesting camera permission for frame capture");
             try {
-              const mediaCapture = mediaCaptureRef.current;
-              if (mediaCapture) {
-                await mediaCapture.requestPermissions();
+              // const mediaCapture = mediaCaptureRef.current;
+              if (options.requestMediaPermissions) {
+                await options.requestMediaPermissions();
                 // Wait a bit for video to initialize
                 await new Promise((resolve) => setTimeout(resolve, 1000));
                 // Try capturing after permission granted
-                if (mediaCapture.captureFrame) {
-                  frameData = mediaCapture.captureFrame();
+                if (options.captureFrame) {
+                  frameData = options.captureFrame();
                   logger.info("Captured frame after permission request", {
                     hasFrame: !!frameData,
                   });
@@ -834,6 +839,9 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
       options.onResponseReceived,
       options.onAudioResponseReceived,
       options.onError,
+      options.hasVideoPermission,
+      options.captureFrame,
+      options.requestMediaPermissions,
     ],
   );
 
@@ -842,14 +850,16 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
       logger.info("Starting OpenAI WebRTC connection");
 
       // If video is enabled, ensure media capture is initialized first
-      const mediaCapture = mediaCaptureRef.current;
-      if (options.enableVideo && mediaCapture) {
+      // const mediaCapture = mediaCaptureRef.current;
+      if (options.enableVideo) {
         logger.info("Video enabled, requesting media permissions first");
         try {
-          await mediaCapture.requestPermissions();
-          // Wait for video to be properly initialized
-          await new Promise((resolve) => setTimeout(resolve, 1500));
-          logger.info("Media permissions granted and video initialized");
+          if (options.requestMediaPermissions) {
+            await options.requestMediaPermissions();
+            // Wait for video to be properly initialized
+            await new Promise((resolve) => setTimeout(resolve, 1500));
+            logger.info("Media permissions granted and video initialized");
+          }
         } catch (mediaError) {
           logger.warn(
             "Video permission request failed, continuing without video",
@@ -961,7 +971,7 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
         logger.error("Failed to read response text", {
           error: textError.message,
         });
-        throw new Error(`Failed to read response: ${textError.message}`);
+        throw newError(`Failed to read response: ${textError.message}`);
       });
 
       await pc
@@ -1001,6 +1011,7 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
     setupDataChannel,
     options.enableVideo,
     options.onError,
+    options.requestMediaPermissions,
   ]);
 
   const disconnect = useCallback(() => {
@@ -1022,9 +1033,8 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
     }
 
     // Clean up media capture resources
-    const mediaCapture = mediaCaptureRef.current;
-    if (mediaCapture) {
-      mediaCapture.cleanup();
+    if (options.cleanupMedia) {
+      options.cleanupMedia();
     }
 
     setState((prev) => ({
@@ -1033,12 +1043,12 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
       isRecording: false,
       lastCapturedFrame: null,
     }));
-  }, []);
+  }, [options.cleanupMedia]);
 
   return {
     ...state,
     connect,
     disconnect,
-    mediaCapture: mediaCaptureRef.current,
+    // mediaCapture: mediaCaptureRef.current,
   };
 }

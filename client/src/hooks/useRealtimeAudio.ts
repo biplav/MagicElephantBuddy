@@ -59,10 +59,20 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     enableVideo: options.enableVideo
   }), [options.enableVideo]);
 
-  // Initialize connection hooks with memoized options
-  const openaiConnection = useOpenAIConnection(openaiOptions);
-  const geminiConnection = useGeminiConnection(geminiOptions);
+  // Initialize media capture at the top level
   const mediaCapture = useMediaCapture(mediaCaptureOptions);
+
+  // Create stable media functions to pass down
+  const mediaFunctions = useMemo(() => ({
+    requestMediaPermissions: mediaCapture.requestPermissions,
+    captureFrame: mediaCapture.captureFrame,
+    cleanupMedia: mediaCapture.cleanup,
+    hasVideoPermission: mediaCapture.hasVideoPermission
+  }), [mediaCapture.requestPermissions, mediaCapture.captureFrame, mediaCapture.cleanup, mediaCapture.hasVideoPermission]);
+
+  // Initialize connection hooks with memoized options and media functions
+  const openaiConnection = useOpenAIConnection({ ...openaiOptions, ...mediaFunctions });
+  const geminiConnection = useGeminiConnection(geminiOptions);
 
   // Get the active connection based on model type
   const activeConnection = modelType === 'openai' ? openaiConnection : geminiConnection;
@@ -81,7 +91,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
 
   // Handle model type changes
   const [previousModelType, setPreviousModelType] = useState<string>(modelType);
-  
+
   useEffect(() => {
     // Only act when modelType actually changes
     if (previousModelType !== modelType) {
