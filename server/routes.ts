@@ -1496,6 +1496,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Simple PDF upload for testing (saves directly to public directory)
+  app.post("/api/upload-test-pdf", upload.single("pdf"), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No PDF file provided" });
+      }
+
+      if (!req.file.originalname.toLowerCase().endsWith('.pdf')) {
+        return res.status(400).json({ error: "File must be a PDF" });
+      }
+
+      const publicDir = path.join(process.cwd(), "public");
+      const fileName = req.file.originalname;
+      const filePath = path.join(publicDir, fileName);
+
+      // Ensure public directory exists
+      if (!fs.existsSync(publicDir)) {
+        fs.mkdirSync(publicDir, { recursive: true });
+      }
+
+      // Save the PDF file to public directory
+      fs.writeFileSync(filePath, req.file.buffer);
+
+      console.log(`✅ Test PDF uploaded: ${fileName} (${req.file.buffer.length} bytes)`);
+      console.log(`📁 Saved to: ${filePath}`);
+      console.log(`🔗 Accessible at: /public/${fileName}`);
+
+      res.json({
+        success: true,
+        message: "PDF uploaded successfully for testing",
+        fileName: fileName,
+        filePath: filePath,
+        size: req.file.buffer.length,
+        testCommand: "node test/test-pdf2pic.js"
+      });
+
+    } catch (error: any) {
+      console.error("Error uploading test PDF:", error);
+      res.status(500).json({ 
+        error: "Failed to upload PDF",
+        details: error.message 
+      });
+    }
+  });
+
   // Book upload and management endpoints
   app.post("/api/admin/upload-book", upload.single("pdf"), async (req: Request, res: Response) => {
     try {

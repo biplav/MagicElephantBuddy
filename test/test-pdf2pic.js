@@ -1,14 +1,48 @@
-
 import pdf2pic from 'pdf2pic';
 import fs from 'fs';
 import path from 'path';
 
 console.log('Testing pdf2pic library...');
 
-// Check if test PDF exists
-const testPdfPath = './public/books/wise-brown-moon-page-30.pdf';
-if (!fs.existsSync(testPdfPath)) {
-  console.error('Test PDF not found at:', testPdfPath);
+// Check for PDF files in public directory
+const publicDir = './public';
+const possiblePaths = [
+  './public/test.pdf',
+  './public/sample.pdf',
+  './public/books/wise-moon.pdf',
+  './test/data/05-versions-space.pdf'
+];
+
+// Also scan public directory for any PDF files
+if (fs.existsSync(publicDir)) {
+  const files = fs.readdirSync(publicDir);
+  const pdfFiles = files.filter(file => file.toLowerCase().endsWith('.pdf'));
+
+  if (pdfFiles.length > 0) {
+    console.log(`Found ${pdfFiles.length} PDF file(s) in public directory:`, pdfFiles);
+    pdfFiles.forEach(file => {
+      possiblePaths.unshift(path.join(publicDir, file));
+    });
+  }
+}
+
+let testPdfPath = null;
+for (const pdfPath of possiblePaths) {
+  if (fs.existsSync(pdfPath)) {
+    testPdfPath = pdfPath;
+    console.log('Using PDF file:', pdfPath);
+    break;
+  }
+}
+
+if (!testPdfPath) {
+  console.log('\n❌ No PDF files found for testing.');
+  console.log('\n📋 To upload a PDF for testing:');
+  console.log('1. Go to http://localhost:5000/admin-book-upload in your browser');
+  console.log('2. Upload any PDF file using the admin interface');
+  console.log('3. Or manually copy a PDF file to the ./public/ directory');
+  console.log('4. Then run this test again');
+  console.log('\nChecked paths:', possiblePaths);
   process.exit(1);
 }
 
@@ -30,7 +64,7 @@ try {
 
   console.log('Converting first page...');
   const result = await convert(1, { responseType: "buffer" });
-  
+
   console.log('Conversion result:', {
     hasBuffer: !!result.buffer,
     bufferLength: result.buffer ? result.buffer.length : 0,
@@ -46,7 +80,7 @@ try {
     console.log(`Test image saved to: ${testImagePath}`);
   } else {
     console.log('❌ pdf2pic returned empty buffer');
-    
+
     // Check if file was created instead
     const expectedFile = path.join(tempDir, 'test-page.1.png');
     if (fs.existsSync(expectedFile)) {
