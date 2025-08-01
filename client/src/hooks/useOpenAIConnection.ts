@@ -322,7 +322,20 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
           }
 
           // Search for books
-          const response = await fetch(`/api/books/search?${searchParams}`);
+          const searchBody = {
+            context: argsJson.context,
+            bookTitle: argsJson.bookTitle,
+            keywords: argsJson.keywords,
+            ageRange: argsJson.ageRange
+          };
+
+          const response = await fetch('/api/books/search', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(searchBody),
+          });
           
           if (!response.ok) {
             throw new Error(`Book search failed: ${response.status}`);
