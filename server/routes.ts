@@ -217,8 +217,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
       "Content-Length": audioBuffer.length,
     });
 
+    // Serve the audio file
     res.send(audioBuffer);
     console.log(`Audio downloaded: ${audioId}`);
+  });
+
+  // Serve images from object storage
+  app.get("/api/object-storage/:fileName", async (req: Request, res: Response) => {
+    try {
+      const fileName = decodeURIComponent(req.params.fileName);
+      console.log(`Serving image from object storage: ${fileName}`);
+
+      const { Client } = await import('@replit/object-storage');
+      const objectStorage = new Client();
+
+      // Download the base64 image data from object storage
+      const downloadResult = await objectStorage.downloadToText(fileName);
+
+      if (!downloadResult.ok) {
+        console.error(`Failed to download ${fileName}:`, downloadResult.error);
+        return res.status(404).json({ error: "Image not found in object storage" });
+      }
+
+      // Convert base64 back to buffer
+      const imageBuffer = Buffer.from(downloadResult.value, 'base64');
+
+      res.set({
+        'Content-Type': 'image/png',
+        'Content-Length': imageBuffer.length.toString(),
+        'Cache-Control': 'public, max-age=86400' // Cache for 24 hours
+      });
+
+      res.send(imageBuffer);
+      console.log(`Successfully served image: ${fileName}`);
+    } catch (error) {
+      console.error("Error serving image from object storage:", error);
+      res.status(500).json({ error: "Failed to serve image" });
+    }
   });
 
   // Debug endpoint to show the enhanced system prompt structure
@@ -1485,10 +1520,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let book;
       if (existingBook) {
         console.log(`Updating existing book: ${existingBook.title}`);
-        
+
         // Delete existing pages
         await storage.deletePagesByBook(existingBook.id);
-        
+
         // Update book metadata
         book = await storage.updateBook(existingBook.id, {
           author: processedBook.author,
@@ -1498,7 +1533,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       } else {
         console.log(`Creating new book: ${processedBook.title}`);
-        
+
         // Create new book
         book = await storage.createBook({
           title: processedBook.title,
@@ -1877,7 +1912,7 @@ Answer the parent's question using this data. Be specific, helpful, and encourag
 
         if (updates.preferredLanguages) {
           updatedProfile.preferredLanguages = Array.isArray(
-            updates.preferredLanguages,
+            updates.preferredgeneration>
           )
             ? updates.preferredLanguages
             : [
