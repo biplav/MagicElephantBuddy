@@ -1535,7 +1535,7 @@ const Home = memo(() => {
                     </Button>
 
                     <Button
-                      onClick={()={() => {
+                      onClick={() => {
                         fetch("/api/process-text", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
