@@ -2,7 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import pdf2pic from 'pdf2pic';
-import pdfParse from 'pdf-parse';
+const pdfParse = require('pdf-parse');
 import { createAIService } from './ai-service';
 import { Client } from '@replit/object-storage';
 
@@ -42,8 +42,13 @@ export class PDFProcessor {
       fs.writeFileSync(pdfPath, pdfBuffer);
 
       // Extract text from PDF
-      const pdfData = await pdfParse(pdfBuffer);
+      console.log(`Extracting text from PDF buffer of size: ${pdfBuffer.length} bytes`);
+      const pdfData = await pdfParse(pdfBuffer, {
+        // Ensure we're working with the buffer, not trying to read a file
+        max: 0 // No page limit
+      });
       const fullText = pdfData.text;
+      console.log(`Extracted ${fullText.length} characters of text`);
 
       // Convert PDF pages to images
       const convert = pdf2pic.fromPath(pdfPath, {
