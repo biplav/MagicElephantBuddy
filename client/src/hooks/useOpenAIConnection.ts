@@ -53,7 +53,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const conversationIdRef = useRef<string | null>(null); // Add conversationIdRef
 
-  // Add media capture for frame analysis
+  // Add media capture for frame analysis - moved to top level
   const mediaCapture = useMediaCapture({ enableVideo: options.enableVideo });
 
   const getSelectedChildId = useCallback((): string => {
@@ -996,6 +996,7 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
     setupDataChannel,
     options.enableVideo,
     options.onError,
+    mediaCapture,
   ]);
 
   const disconnect = useCallback(() => {
