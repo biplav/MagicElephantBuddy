@@ -313,6 +313,10 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         }
       };
 
+      // Store the current selected book for display
+      const selectedBookRef = useRef<any>(null);
+      const currentPageRef = useRef<number>(1);
+
       const handleBookSearchTool = async (callId: string, args: any) => {
         logger.info("bookSearchTool was called!", { callId, args });
 
@@ -320,21 +324,6 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         logger.info("Parsed JSON arguments", { callId, argsJson });
 
         try {
-          // Build search parameters
-          const searchParams = new URLSearchParams();
-
-          if (argsJson.bookTitle) {
-            searchParams.append('title', argsJson.bookTitle);
-          }
-
-          if (argsJson.keywords) {
-            searchParams.append('keywords', argsJson.keywords);
-          }
-
-          if (argsJson.ageRange) {
-            searchParams.append('ageRange', argsJson.ageRange);
-          }
-
           // Search for books
           const searchBody = {
             context: argsJson.context,
@@ -361,17 +350,29 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
             searchParams: args 
           });
 
-          // Return search results to OpenAI
-          const resultMessage = searchResults.books?.length > 0 
-            ? `Found ${searchResults.books.length} book(s):\n\n${searchResults.books.map((book: any) => 
-                `**${book.title}** by ${book.author || 'Unknown Author'}\n` +
-                `Age Range: ${book.ageRange || 'All ages'}\n` +
-                `Genre: ${book.genre || 'General'}\n` +
-                `Summary: ${book.summary || book.description || 'No summary available'}\n` +
-                `Pages: ${book.totalPages}\n` +
-                `Book ID: ${book.id}\n`
-              ).join('\n')}\n\nTo read a book, ask me to get the full content by mentioning the book title or saying "Let's read [book title]"`
-            : `No books found matching your search criteria. Try different keywords or ask for a different type of story.`;
+          let resultMessage: string;
+
+          if (searchResults.books?.length > 0) {
+            // Store the first book for later display
+            selectedBookRef.current = searchResults.books[0];
+            currentPageRef.current = 1;
+            
+            logger.info("Stored book for display", { 
+              bookTitle: selectedBookRef.current.title,
+              totalPages: selectedBookRef.current.pages?.length || selectedBookRef.current.totalPages
+            });
+
+            if (searchResults.books.length === 1) {
+              // Single book found - ready to read
+              resultMessage = `Perfect! I found "${selectedBookRef.current.title}" by ${selectedBookRef.current.author || 'Unknown Author'}. This is a wonderful ${selectedBookRef.current.genre || 'story'} book with ${selectedBookRef.current.totalPages} pages. ${selectedBookRef.current.summary || selectedBookRef.current.description || ''}\n\nI'm ready to start reading it to you! Should I begin with the first page?`;
+            } else {
+              // Multiple books found - show options but store first one
+              resultMessage = `I found ${searchResults.books.length} great books! I've selected "${selectedBookRef.current.title}" for us to read. It's ${selectedBookRef.current.summary || selectedBookRef.current.description || 'a wonderful story'}.\n\nShould I start reading this book to you, or would you like to hear about the other books I found?`;
+            }
+          } else {
+            resultMessage = `I couldn't find any books matching your search. Let me try a different approach or suggest some popular stories instead!`;
+            selectedBookRef.current = null;
+          }
 
           sendFunctionCallOutput(callId, resultMessage);
 
@@ -402,27 +403,88 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         logger.info("display_book_page was called!", { callId, args });
 
         try {
+          // Check if we have a stored book
+          if (!selectedBookRef.current) {
+            sendFunctionCallOutput(
+              callId,
+              "I need to search for a book first before I can display pages. What kind of story would you like to read?"
+            );
+            
+            dataChannelRef.current?.send(JSON.stringify({
+              type: 'response.create'
+            }));
+            return;
+          }
+
+          // Parse the page request (could be "first", "next", "previous", or a number)
+          let targetPageNumber = currentPageRef.current;
+          
+          if (args.pageRequest) {
+            const request = args.pageRequest.toLowerCase();
+            if (request === 'first' || request === 'start') {
+              targetPageNumber = 1;
+            } else if (request === 'next') {
+              targetPageNumber = Math.min(currentPageRef.current + 1, selectedBookRef.current.pages?.length || selectedBookRef.current.totalPages);
+            } else if (request === 'previous' || request === 'back') {
+              targetPageNumber = Math.max(currentPageRef.current - 1, 1);
+            } else if (!isNaN(parseInt(request))) {
+              targetPageNumber = Math.max(1, Math.min(parseInt(request), selectedBookRef.current.pages?.length || selectedBookRef.current.totalPages));
+            }
+          }
+
+          // Get the page data from stored book
+          const pages = selectedBookRef.current.pages || [];
+          const targetPage = pages.find((p: any) => p.pageNumber === targetPageNumber);
+          
+          if (!targetPage) {
+            sendFunctionCallOutput(
+              callId,
+              `I couldn't find page ${targetPageNumber} in "${selectedBookRef.current.title}". This book has ${pages.length} pages. Would you like me to show you page 1 instead?`
+            );
+            
+            dataChannelRef.current?.send(JSON.stringify({
+              type: 'response.create'
+            }));
+            return;
+          }
+
+          // Update current page
+          currentPageRef.current = targetPageNumber;
+
           // Trigger the storybook display component
           if (options.onStorybookPageDisplay) {
             options.onStorybookPageDisplay({
-              pageImageUrl: args.pageImageUrl,
-              pageText: args.pageText,
-              pageNumber: args.pageNumber,
-              totalPages: args.totalPages,
-              bookTitle: args.bookTitle
+              pageImageUrl: targetPage.imageUrl,
+              pageText: targetPage.pageText,
+              pageNumber: targetPage.pageNumber,
+              totalPages: pages.length,
+              bookTitle: selectedBookRef.current.title
             });
           }
 
-          // Confirm the page display to OpenAI
-          sendFunctionCallOutput(
-            callId, 
-            `Page ${args.pageNumber} of "${args.bookTitle}" is now displayed. I can see the image and will read the text aloud.`
-          );
+          // Send page context back to Appu for better storytelling
+          const pageContext = `Page ${targetPage.pageNumber} of "${selectedBookRef.current.title}" is now displayed. 
+
+IMAGE DESCRIPTION: ${targetPage.imageDescription || 'A colorful illustration that matches the story'}
+
+PAGE TEXT: "${targetPage.pageText}"
+
+STORY CONTEXT: This is page ${targetPage.pageNumber} of ${pages.length} in the book. ${targetPage.pageNumber === 1 ? 'This is the beginning of our story.' : targetPage.pageNumber === pages.length ? 'This is the final page of our story.' : 'We are in the middle of our wonderful story.'}
+
+Now please read this page aloud to the child in an engaging, storytelling voice. You can add expression and make it come alive!`;
+
+          sendFunctionCallOutput(callId, pageContext);
 
           // Trigger model response
           dataChannelRef.current?.send(JSON.stringify({
             type: 'response.create'
           }));
+
+          logger.info("Displayed page and sent context to Appu", {
+            pageNumber: targetPageNumber,
+            bookTitle: selectedBookRef.current.title,
+            pageText: targetPage.pageText?.substring(0, 100) + "..."
+          });
 
         } catch (error: any) {
           logger.error("Error handling display_book_page", {

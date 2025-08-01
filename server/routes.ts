@@ -1031,32 +1031,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     {
       type: "function",
       name: "display_book_page",
-      description: "Display a specific page from a storybook with image and text. Use this to show pages during story reading sessions.",
+      description: "Display a page from the currently selected storybook. Use this after searching for a book to show pages during story reading sessions. The system will automatically handle page data from the stored book.",
       parameters: {
         type: "object",
         properties: {
-          pageImageUrl: {
+          pageRequest: {
             type: "string",
-            description: "URL of the page image to display"
-          },
-          pageText: {
-            type: "string",
-            description: "Text content of the page to read aloud"
-          },
-          pageNumber: {
-            type: "number",
-            description: "Current page number"
-          },
-          totalPages: {
-            type: "number", 
-            description: "Total number of pages in the book"
-          },
-          bookTitle: {
-            type: "string",
-            description: "Title of the book being read"
+            description: "Which page to display: 'first'/'start' for page 1, 'next' for next page, 'previous'/'back' for previous page, or a specific page number like '3'"
           }
         },
-        required: ["pageImageUrl", "pageText", "pageNumber", "totalPages", "bookTitle"]
+        required: ["pageRequest"]
       }
     }
   ];

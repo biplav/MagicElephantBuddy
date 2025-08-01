@@ -19,6 +19,7 @@ interface StorybookDisplayProps {
   onPreviousPage: () => void;
   onClose: () => void;
   isVisible: boolean;
+  onPageNavigation?: (direction: 'next' | 'previous') => void;
 }
 
 export default function StorybookDisplay({ 
@@ -109,7 +110,10 @@ export default function StorybookDisplay({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={onPreviousPage}
+                  onClick={() => {
+                    onPreviousPage();
+                    onPageNavigation?.('previous');
+                  }}
                   disabled={currentPage.pageNumber <= 1}
                   className="flex items-center gap-2"
                 >
@@ -120,7 +124,10 @@ export default function StorybookDisplay({
                 <Button
                   variant="default"
                   size="sm"
-                  onClick={onNextPage}
+                  onClick={() => {
+                    onNextPage();
+                    onPageNavigation?.('next');
+                  }}
                   disabled={currentPage.pageNumber >= currentPage.totalPages}
                   className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700"
                 >

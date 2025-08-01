@@ -905,6 +905,16 @@ const Home = memo(() => {
   const handleCloseStorybook = () => {
     console.log("Closing storybook");
     setIsStorybookVisible(false);
+    setCurrentStorybookPage(null);
+  };
+
+  const handlePageNavigation = (direction: 'next' | 'previous') => {
+    // You could send a message to Appu about the page change
+    // This would let Appu know the user manually navigated and can respond accordingly
+    console.log(`User manually navigated to ${direction} page`);
+
+    // Optional: Send a message to the AI about the navigation
+    // This could trigger Appu to read the new page or comment on it
   };
 
   return (
@@ -955,8 +965,7 @@ const Home = memo(() => {
           </Link>
           <Link href="/dashboard">
             <Button
-              variant="ghost"
-              size="sm"
+              variant="ghost"size="sm"
               aria-label="Parent Dashboard"
               className="p-1 sm:p-2"
             >
