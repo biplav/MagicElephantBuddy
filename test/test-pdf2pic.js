@@ -6,7 +6,7 @@ import path from 'path';
 console.log('Testing pdf2pic library...');
 
 // Check if test PDF exists
-const testPdfPath = './public/books/wise-moon.pdf';
+const testPdfPath = './public/books/wise-brown-moon-page-30.pdf';
 if (!fs.existsSync(testPdfPath)) {
   console.error('Test PDF not found at:', testPdfPath);
   process.exit(1);
