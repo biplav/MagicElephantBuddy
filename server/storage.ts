@@ -36,7 +36,7 @@ export interface IStorage {
   updateConversation(id: number, updates: Partial<InsertConversation>): Promise<Conversation>;
   getConversation(conversationId: number): Promise<Conversation | undefined>;
   getConversationsByChild(childId: number, limit?: number): Promise<Conversation[]>;
-  getChildConversations(childId: number, limit?: number): Promise<Conversation[]>;
+  getChildConversations(childId: string | number): Promise<Conversation | undefined>;
   getCurrentConversation(childId: string | number): Promise<Conversation | undefined>;
 
   // Message management
@@ -208,7 +208,7 @@ export class DatabaseStorage implements IStorage {
     return conversation || undefined;
   }
 
-  
+
 
   // Message methods
   async createMessage(insertMessage: InsertMessage): Promise<Message> {
@@ -475,6 +475,28 @@ export class DatabaseStorage implements IStorage {
     return result[0] || null;
   }
 
+  async storeProfileUpdateSuggestions(childId: number, conversationId: number, suggestions: any[]): Promise<ProfileUpdateSuggestion> {
+    console.log(`💾 Storing profile suggestions for child ${childId}, conversation ${conversationId}`);
+    console.log(`📝 Suggestions:`, JSON.stringify(suggestions, null, 2));
+
+    try {
+      const [suggestion] = await db
+        .insert(profileUpdateSuggestions)
+        .values({
+          childId,
+          conversationId,
+          suggestions,
+          status: 'pending'
+        })
+        .returning();
+
+      console.log(`✅ Successfully stored profile suggestions with ID: ${suggestion.id}`);
+      return suggestion;
+    } catch (error) {
+      console.error(`❌ Error storing profile suggestions:`, error);
+      throw error;
+    }
+  }
 
 
   // Conversation analysis - get conversations from past hour only
@@ -532,14 +554,14 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(books)
       .where(eq(books.title, title));
-    
+
     return existingBooks[0] || undefined;
   }
 
   async searchBooks(searchTerms: string, ageRange?: string): Promise<Book[]> {
     // Split search terms into individual words for better matching
     const terms = searchTerms.toLowerCase().split(' ').filter(term => term.length > 1);
-    
+
     let query = db
       .select()
       .from(books)
@@ -563,17 +585,17 @@ export class DatabaseStorage implements IStorage {
       const description = (book.description || '').toLowerCase();
       const summary = (book.summary || '').toLowerCase();
       const metadata = JSON.stringify(book.metadata || {}).toLowerCase();
-      
+
       let score = 0;
       let titleMatches = 0;
       let exactTitleMatch = false;
-      
+
       // Check for exact title match (highest priority)
       if (title === searchTerms.toLowerCase()) {
         exactTitleMatch = true;
         score += 1000;
       }
-      
+
       // Check each search term
       terms.forEach(term => {
         // Title matches get highest weight
@@ -598,12 +620,12 @@ export class DatabaseStorage implements IStorage {
           score += 1;
         }
       });
-      
+
       // Bonus for multiple title word matches
       if (titleMatches > 1) {
         score += titleMatches * 5;
       }
-      
+
       return { ...book, searchScore: score, exactTitleMatch };
     })
     .filter(book => book.searchScore > 0) // Only include books with some match
@@ -611,7 +633,7 @@ export class DatabaseStorage implements IStorage {
       // Exact title matches always come first
       if (a.exactTitleMatch && !b.exactTitleMatch) return -1;
       if (!a.exactTitleMatch && b.exactTitleMatch) return 1;
-      
+
       // Then sort by score
       return b.searchScore - a.searchScore;
     })

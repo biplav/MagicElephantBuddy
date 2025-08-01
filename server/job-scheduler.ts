@@ -208,7 +208,7 @@ export class JobScheduler {
 
       // Get conversations that are still active (no endTime) and older than 30 minutes
       const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
-      
+
       const inactiveConversations = await db
         .select()
         .from(conversations)

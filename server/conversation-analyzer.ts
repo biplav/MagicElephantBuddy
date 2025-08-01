@@ -57,7 +57,7 @@ Focus on educational content, emotional development, and behavioral observations
 `;
 
       const response = await this.aiService.generateResponse(prompt);
-      
+
       // Clean up markdown formatting if present
       let cleanedResponse = response.trim();
       if (cleanedResponse.startsWith('```json')) {
@@ -65,7 +65,7 @@ Focus on educational content, emotional development, and behavioral observations
       } else if (cleanedResponse.startsWith('```')) {
         cleanedResponse = cleanedResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
       }
-      
+
       const parsed = JSON.parse(cleanedResponse);
 
       return {
@@ -127,7 +127,7 @@ Ignore information already present in the current profile.
 `;
 
       const response = await this.aiService.generateResponse(prompt);
-      
+
       // Clean up markdown formatting if present
       let cleanedResponse = response.trim();
       if (cleanedResponse.startsWith('```json')) {
@@ -135,7 +135,7 @@ Ignore information already present in the current profile.
       } else if (cleanedResponse.startsWith('```')) {
         cleanedResponse = cleanedResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
       }
-      
+
       const suggestions = JSON.parse(cleanedResponse);
 
       // Validate and filter suggestions
@@ -210,20 +210,20 @@ Ignore information already present in the current profile.
     try {
       // Get all conversations without insights
       const allUnanalyzed = await storage.getConversationsWithoutSummary();
-      
+
       // Filter to only conversations from the past hour
       const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
       const recentConversations = allUnanalyzed.filter(conv => 
         conv.endTime && new Date(conv.endTime) >= oneHourAgo
       );
-      
+
       if (recentConversations.length === 0) {
         console.log('No new conversations from the past hour to analyze');
         return;
       }
-      
+
       console.log(`Processing ${recentConversations.length} conversations from the past hour`);
-      
+
       for (const conversation of recentConversations) {
         await this.processConversation(conversation.id);
         // Add small delay to avoid rate limiting
@@ -231,6 +231,35 @@ Ignore information already present in the current profile.
       }
     } catch (error) {
       console.error('Error processing unanalyzed conversations:', error);
+    }
+  }
+
+  // Analyze recent conversations (last hour) for summaries and profile insights
+  async analyzeRecentConversations(): Promise<void> {
+    try {
+      console.log('🔍 Fetching unanalyzed conversations...');
+      const conversations = await storage.getUnanalyzedConversations();
+      console.log(`📋 Found ${conversations.length} unanalyzed conversations`);
+
+      // Filter to conversations from the last hour only
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      const recentConversations = conversations.filter(conv => {
+        const conversationTime = new Date(conv.updatedAt);
+        const isRecent = conversationTime > oneHourAgo;
+        console.log(`📅 Conversation ${conv.id}: ${conversationTime.toISOString()} - ${isRecent ? 'RECENT' : 'OLD'}`);
+        return isRecent;
+      });
+
+      console.log(`🔄 Analyzing ${recentConversations.length} recent conversations (last hour)`);
+
+      for (const conv of recentConversations) {
+        console.log(`🔄 Processing conversation ${conv.id}...`);
+        await this.processConversation(conv.id);
+      }
+
+      console.log('✅ Finished analyzing recent conversations');
+    } catch (error) {
+      console.error('❌ Error analyzing recent conversations:', error);
     }
   }
 }

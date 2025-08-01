@@ -946,6 +946,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Generate enhanced prompt and ensure it's a string
       console.log(`Starting enhanced prompt generation for child ${selectedChildId}...`);
+      ```text
       let enhancedInstructions;
 
       try {
@@ -1401,13 +1402,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );;
 
+  // Manual trigger for conversation analysis (for testing)
+  app.post("/api/analyze-conversations", async (req: Request, res: Response) => {
+    try {
+      const { conversationAnalyzer } = await import("./conversation-analyzer");
+      await conversationAnalyzer.analyzeRecentConversations();
+      res.json({ message: "Conversation analysis triggered successfully" });
+    } catch (error) {
+      console.error("Error triggering conversation analysis:", error);
+      res.status(500).json({ message: "Failed to trigger conversation analysis" });
+    }
+  });
+
   // Profile update suggestions endpoints
   app.get(
     "/api/parents/:parentId/profile-suggestions",
     async (req: Request, res: Response) => {
       try {
         const parentId = req.params.parentId;
-        const status = req.query.status as string;
+        let status = req.query.status as string;
 
         const suggestions = await storage.getProfileUpdateSuggestionsByParent(
           parseInt(parentId),
@@ -1786,10 +1799,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (randomBooks.length > 0) {
           const randomIndex = Math.floor(Math.random() * randomBooks.length);
           const randomBook = randomBooks[randomIndex];
-          
+
           // Get all pages for the random book
           const pages = await storage.getPagesByBook(randomBook.id.toString());
-          
+
           return res.json({
             success: true,
             message: `I couldn't find books matching "${searchTerms}", but here's a wonderful story I think you'll love!`,
@@ -1804,7 +1817,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }]
           });
         }
-        
+
         return res.json({
           success: false,
           message: `I couldn't find any books matching "${searchTerms}". Would you like me to suggest some popular books instead?`,
@@ -1816,7 +1829,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (books.length === 1) {
         const book = books[0];
         const pages = await storage.getPagesByBook(book.id.toString());
-        
+
         return res.json({
           success: true,
           message: `I found "${book.title}"! This looks like a wonderful story.`,
@@ -1892,6 +1905,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }))
         }
       });
+
+```text
 
     } catch (error) {
       console.error("Error fetching full book:", error);
