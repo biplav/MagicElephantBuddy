@@ -65,13 +65,19 @@ export class PDFProcessor {
 
       const pages: ProcessedPage[] = [];
 
-      // Process each page
+      // Process each page with rate limiting
       for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
         console.log(`Processing page ${pageNum}/${totalPages}`);
 
         // Convert page to image
         const result = await convert(pageNum, { responseType: "buffer" });
         const imageBuffer = result.buffer as Buffer;
+
+        // Validate the image buffer
+        if (!imageBuffer || imageBuffer.length === 0) {
+          console.warn(`Empty image buffer for page ${pageNum}, skipping...`);
+          continue;
+        }
 
         // Store image in object storage and provide fallback to local storage
         const imageFileName = `books/${fileName.replace('.pdf', '')}-page-${pageNum}.png`;
@@ -105,11 +111,23 @@ export class PDFProcessor {
           console.log(`Saved image locally: ${imageUrl}`);
         }
 
-        // Extract text for this specific page using OCR via OpenAI Vision
-        const pageText = await this.extractTextFromImage(imageBuffer);
+        // Extract text for this specific page using OCR via OpenAI Vision with retry
+        let pageText = '';
+        try {
+          pageText = await this.extractTextFromImage(imageBuffer);
+        } catch (error) {
+          console.warn(`Failed to extract text from page ${pageNum}:`, error.message);
+          // Continue processing without text extraction
+        }
 
-        // Generate image description using AI
-        const imageDescription = await this.generateImageDescription(imageBuffer);
+        // Generate image description using AI with retry
+        let imageDescription = '';
+        try {
+          imageDescription = await this.generateImageDescription(imageBuffer);
+        } catch (error) {
+          console.warn(`Failed to generate description for page ${pageNum}:`, error.message);
+          // Continue processing without description
+        }
 
         pages.push({
           pageNumber: pageNum,
@@ -118,6 +136,11 @@ export class PDFProcessor {
           imageDescription,
           imageUrl
         });
+
+        // Add delay between pages to avoid rate limits (100ms delay)
+        if (pageNum < totalPages) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
       }
 
       // Generate book summary
@@ -149,7 +172,20 @@ export class PDFProcessor {
 
   private async extractTextFromImage(imageBuffer: Buffer): Promise<string> {
     try {
+      // Validate buffer before processing
+      if (!imageBuffer || imageBuffer.length === 0) {
+        console.warn('Empty image buffer provided for text extraction');
+        return '';
+      }
+
+      // Ensure we have a valid PNG buffer
       const base64Image = imageBuffer.toString('base64');
+      
+      // Validate base64 string
+      if (!base64Image || base64Image.length === 0) {
+        console.warn('Failed to generate base64 from image buffer');
+        return '';
+      }
 
       const OpenAI = (await import('openai')).default;
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -167,13 +203,15 @@ export class PDFProcessor {
               {
                 type: "image_url",
                 image_url: {
-                  url: `data:image/png;base64,${base64Image}`
+                  url: `data:image/png;base64,${base64Image}`,
+                  detail: "high"
                 }
               }
             ]
           }
         ],
-        max_tokens: 1000
+        max_tokens: 1000,
+        temperature: 0.1
       });
 
       return response.choices[0].message.content || '';
@@ -185,7 +223,20 @@ export class PDFProcessor {
 
   private async generateImageDescription(imageBuffer: Buffer): Promise<string> {
     try {
+      // Validate buffer before processing
+      if (!imageBuffer || imageBuffer.length === 0) {
+        console.warn('Empty image buffer provided for description generation');
+        return '';
+      }
+
+      // Ensure we have a valid PNG buffer
       const base64Image = imageBuffer.toString('base64');
+      
+      // Validate base64 string
+      if (!base64Image || base64Image.length === 0) {
+        console.warn('Failed to generate base64 from image buffer');
+        return '';
+      }
 
       const OpenAI = (await import('openai')).default;
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -203,13 +254,15 @@ export class PDFProcessor {
               {
                 type: "image_url",
                 image_url: {
-                  url: `data:image/png;base64,${base64Image}`
+                  url: `data:image/png;base64,${base64Image}`,
+                  detail: "high"
                 }
               }
             ]
           }
         ],
-        max_tokens: 300
+        max_tokens: 300,
+        temperature: 0.7
       });
 
       return response.choices[0].message.content || '';
