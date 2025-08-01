@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import path from 'path';
 import pdf2pic from 'pdf2pic';
@@ -74,10 +73,38 @@ export class PDFProcessor {
         const result = await convert(pageNum, { responseType: "buffer" });
         const imageBuffer = result.buffer as Buffer;
 
-        // Upload image to object storage
-        const imageFileName = `books/${fileName.replace('.pdf', '')}/page-${pageNum}.png`;
-        await this.objectStorage.uploadFromBuffer(imageFileName, imageBuffer, 'image/png');
-        const imageUrl = await this.objectStorage.getPublicUrl(imageFileName);
+        // Upload image to object storage using the correct API
+        const imageFileName = `books/${fileName.replace('.pdf', '')}-page-${pageNum}.png`;
+
+        let imageUrl: string;
+        try {
+          const uploadResult = await this.objectStorage.uploadFromBuffer(imageFileName, imageBuffer);
+          if (!uploadResult.ok) {
+            console.error('Failed to upload image to object storage:', uploadResult.error);
+            throw new Error(`Failed to upload image: ${uploadResult.error}`);
+          }
+
+          // Get public URL for the uploaded image
+          const urlResult = await this.objectStorage.getPublicUrl(imageFileName);
+          if (!urlResult.ok) {
+            console.error('Failed to get public URL:', urlResult.error);
+            throw new Error(`Failed to get public URL: ${urlResult.error}`);
+          }
+
+          imageUrl = urlResult.value;
+        } catch (storageError) {
+          console.error('Object storage error, falling back to local storage:', storageError);
+
+          // Fallback to local storage
+          const publicDir = path.join(process.cwd(), 'public');
+          if (!fs.existsSync(publicDir)) {
+            fs.mkdirSync(publicDir, { recursive: true });
+          }
+
+          const localImagePath = path.join(publicDir, imageFileName);
+          fs.writeFileSync(localImagePath, imageBuffer);
+          imageUrl = `/${imageFileName}`;
+        }
 
         // Extract text for this specific page using OCR via OpenAI Vision
         const pageText = await this.extractTextFromImage(imageBuffer);
@@ -124,7 +151,7 @@ export class PDFProcessor {
   private async extractTextFromImage(imageBuffer: Buffer): Promise<string> {
     try {
       const base64Image = imageBuffer.toString('base64');
-      
+
       const OpenAI = (await import('openai')).default;
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -160,7 +187,7 @@ export class PDFProcessor {
   private async generateImageDescription(imageBuffer: Buffer): Promise<string> {
     try {
       const base64Image = imageBuffer.toString('base64');
-      
+
       const OpenAI = (await import('openai')).default;
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -227,7 +254,7 @@ Book content:
 ${fullText.substring(0, 3000)}...`;
 
       const response = await this.aiService.generateResponse(prompt);
-      
+
       // Try to parse JSON response
       try {
         return JSON.parse(response);
@@ -258,7 +285,7 @@ ${fullText.substring(0, 3000)}...`;
         return firstLine;
       }
     }
-    
+
     // Fallback to filename without extension
     return fileName.replace('.pdf', '').replace(/[-_]/g, ' ');
   }
