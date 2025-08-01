@@ -423,7 +423,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
 
           // Parse the page request (could be "first", "next", "previous", or a number)
           let targetPageNumber = currentPageRef.current;
-
+          if(!args.pageRequest) args = JSON.parse(args);
           if (args.pageRequest) {
             const request = args.pageRequest.toLowerCase();
             if (request === 'first' || request === 'start') {
@@ -937,7 +937,7 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
 
       // Handle API request with explicit error handling
       const realtimeResponse = await fetch(
-        "https://api.openai.com/v1/realtime",
+        "https://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview-2024-12-17",
         {
           method: "POST",
           headers: {
