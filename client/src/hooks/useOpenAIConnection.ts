@@ -61,7 +61,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
   // Book tracking refs - moved to top level to avoid hook call in callback
   const selectedBookRef = useRef<any>(null);
   const currentPageRef = useRef<number>(1);
-  
+
   // Reading session optimization refs
   const isInReadingSessionRef = useRef<boolean>(false);
   const readingSessionMessagesRef = useRef<any[]>([]);
@@ -279,7 +279,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
               max_response_output_tokens: isInReadingSessionRef.current ? 150 : 300,
             },
           };
-          
+
           channel.send(JSON.stringify(sessionConfig));
           logger.info(
             "Session configuration sent successfully with enhanced prompt",
@@ -337,7 +337,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         if (!isInReadingSessionRef.current) {
           logger.info("Entering optimized reading session mode");
           isInReadingSessionRef.current = true;
-          
+
           // Send optimized session update for reading
           dataChannelRef.current?.send(JSON.stringify({
             type: "session.update",
@@ -355,7 +355,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
           isInReadingSessionRef.current = false;
           selectedBookRef.current = null;
           currentPageRef.current = 1;
-          
+
           // Restore normal session settings
           dataChannelRef.current?.send(JSON.stringify({
             type: "session.update",
@@ -406,7 +406,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
             // Store the first book for later display
             selectedBookRef.current = searchResults.books[0];
             currentPageRef.current = 1;
-            
+
             // Enter reading session mode for token optimization
             enterReadingSession();
 
@@ -517,7 +517,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
           // Optimized page context - much shorter to save tokens
           const isFirstPage = targetPage.pageNumber === 1;
           const isLastPage = targetPage.pageNumber === pages.length;
-          
+
           let pageContext: string;
           if (isFirstPage) {
             pageContext = `Page 1 displayed. Read this aloud: "${targetPage.pageText}"`;
@@ -750,13 +750,13 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
                 delta: message.delta,
                 fullMessage: message,
               });
-              
+
               // Mark Appu as speaking when receiving audio
               if (!isAppuSpeaking) {
                 setIsAppuSpeaking(true);
                 options.onAppuSpeakingChange?.(true);
               }
-              
+
               options.onAudioResponseReceived?.(message.delta);
               break;
             case "session.created":
@@ -819,13 +819,13 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
                 status: message.response?.status,
                 fullMessage: message,
               });
-              
+
               // Mark Appu as no longer speaking when response is complete
               if (isAppuSpeaking) {
                 setIsAppuSpeaking(false);
                 options.onAppuSpeakingChange?.(false);
               }
-              
+
               // During reading sessions, periodically clear conversation history to save tokens
               if (isInReadingSessionRef.current && readingSessionMessagesRef.current.length > 6) {
                 logger.info("Clearing conversation history to optimize tokens");
@@ -835,7 +835,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
                 }));
                 readingSessionMessagesRef.current = [];
               }
-              
+
               break;
             case "error":
               logger.error("Error message received", {
@@ -987,7 +987,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
       // Handle offer creation with explicit error handling
       const offer = await pc
         .createOffer({
-          offerToReceiveAudio: true,
+offerToReceiveAudio: true,
           offerToReceiveVideo: false,
         })
         .catch((offerError) => {
