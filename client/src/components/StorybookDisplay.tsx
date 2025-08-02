@@ -47,6 +47,9 @@ export default function StorybookDisplay({
     if (currentPage && currentPage.pageNumber < currentPage.totalPages && !isFlipping) {
       console.log('Auto-advancing to next page due to silence');
       handleNextPage();
+    } else if (currentPage && currentPage.pageNumber >= currentPage.totalPages) {
+      console.log('Reached end of book - auto page advance disabled');
+      // Could trigger end-of-book celebration or suggestions here
     }
   }, [currentPage, isFlipping]);
 

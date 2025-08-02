@@ -61,6 +61,11 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
   // Book tracking refs - moved to top level to avoid hook call in callback
   const selectedBookRef = useRef<any>(null);
   const currentPageRef = useRef<number>(1);
+  
+  // Reading session optimization refs
+  const isInReadingSessionRef = useRef<boolean>(false);
+  const readingSessionMessagesRef = useRef<any[]>([]);
+  const preReadingConversationRef = useRef<any[]>([]);
 
   // Use the media capture instance passed from parent - store in ref to avoid dependency issues
   // const mediaCaptureRef = useRef(options.mediaCapture);
@@ -252,28 +257,30 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
           const enhancedInstructions = await fetchEnhancedPrompt(childId);
 
           // Send session configuration with enhanced prompt
-          channel.send(
-            JSON.stringify({
-              type: "session.update",
-              session: {
-                modalities: ["text", "audio"],
-                instructions: enhancedInstructions,
-                voice: "alloy",
-                input_audio_format: "pcm16",
-                output_audio_format: "pcm16",
-                input_audio_transcription: {
-                  model: "whisper-1",
-                },
-                turn_detection: {
-                  type: "server_vad",
-                  threshold: 0.5,
-                  prefix_padding_ms: 300,
-                  silence_duration_ms: 200,
-                },
-                temperature: 0.8,
+          const sessionConfig = {
+            type: "session.update",
+            session: {
+              modalities: ["text", "audio"],
+              instructions: enhancedInstructions,
+              voice: "alloy",
+              input_audio_format: "pcm16",
+              output_audio_format: "pcm16",
+              input_audio_transcription: {
+                model: "whisper-1",
               },
-            }),
-          );
+              turn_detection: {
+                type: "server_vad",
+                threshold: 0.5,
+                prefix_padding_ms: 300,
+                silence_duration_ms: 200,
+              },
+              temperature: 0.8,
+              // Optimize context window for token efficiency
+              max_response_output_tokens: isInReadingSessionRef.current ? 150 : 300,
+            },
+          };
+          
+          channel.send(JSON.stringify(sessionConfig));
           logger.info(
             "Session configuration sent successfully with enhanced prompt",
           );
@@ -325,6 +332,41 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
 
       // Book refs are now available at hook level
 
+      // Helper function to manage reading session state
+      const enterReadingSession = () => {
+        if (!isInReadingSessionRef.current) {
+          logger.info("Entering optimized reading session mode");
+          isInReadingSessionRef.current = true;
+          
+          // Send optimized session update for reading
+          dataChannelRef.current?.send(JSON.stringify({
+            type: "session.update",
+            session: {
+              max_response_output_tokens: 150, // Shorter responses during reading
+              temperature: 0.7, // Slightly more consistent for storytelling
+            }
+          }));
+        }
+      };
+
+      const exitReadingSession = () => {
+        if (isInReadingSessionRef.current) {
+          logger.info("Exiting reading session mode");
+          isInReadingSessionRef.current = false;
+          selectedBookRef.current = null;
+          currentPageRef.current = 1;
+          
+          // Restore normal session settings
+          dataChannelRef.current?.send(JSON.stringify({
+            type: "session.update",
+            session: {
+              max_response_output_tokens: 300,
+              temperature: 0.8,
+            }
+          }));
+        }
+      };
+
       const handleBookSearchTool = async (callId: string, args: any) => {
         logger.info("bookSearchTool was called!", { callId, args });
 
@@ -364,21 +406,23 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
             // Store the first book for later display
             selectedBookRef.current = searchResults.books[0];
             currentPageRef.current = 1;
+            
+            // Enter reading session mode for token optimization
+            enterReadingSession();
 
             logger.info("Stored book for display", { 
               bookTitle: selectedBookRef.current.title,
               totalPages: selectedBookRef.current.pages?.length || selectedBookRef.current.totalPages
             });
 
+            // Optimized response - shorter and more direct
             if (searchResults.books.length === 1) {
-              // Single book found - ready to read
-              resultMessage = `Perfect! I found "${selectedBookRef.current.title}" by ${selectedBookRef.current.author || 'Unknown Author'}. This is a wonderful ${selectedBookRef.current.genre || 'story'} book with ${selectedBookRef.current.totalPages} pages. ${selectedBookRef.current.summary || selectedBookRef.current.description || ''}\n\nI'm ready to start reading it to you! Should I begin with the first page?`;
+              resultMessage = `Found "${selectedBookRef.current.title}"! Ready to read it to you. Should I start?`;
             } else {
-              // Multiple books found - show options but store first one
-              resultMessage = `I found ${searchResults.books.length} great books! I've selected "${selectedBookRef.current.title}" for us to read. It's ${selectedBookRef.current.summary || selectedBookRef.current.description || 'a wonderful story'}.\n\nShould I start reading this book to you, or would you like to hear about the other books I found?`;
+              resultMessage = `Found ${searchResults.books.length} books! Selected "${selectedBookRef.current.title}". Should I start reading?`;
             }
           } else {
-            resultMessage = `I couldn't find any books matching your search. Let me try a different approach or suggest some popular stories instead!`;
+            resultMessage = `No books found. Let me suggest something else!`;
             selectedBookRef.current = null;
           }
 
@@ -470,16 +514,18 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
             });
           }
 
-          // Send page context back to Appu for better storytelling
-          const pageContext = `Page ${targetPage.pageNumber} of "${selectedBookRef.current.title}" is now displayed. 
-
-IMAGE DESCRIPTION: ${targetPage.imageDescription || 'A colorful illustration that matches the story'}
-
-PAGE TEXT: "${targetPage.pageText}"
-
-STORY CONTEXT: This is page ${targetPage.pageNumber} of ${pages.length} in the book. ${targetPage.pageNumber === 1 ? 'This is the beginning of our story.' : targetPage.pageNumber === pages.length ? 'This is the final page of our story.' : 'We are in the middle of our wonderful story.'}
-
-Now please read this page aloud to the child in an engaging, storytelling voice. You can add expression and make it come alive!`;
+          // Optimized page context - much shorter to save tokens
+          const isFirstPage = targetPage.pageNumber === 1;
+          const isLastPage = targetPage.pageNumber === pages.length;
+          
+          let pageContext: string;
+          if (isFirstPage) {
+            pageContext = `Page 1 displayed. Read this aloud: "${targetPage.pageText}"`;
+          } else if (isLastPage) {
+            pageContext = `Final page displayed. Read: "${targetPage.pageText}" Then say "The End!"`;
+          } else {
+            pageContext = `Page ${targetPage.pageNumber} displayed. Read: "${targetPage.pageText}"`;
+          }
 
           sendFunctionCallOutput(callId, pageContext);
 
@@ -780,7 +826,16 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
                 options.onAppuSpeakingChange?.(false);
               }
               
-              // This indicates that OpenAI has finished generating a complete response
+              // During reading sessions, periodically clear conversation history to save tokens
+              if (isInReadingSessionRef.current && readingSessionMessagesRef.current.length > 6) {
+                logger.info("Clearing conversation history to optimize tokens");
+                dataChannelRef.current?.send(JSON.stringify({
+                  type: "conversation.item.truncate",
+                  audio_end_ms: 0
+                }));
+                readingSessionMessagesRef.current = [];
+              }
+              
               break;
             case "error":
               logger.error("Error message received", {

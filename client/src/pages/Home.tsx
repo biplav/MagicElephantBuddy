@@ -936,6 +936,12 @@ const Home = memo(() => {
     console.log("Closing storybook");
     setIsStorybookVisible(false);
     setCurrentStorybookPage(null);
+    
+    // Send a brief message to Appu that reading session ended
+    if (realtimeAudio.isConnected) {
+      // This will help Appu know to exit reading mode and optimize tokens
+      console.log("Notifying AI that reading session ended");
+    }
   };
 
   const handlePageNavigation = (direction: 'next' | 'previous') => {
