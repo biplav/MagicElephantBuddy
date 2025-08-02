@@ -245,6 +245,9 @@ const Home = memo(() => {
     onAudioResponseReceived: handleAudioResponse,
     onError: handleError,
     onStorybookPageDisplay: handleStorybookPageDisplay,
+    onAppuSpeakingChange: (speaking) => {
+      console.log('Appu speaking state changed:', speaking);
+    },
     enableVideo: enableVideo,
     modelType: aiProvider,
   }), [
@@ -970,7 +973,8 @@ const Home = memo(() => {
               <circle cx="10" cy="12.5" r="0.75" fill="black" />
               <circle cx="14" cy="12.5" r="0.75" fill="black" />
               <path
-                d="M11 15C11 15 12 16 13 15"
+                d="M11 15C1```text
+1 15 12 16 13 15"
                 stroke="black"
                 strokeWidth="0.5"
                 strokeLinecap="round"
@@ -1666,13 +1670,18 @@ const Home = memo(() => {
       )}
 
       {/* Storybook Display */}
-      <StorybookDisplay
-        currentPage={currentStorybookPage}
-        onNextPage={handleNextPage}
-        onPreviousPage={handlePreviousPage}
-        onClose={handleCloseStorybook}
-        isVisible={isStorybookVisible}
-      />
+      {isStorybookVisible && (
+        <StorybookDisplay
+          currentPage={currentStorybookPage}
+          onNextPage={handleNextPage}
+          onPreviousPage={handlePreviousPage}
+          onClose={handleCloseStorybook}
+          isVisible={isStorybookVisible}
+          onPageNavigation={handlePageNavigation}
+          autoPageTurnEnabled={true}
+          isAppuSpeaking={realtimeAudio.isAppuSpeaking}
+        />
+      )}
     </div>
   );
 });

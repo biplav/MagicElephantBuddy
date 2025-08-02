@@ -19,6 +19,7 @@ interface UseRealtimeAudioOptions {
     bookTitle: string;
   }) => void;
   onBookSelected?: (book: any) => void;
+  onAppuSpeakingChange?: (speaking: boolean) => void;
   modelType?: 'openai' | 'gemini';
 }
 
@@ -31,6 +32,7 @@ interface RealtimeAudioState {
   hasVideoPermission: boolean;
   modelType: 'openai' | 'gemini';
   conversationId?: number;
+  isAppuSpeaking: boolean;
 }
 
 export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) {
@@ -55,8 +57,9 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     onAudioResponseReceived: options.onAudioResponseReceived,
     onError: options.onError,
     onStorybookPageDisplay: options.onStorybookPageDisplay,
-    onBookSelected: options.onBookSelected
-  }), [options.onTranscriptionReceived, options.onResponseReceived, options.onAudioResponseReceived, options.onError, options.onStorybookPageDisplay, options.onBookSelected]);
+    onBookSelected: options.onBookSelected,
+    onAppuSpeakingChange: options.onAppuSpeakingChange
+  }), [options.onTranscriptionReceived, options.onResponseReceived, options.onAudioResponseReceived, options.onError, options.onStorybookPageDisplay, options.onBookSelected, options.onAppuSpeakingChange]);
 
   // Initialize media capture at the top level with stable options
   const mediaCapture = useMediaCapture({ enableVideo: options.enableVideo || false });
@@ -95,7 +98,8 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     videoEnabled: mediaCapture.videoEnabled,
     hasVideoPermission: mediaCapture.hasVideoPermission,
     modelType,
-    conversationId: 'conversationId' in activeConnection ? activeConnection.conversationId as number : undefined
+    conversationId: 'conversationId' in activeConnection ? activeConnection.conversationId as number : undefined,
+    isAppuSpeaking: 'isAppuSpeaking' in activeConnection ? activeConnection.isAppuSpeaking as boolean : false
   };
 
   // Handle model type changes

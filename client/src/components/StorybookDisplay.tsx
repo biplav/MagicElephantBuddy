@@ -1,10 +1,11 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, Book } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Book, Clock } from 'lucide-react';
+import { useSilenceDetection } from '@/hooks/useSilenceDetection';
 
 interface StorybookPage {
   pageImageUrl: string;
@@ -21,6 +22,9 @@ interface StorybookDisplayProps {
   onClose: () => void;
   isVisible: boolean;
   onPageNavigation?: (direction: 'next' | 'previous') => void;
+  autoPageTurnEnabled?: boolean;
+  onAppuSpeakingChange?: (speaking: boolean) => void;
+  isAppuSpeaking?: boolean;
 }
 
 export default function StorybookDisplay({ 
@@ -29,11 +33,44 @@ export default function StorybookDisplay({
   onPreviousPage, 
   onClose, 
   isVisible,
-  onPageNavigation
+  onPageNavigation,
+  autoPageTurnEnabled = true,
+  onAppuSpeakingChange,
+  isAppuSpeaking = false
 }: StorybookDisplayProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isFlipping, setIsFlipping] = useState(false);
   const [flipDirection, setFlipDirection] = useState<'next' | 'previous'>('next');
+
+  // Auto page turning with silence detection
+  const handleAutoPageAdvance = useCallback(() => {
+    if (currentPage && currentPage.pageNumber < currentPage.totalPages && !isFlipping) {
+      console.log('Auto-advancing to next page due to silence');
+      handleNextPage();
+    }
+  }, [currentPage, isFlipping]);
+
+  const handleSilenceInterrupted = useCallback(() => {
+    console.log('Auto page advance interrupted by speech');
+  }, []);
+
+  const silenceDetection = useSilenceDetection({
+    silenceThreshold: -50, // dB threshold
+    silenceDuration: 3000, // 3 seconds
+    onSilenceDetected: handleAutoPageAdvance,
+    onSilenceInterrupted: handleSilenceInterrupted,
+    enabled: autoPageTurnEnabled && isVisible
+  });
+
+  // Sync Appu speaking state with silence detection
+  useEffect(() => {
+    silenceDetection.setAppuSpeaking(isAppuSpeaking);
+  }, [isAppuSpeaking, silenceDetection]);
+
+  // Enable/disable silence detection based on visibility and settings
+  useEffect(() => {
+    silenceDetection.setEnabled(autoPageTurnEnabled && isVisible);
+  }, [autoPageTurnEnabled, isVisible, silenceDetection]);
 
   useEffect(() => {
     if (currentPage?.pageImageUrl) {
@@ -41,8 +78,11 @@ export default function StorybookDisplay({
     }
   }, [currentPage?.pageImageUrl]);
 
-  const handleNextPage = () => {
+  const handleNextPage = useCallback(() => {
     if (currentPage && currentPage.pageNumber < currentPage.totalPages) {
+      // Interrupt silence detection when manually navigating
+      silenceDetection.interruptSilence();
+      
       setFlipDirection('next');
       setIsFlipping(true);
       setTimeout(() => {
@@ -51,10 +91,13 @@ export default function StorybookDisplay({
         setIsFlipping(false);
       }, 500);
     }
-  };
+  }, [currentPage, onNextPage, onPageNavigation, silenceDetection]);
 
-  const handlePreviousPage = () => {
+  const handlePreviousPage = useCallback(() => {
     if (currentPage && currentPage.pageNumber > 1) {
+      // Interrupt silence detection when manually navigating
+      silenceDetection.interruptSilence();
+      
       setFlipDirection('previous');
       setIsFlipping(true);
       setTimeout(() => {
@@ -63,7 +106,7 @@ export default function StorybookDisplay({
         setIsFlipping(false);
       }, 500);
     }
-  };
+  }, [currentPage, onPreviousPage, onPageNavigation, silenceDetection]);
 
   if (!isVisible || !currentPage) {
     return null;
@@ -89,6 +132,12 @@ export default function StorybookDisplay({
             <Badge variant="secondary" className="text-sm">
               Page {currentPage.pageNumber} of {currentPage.totalPages}
             </Badge>
+            {silenceDetection.isDetectingSilence && (
+              <Badge variant="outline" className="text-xs animate-pulse">
+                <Clock className="h-3 w-3 mr-1" />
+                {Math.ceil(silenceDetection.silenceTimer / 1000)}s
+              </Badge>
+            )}
             <Button variant="ghost" size="sm" onClick={onClose}>
               ✕
             </Button>

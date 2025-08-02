@@ -39,6 +39,7 @@ interface UseOpenAIConnectionOptions {
     bookTitle: string;
   }) => void;
   onBookSelected?: (book: any) => void;
+  onAppuSpeakingChange?: (speaking: boolean) => void;
 }
 
 export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
@@ -50,6 +51,8 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     error: null,
     lastCapturedFrame: null,
   });
+
+  const [isAppuSpeaking, setIsAppuSpeaking] = useState(false);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -701,6 +704,13 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
                 delta: message.delta,
                 fullMessage: message,
               });
+              
+              // Mark Appu as speaking when receiving audio
+              if (!isAppuSpeaking) {
+                setIsAppuSpeaking(true);
+                options.onAppuSpeakingChange?.(true);
+              }
+              
               options.onAudioResponseReceived?.(message.delta);
               break;
             case "session.created":
@@ -763,8 +773,14 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
                 status: message.response?.status,
                 fullMessage: message,
               });
+              
+              // Mark Appu as no longer speaking when response is complete
+              if (isAppuSpeaking) {
+                setIsAppuSpeaking(false);
+                options.onAppuSpeakingChange?.(false);
+              }
+              
               // This indicates that OpenAI has finished generating a complete response
-              // No specific action needed, just logging for completeness
               break;
             case "error":
               logger.error("Error message received", {
@@ -1043,6 +1059,7 @@ Now please read this page aloud to the child in an engaging, storytelling voice.
     ...state,
     connect,
     disconnect,
+    isAppuSpeaking,
     // mediaCapture: mediaCaptureRef.current,
   };
 }
