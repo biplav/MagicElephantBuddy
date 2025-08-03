@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createServiceLogger } from '@/lib/logger';
 
@@ -18,7 +17,7 @@ interface SilenceDetectionState {
 }
 
 export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
-  const logger = createServiceLogger('silence-detection');
+  const logger = useMemo(() => createServiceLogger('silence-detection'), []);
 
   const {
     silenceDuration = 3000, // 3 seconds
@@ -28,56 +27,66 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
     openaiConnection
   } = options;
 
-  const [state, setState] = useState<SilenceDetectionState>({
+  // UI state - only for things that need to trigger re-renders
+  const [uiState, setUIState] = useState<SilenceDetectionState>({
     isDetectingSilence: false,
     isSilent: false,
     silenceTimer: 0,
     isEnabled: enabled
   });
 
-  const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const silenceStartTimeRef = useRef<number | null>(null);
+  // Internal state - using refs for performance
+  const internalState = useRef({
+    isDetectingSilence: false,
+    isSilent: false,
+    isEnabled: enabled,
+    appuSpeaking: false,
+    userSpeaking: false,
+    silenceStartTime: null as number | null
+  });
+
+  // Timer refs
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const appuSpeakingRef = useRef<boolean>(false);
-  const userSpeakingRef = useRef<boolean>(false);
-  const isEnabledRef = useRef<boolean>(enabled);
   
-  // Sync ref with enabled prop
+  // Stable callback refs - these won't change unless the actual functions change
+  const callbacksRef = useRef({
+    onSilenceDetected,
+    onSilenceInterrupted
+  });
+
+  // Update callback refs when they change
   useEffect(() => {
-    isEnabledRef.current = enabled;
+    callbacksRef.current = {
+      onSilenceDetected,
+      onSilenceInterrupted
+    };
+  }, [onSilenceDetected, onSilenceInterrupted]);
+
+  // Update enabled state
+  useEffect(() => {
+    internalState.current.isEnabled = enabled;
+    setUIState(prev => ({ ...prev, isEnabled: enabled }));
   }, [enabled]);
 
-  // Reset silence detection state
+  // Reset silence detection - stable function
   const resetSilenceDetection = useCallback(() => {
-    silenceStartTimeRef.current = null;
-
-    if (silenceTimeoutRef.current) {
-      clearTimeout(silenceTimeoutRef.current);
-      silenceTimeoutRef.current = null;
-    }
+    internalState.current.silenceStartTime = null;
+    internalState.current.isDetectingSilence = false;
 
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
     }
 
-    setState(prev => ({
+    // Batch UI update
+    setUIState(prev => ({
       ...prev,
       isDetectingSilence: false,
       silenceTimer: 0
     }));
   }, []);
 
-  // Manually interrupt silence detection (for external triggers)
-  const interruptSilence = useCallback(() => {
-    if (state.isDetectingSilence) {
-      resetSilenceDetection();
-      onSilenceInterrupted?.();
-      logger.debug('Silence detection manually interrupted');
-    }
-  }, [state.isDetectingSilence, resetSilenceDetection, onSilenceInterrupted, logger]);
-
-  // Start the countdown timer and update UI
+  // Start silence timer - stable function
   const startSilenceTimer = useCallback(() => {
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
@@ -89,68 +98,105 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
       const elapsed = Date.now() - startTime;
       const remaining = Math.max(0, silenceDuration - elapsed);
 
-      setState(prev => ({ ...prev, silenceTimer: remaining }));
+      // Update only the timer in UI
+      setUIState(prev => ({ ...prev, silenceTimer: remaining }));
 
       if (remaining <= 0) {
         // Silence duration completed
         clearInterval(timerIntervalRef.current!);
-        onSilenceDetected?.();
-        resetSilenceDetection();
+        timerIntervalRef.current = null;
+        
+        // Reset internal state
+        internalState.current.isDetectingSilence = false;
+        internalState.current.silenceStartTime = null;
+        
+        // Update UI
+        setUIState(prev => ({
+          ...prev,
+          isDetectingSilence: false,
+          silenceTimer: 0
+        }));
+
+        // Trigger callback
+        callbacksRef.current.onSilenceDetected?.();
         logger.info('Silence timer completed, triggering page advance');
       }
     }, 100); // Update timer every 100ms for smooth countdown
-  }, [silenceDuration, onSilenceDetected, resetSilenceDetection, logger]);
+  }, [silenceDuration, logger]);
 
-  // Check if we should start silence detection
+  // Core silence state checker - stable and efficient
   const checkSilenceState = useCallback(() => {
-    if (!isEnabledRef.current) return;
+    if (!internalState.current.isEnabled) return;
 
-    const isTrulySilent = !appuSpeakingRef.current && !userSpeakingRef.current;
+    const isTrulySilent = !internalState.current.appuSpeaking && !internalState.current.userSpeaking;
+    const wasDetecting = internalState.current.isDetectingSilence;
+    const wasSilent = internalState.current.isSilent;
 
-    setState(prev => ({ ...prev, isSilent: isTrulySilent }));
+    // Update internal state
+    internalState.current.isSilent = isTrulySilent;
+
+    // Only update UI if something actually changed
+    const uiNeedsUpdate = wasSilent !== isTrulySilent || wasDetecting !== internalState.current.isDetectingSilence;
 
     if (isTrulySilent) {
       // Start silence detection if not already started
-      if (!silenceStartTimeRef.current) {
-        silenceStartTimeRef.current = Date.now();
-        setState(prev => ({ ...prev, isDetectingSilence: true }));
+      if (!internalState.current.silenceStartTime) {
+        internalState.current.silenceStartTime = Date.now();
+        internalState.current.isDetectingSilence = true;
 
         // Start countdown timer
         startSilenceTimer();
 
         logger.debug('True silence detected (neither Appu nor user speaking), starting timer');
+        
+        // Update UI
+        setUIState(prev => ({
+          ...prev,
+          isSilent: true,
+          isDetectingSilence: true
+        }));
+      } else if (uiNeedsUpdate) {
+        // Just update silence state if needed
+        setUIState(prev => ({ ...prev, isSilent: true }));
       }
     } else {
       // Either Appu or user is speaking - reset everything
-      if (silenceStartTimeRef.current) {
+      if (internalState.current.silenceStartTime) {
         resetSilenceDetection();
-        onSilenceInterrupted?.();
+        callbacksRef.current.onSilenceInterrupted?.();
         logger.debug('Speech detected, resetting silence timer', { 
-          appuSpeaking: appuSpeakingRef.current, 
-          userSpeaking: userSpeakingRef.current 
+          appuSpeaking: internalState.current.appuSpeaking, 
+          userSpeaking: internalState.current.userSpeaking 
         });
+      } else if (uiNeedsUpdate) {
+        // Just update silence state if needed
+        setUIState(prev => ({ ...prev, isSilent: false }));
       }
     }
-  }, [startSilenceTimer, resetSilenceDetection, onSilenceInterrupted, logger]);
+  }, [startSilenceTimer, resetSilenceDetection, logger]);
 
-  // Public methods to control Appu speaking state
+  // Stable public methods
   const setAppuSpeaking = useCallback((speaking: boolean) => {
-    appuSpeakingRef.current = speaking;
+    if (internalState.current.appuSpeaking === speaking) return; // Prevent unnecessary updates
+    
+    internalState.current.appuSpeaking = speaking;
     logger.debug('Appu speaking state changed', { speaking });
     checkSilenceState();
   }, [checkSilenceState, logger]);
 
-  // Public methods to control user speaking state (called from OpenAI events)
   const setUserSpeaking = useCallback((speaking: boolean) => {
-    userSpeakingRef.current = speaking;
+    if (internalState.current.userSpeaking === speaking) return; // Prevent unnecessary updates
+    
+    internalState.current.userSpeaking = speaking;
     logger.debug('User speaking state changed', { speaking });
     checkSilenceState();
   }, [checkSilenceState, logger]);
 
-  // Enable/disable silence detection
   const setEnabled = useCallback((enabled: boolean) => {
-    isEnabledRef.current = enabled;
-    setState(prev => ({ ...prev, isEnabled: enabled }));
+    if (internalState.current.isEnabled === enabled) return; // Prevent unnecessary updates
+    
+    internalState.current.isEnabled = enabled;
+    setUIState(prev => ({ ...prev, isEnabled: enabled }));
 
     if (!enabled) {
       resetSilenceDetection();
@@ -159,15 +205,23 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
     logger.info('Silence detection enabled state changed', { enabled });
   }, [resetSilenceDetection, logger]);
 
-  // Memoize the returned object to prevent unnecessary re-renders
+  const interruptSilence = useCallback(() => {
+    if (internalState.current.isDetectingSilence) {
+      resetSilenceDetection();
+      callbacksRef.current.onSilenceInterrupted?.();
+      logger.debug('Silence detection manually interrupted');
+    }
+  }, [resetSilenceDetection, logger]);
+
+  // Stable API object - only recreated when UI state actually changes
   const silenceDetectionAPI = useMemo(() => ({
-    ...state,
+    ...uiState,
     setEnabled,
     setAppuSpeaking,
     setUserSpeaking,
     interruptSilence,
     resetSilenceDetection
-  }), [state, setEnabled, setAppuSpeaking, setUserSpeaking, interruptSilence, resetSilenceDetection]);
+  }), [uiState, setEnabled, setAppuSpeaking, setUserSpeaking, interruptSilence, resetSilenceDetection]);
 
   // Listen to OpenAI Realtime API events for automatic speech detection
   useEffect(() => {
@@ -193,7 +247,7 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
           
         case 'response.audio.delta':
           // Appu is speaking when we receive audio deltas
-          if (!appuSpeakingRef.current) {
+          if (!internalState.current.appuSpeaking) {
             logger.debug('Appu speech started (audio delta received)');
             setAppuSpeaking(true);
           }
@@ -214,7 +268,6 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
     };
 
     // If openaiConnection has an event emitter or similar mechanism
-    // We'll add the event listener here
     if (openaiConnection.addEventListener) {
       openaiConnection.addEventListener('message', handleOpenAIEvent);
     } else if (openaiConnection.on) {
@@ -237,11 +290,6 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
       resetSilenceDetection();
     };
   }, [resetSilenceDetection]);
-
-  // Update enabled state when prop changes
-  useEffect(() => {
-    setState(prev => ({ ...prev, isEnabled: enabled }));
-  }, [enabled]);
 
   return silenceDetectionAPI;
 }
