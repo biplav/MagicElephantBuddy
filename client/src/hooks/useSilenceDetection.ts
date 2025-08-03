@@ -40,6 +40,12 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const appuSpeakingRef = useRef<boolean>(false);
   const userSpeakingRef = useRef<boolean>(false);
+  const isEnabledRef = useRef<boolean>(enabled);
+  
+  // Sync ref with enabled prop
+  useEffect(() => {
+    isEnabledRef.current = enabled;
+  }, [enabled]);
 
   // Reset silence detection state
   const resetSilenceDetection = useCallback(() => {
@@ -97,7 +103,7 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
 
   // Check if we should start silence detection
   const checkSilenceState = useCallback(() => {
-    if (!state.isEnabled) return;
+    if (!isEnabledRef.current) return;
 
     const isTrulySilent = !appuSpeakingRef.current && !userSpeakingRef.current;
 
@@ -125,7 +131,7 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
         });
       }
     }
-  }, [state.isEnabled, startSilenceTimer, resetSilenceDetection, onSilenceInterrupted, logger]);
+  }, [startSilenceTimer, resetSilenceDetection, onSilenceInterrupted, logger]);
 
   // Public methods to control Appu speaking state
   const setAppuSpeaking = useCallback((speaking: boolean) => {
@@ -143,6 +149,7 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
 
   // Enable/disable silence detection
   const setEnabled = useCallback((enabled: boolean) => {
+    isEnabledRef.current = enabled;
     setState(prev => ({ ...prev, isEnabled: enabled }));
 
     if (!enabled) {
