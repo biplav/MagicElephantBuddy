@@ -11,6 +11,8 @@ import useAudioRecorder from "@/hooks/useAudioRecorder";
 import useRealtimeAudio from "@/hooks/useRealtimeAudio";
 import StorybookDisplay from "../components/StorybookDisplay";
 import { CheckCircle, Mic, MicOff, Video, VideoOff } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import SilenceTestControls from "@/components/SilenceTestControls";
 
 type AppState = "welcome" | "interaction";
 
