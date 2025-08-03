@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createServiceLogger } from '@/lib/logger';
 
@@ -40,6 +41,36 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
   const appuSpeakingRef = useRef<boolean>(false);
   const userSpeakingRef = useRef<boolean>(false);
 
+  // Reset silence detection state
+  const resetSilenceDetection = useCallback(() => {
+    silenceStartTimeRef.current = null;
+
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = null;
+    }
+
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+
+    setState(prev => ({
+      ...prev,
+      isDetectingSilence: false,
+      silenceTimer: 0
+    }));
+  }, []);
+
+  // Manually interrupt silence detection (for external triggers)
+  const interruptSilence = useCallback(() => {
+    if (state.isDetectingSilence) {
+      resetSilenceDetection();
+      onSilenceInterrupted?.();
+      logger.debug('Silence detection manually interrupted');
+    }
+  }, [state.isDetectingSilence, resetSilenceDetection, onSilenceInterrupted, logger]);
+
   // Start the countdown timer and update UI
   const startSilenceTimer = useCallback(() => {
     if (timerIntervalRef.current) {
@@ -62,28 +93,7 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
         logger.info('Silence timer completed, triggering page advance');
       }
     }, 100); // Update timer every 100ms for smooth countdown
-  }, [silenceDuration, onSilenceDetected, logger]);
-
-  // Reset silence detection state
-  const resetSilenceDetection = useCallback(() => {
-    silenceStartTimeRef.current = null;
-
-    if (silenceTimeoutRef.current) {
-      clearTimeout(silenceTimeoutRef.current);
-      silenceTimeoutRef.current = null;
-    }
-
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = null;
-    }
-
-    setState(prev => ({
-      ...prev,
-      isDetectingSilence: false,
-      silenceTimer: 0
-    }));
-  }, []);
+  }, [silenceDuration, onSilenceDetected, resetSilenceDetection, logger]);
 
   // Check if we should start silence detection
   const checkSilenceState = useCallback(() => {
@@ -151,15 +161,6 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
     interruptSilence,
     resetSilenceDetection
   }), [state, setEnabled, setAppuSpeaking, setUserSpeaking, interruptSilence, resetSilenceDetection]);
-
-  // Manually interrupt silence detection (for external triggers)
-  const interruptSilence = useCallback(() => {
-    if (state.isDetectingSilence) {
-      resetSilenceDetection();
-      onSilenceInterrupted?.();
-      logger.debug('Silence detection manually interrupted');
-    }
-  }, [state.isDetectingSilence, resetSilenceDetection, onSilenceInterrupted, logger]);
 
   // Listen to OpenAI Realtime API events for automatic speech detection
   useEffect(() => {
