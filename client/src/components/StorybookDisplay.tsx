@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent } from '@/components/ui/card';
@@ -98,7 +97,7 @@ export default function StorybookDisplay({
     if (currentPage && currentPage.pageNumber < currentPage.totalPages) {
       // Interrupt silence detection when manually navigating
       silenceDetection.interruptSilence();
-      
+
       setFlipDirection('next');
       setIsFlipping(true);
       setTimeout(() => {
@@ -113,7 +112,7 @@ export default function StorybookDisplay({
     if (currentPage && currentPage.pageNumber > 1) {
       // Interrupt silence detection when manually navigating
       silenceDetection.interruptSilence();
-      
+
       setFlipDirection('previous');
       setIsFlipping(true);
       setTimeout(() => {
@@ -163,7 +162,7 @@ export default function StorybookDisplay({
         {/* Main Content */}
         <CardContent className="flex-1 p-6 overflow-hidden">
           <div className="h-full flex flex-col gap-4">
-            
+
             {/* Image Section with Page Flip Animation */}
             <div className="flex-1 flex items-center justify-center bg-white rounded-lg shadow-inner p-6 overflow-hidden">
               <div className="relative w-full h-full max-w-5xl perspective-1000">
@@ -228,7 +227,7 @@ export default function StorybookDisplay({
                 <ChevronLeft className="h-5 w-5" />
                 Previous
               </Button>
-              
+
               <motion.div
                 animate={{ scale: isFlipping ? 0.95 : 1 }}
                 transition={{ duration: 0.2 }}
@@ -237,7 +236,7 @@ export default function StorybookDisplay({
                   Page {currentPage.pageNumber} of {currentPage.totalPages}
                 </Badge>
               </motion.div>
-              
+
               <Button
                 variant="default"
                 size="lg"
