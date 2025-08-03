@@ -49,12 +49,19 @@ export default function StorybookDisplay({
   const handleAutoPageAdvance = useCallback(() => {
     if (currentPage && currentPage.pageNumber < currentPage.totalPages && !isFlipping) {
       console.log('Auto-advancing to next page due to silence');
-      handleNextPage();
+      // Call onNextPage directly, not handleNextPage to avoid circular dependency
+      setFlipDirection('next');
+      setIsFlipping(true);
+      setTimeout(() => {
+        onNextPage();
+        onPageNavigation?.('next');
+        setIsFlipping(false);
+      }, 500);
     } else if (currentPage && currentPage.pageNumber >= currentPage.totalPages) {
       console.log('Reached end of book - auto page advance disabled');
       // Could trigger end-of-book celebration or suggestions here
     }
-  }, [currentPage, isFlipping]);
+  }, [currentPage, isFlipping, onNextPage, onPageNavigation]);
 
   const handleSilenceInterrupted = useCallback(() => {
     console.log('Auto page advance interrupted by speech');
@@ -129,7 +136,7 @@ export default function StorybookDisplay({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <style jsx>{`
+      <style>{`
         .perspective-1000 {
           perspective: 1000px;
         }
