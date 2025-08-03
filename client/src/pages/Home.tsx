@@ -239,14 +239,21 @@ const Home = memo(() => {
   }, []);
 
   // Initialize realtime audio hook with stable options
+  const [isAppuSpeaking, setIsAppuSpeaking] = useState<boolean>(false);
+  const [isUserSpeaking, setIsUserSpeaking] = useState<boolean>(false);
+  const [autoPageTurnEnabled, setAutoPageTurnEnabled] = useState<boolean>(true);
+
   const realtimeOptions = useMemo(() => ({
     onTranscriptionReceived: handleTranscription,
     onResponseReceived: handleResponse,
     onAudioResponseReceived: handleAudioResponse,
     onError: handleError,
     onStorybookPageDisplay: handleStorybookPageDisplay,
-    onAppuSpeakingChange: (speaking) => {
-      console.log('Appu speaking state changed:', speaking);
+    onAppuSpeakingChange: (speaking: boolean) => {
+      setIsAppuSpeaking(speaking);
+    },
+    onUserSpeakingChange: (speaking: boolean) => {
+      setIsUserSpeaking(speaking);
     },
     enableVideo: enableVideo,
     modelType: aiProvider,
@@ -936,7 +943,7 @@ const Home = memo(() => {
     console.log("Closing storybook");
     setIsStorybookVisible(false);
     setCurrentStorybookPage(null);
-    
+
     // Send a brief message to Appu that reading session ended
     if (realtimeAudio.isConnected) {
       // This will help Appu know to exit reading mode and optimize tokens
@@ -979,8 +986,7 @@ const Home = memo(() => {
               <circle cx="10" cy="12.5" r="0.75" fill="black" />
               <circle cx="14" cy="12.5" r="0.75" fill="black" />
               <path
-                d="M11 15C1```text
-1 15 12 16 13 15"
+                d="M11 15C11 15 12 16 13 15"
                 stroke="black"
                 strokeWidth="0.5"
                 strokeLinecap="round"
@@ -1684,8 +1690,10 @@ const Home = memo(() => {
           onClose={handleCloseStorybook}
           isVisible={isStorybookVisible}
           onPageNavigation={handlePageNavigation}
-          autoPageTurnEnabled={true}
-          isAppuSpeaking={realtimeAudio.isAppuSpeaking}
+          autoPageTurnEnabled={autoPageTurnEnabled}
+          isAppuSpeaking={isAppuSpeaking}
+          isUserSpeaking={isUserSpeaking}
+          openaiConnection={realtimeAudio?.openaiConnection}
         />
       )}
     </div>

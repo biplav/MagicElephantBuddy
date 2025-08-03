@@ -25,6 +25,8 @@ interface StorybookDisplayProps {
   autoPageTurnEnabled?: boolean;
   onAppuSpeakingChange?: (speaking: boolean) => void;
   isAppuSpeaking?: boolean;
+  isUserSpeaking?: boolean;
+  openaiConnection?: any;
 }
 
 export default function StorybookDisplay({ 
@@ -36,7 +38,9 @@ export default function StorybookDisplay({
   onPageNavigation,
   autoPageTurnEnabled = true,
   onAppuSpeakingChange,
-  isAppuSpeaking = false
+  isAppuSpeaking = false,
+  isUserSpeaking = false,
+  openaiConnection
 }: StorybookDisplayProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isFlipping, setIsFlipping] = useState(false);
@@ -58,17 +62,21 @@ export default function StorybookDisplay({
   }, []);
 
   const silenceDetection = useSilenceDetection({
-    silenceThreshold: -50, // dB threshold
     silenceDuration: 3000, // 3 seconds
     onSilenceDetected: handleAutoPageAdvance,
     onSilenceInterrupted: handleSilenceInterrupted,
-    enabled: autoPageTurnEnabled && isVisible
+    enabled: autoPageTurnEnabled && isVisible,
+    openaiConnection: openaiConnection
   });
 
-  // Sync Appu speaking state with silence detection
+  // Sync Appu and user speaking state with silence detection
   useEffect(() => {
     silenceDetection.setAppuSpeaking(isAppuSpeaking);
   }, [isAppuSpeaking, silenceDetection]);
+
+  useEffect(() => {
+    silenceDetection.setUserSpeaking(isUserSpeaking);
+  }, [isUserSpeaking, silenceDetection]);
 
   // Enable/disable silence detection based on visibility and settings
   useEffect(() => {

@@ -40,6 +40,7 @@ interface UseOpenAIConnectionOptions {
   }) => void;
   onBookSelected?: (book: any) => void;
   onAppuSpeakingChange?: (speaking: boolean) => void;
+  onUserSpeakingChange?: (speaking: boolean) => void;
 }
 
 export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
@@ -53,6 +54,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
   });
 
   const [isAppuSpeaking, setIsAppuSpeaking] = useState(false);
+  const [isUserSpeaking, setIsUserSpeaking] = useState(false);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -712,6 +714,16 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
           });
 
           switch (message.type) {
+            case "input_audio_buffer.speech_started":
+              logger.info("User speech started detected");
+              setIsUserSpeaking(true);
+              options.onUserSpeakingChange?.(true);
+              break;
+            case "input_audio_buffer.speech_stopped":
+              logger.info("User speech stopped detected");
+              setIsUserSpeaking(false);
+              options.onUserSpeakingChange?.(false);
+              break;
             case "conversation.item.input_audio_transcription.completed":
               logger.info("Transcription completed message", {
                 hasTranscript: !!message.transcript,
@@ -1115,6 +1127,7 @@ offerToReceiveAudio: true,
     connect,
     disconnect,
     isAppuSpeaking,
+    isUserSpeaking,
     // mediaCapture: mediaCaptureRef.current,
   };
 }

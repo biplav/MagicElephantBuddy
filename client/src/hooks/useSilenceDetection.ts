@@ -6,6 +6,7 @@ interface SilenceDetectionOptions {
   onSilenceDetected?: () => void;
   onSilenceInterrupted?: () => void;
   enabled?: boolean;
+  openaiConnection?: any; // OpenAI connection instance to listen to events
 }
 
 interface SilenceDetectionState {
@@ -22,7 +23,8 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
     silenceDuration = 3000, // 3 seconds
     onSilenceDetected,
     onSilenceInterrupted,
-    enabled = false
+    enabled = false,
+    openaiConnection
   } = options;
 
   const [state, setState] = useState<SilenceDetectionState>({
@@ -149,6 +151,68 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
     }
   }, [state.isDetectingSilence, resetSilenceDetection, onSilenceInterrupted, logger]);
 
+  // Listen to OpenAI Realtime API events for automatic speech detection
+  useEffect(() => {
+    if (!openaiConnection || !enabled) return;
+
+    // Create event listeners for OpenAI events
+    const handleOpenAIEvent = (event: any) => {
+      logger.debug('OpenAI event received for silence detection', { 
+        eventType: event.type,
+        hasData: !!event.data 
+      });
+
+      switch (event.type) {
+        case 'input_audio_buffer.speech_started':
+          logger.debug('User speech started - interrupting silence');
+          setUserSpeaking(true);
+          break;
+          
+        case 'input_audio_buffer.speech_stopped':
+          logger.debug('User speech stopped');
+          setUserSpeaking(false);
+          break;
+          
+        case 'response.audio.delta':
+          // Appu is speaking when we receive audio deltas
+          if (!appuSpeakingRef.current) {
+            logger.debug('Appu speech started (audio delta received)');
+            setAppuSpeaking(true);
+          }
+          break;
+          
+        case 'response.done':
+          // Appu finished speaking when response is complete
+          logger.debug('Appu speech ended (response done)');
+          setAppuSpeaking(false);
+          break;
+          
+        case 'conversation.item.input_audio_transcription.completed':
+          // Additional confirmation that user speech has ended
+          logger.debug('User transcription completed - speech ended');
+          setUserSpeaking(false);
+          break;
+      }
+    };
+
+    // If openaiConnection has an event emitter or similar mechanism
+    // We'll add the event listener here
+    if (openaiConnection.addEventListener) {
+      openaiConnection.addEventListener('message', handleOpenAIEvent);
+    } else if (openaiConnection.on) {
+      openaiConnection.on('event', handleOpenAIEvent);
+    }
+
+    // Cleanup function
+    return () => {
+      if (openaiConnection.removeEventListener) {
+        openaiConnection.removeEventListener('message', handleOpenAIEvent);
+      } else if (openaiConnection.off) {
+        openaiConnection.off('event', handleOpenAIEvent);
+      }
+    };
+  }, [openaiConnection, enabled, setUserSpeaking, setAppuSpeaking, logger]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -165,7 +229,7 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
     ...state,
     setEnabled,
     setAppuSpeaking,
-    setUserSpeaking, // New method for OpenAI events
+    setUserSpeaking, // Keep for manual control if needed
     interruptSilence,
     resetSilenceDetection
   };
