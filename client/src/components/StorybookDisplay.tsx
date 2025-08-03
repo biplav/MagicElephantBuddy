@@ -69,19 +69,24 @@ export default function StorybookDisplay({
     openaiConnection: openaiConnection
   });
 
+  // Create stable references to the methods
+  const setAppuSpeaking = silenceDetection.setAppuSpeaking;
+  const setUserSpeaking = silenceDetection.setUserSpeaking;
+  const setEnabled = silenceDetection.setEnabled;
+
   // Sync Appu and user speaking state with silence detection
   useEffect(() => {
-    silenceDetection.setAppuSpeaking(isAppuSpeaking);
-  }, [isAppuSpeaking, silenceDetection]);
+    setAppuSpeaking(isAppuSpeaking);
+  }, [isAppuSpeaking, setAppuSpeaking]);
 
   useEffect(() => {
-    silenceDetection.setUserSpeaking(isUserSpeaking);
-  }, [isUserSpeaking, silenceDetection]);
+    setUserSpeaking(isUserSpeaking);
+  }, [isUserSpeaking, setUserSpeaking]);
 
   // Enable/disable silence detection based on visibility and settings
   useEffect(() => {
-    silenceDetection.setEnabled(autoPageTurnEnabled && isVisible);
-  }, [autoPageTurnEnabled, isVisible, silenceDetection]);
+    setEnabled(autoPageTurnEnabled && isVisible);
+  }, [autoPageTurnEnabled, isVisible, setEnabled]);
 
   useEffect(() => {
     if (currentPage?.pageImageUrl) {

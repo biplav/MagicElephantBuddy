@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createServiceLogger } from '@/lib/logger';
 
 interface SilenceDetectionOptions {
@@ -142,6 +142,16 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
     logger.info('Silence detection enabled state changed', { enabled });
   }, [resetSilenceDetection, logger]);
 
+  // Memoize the returned object to prevent unnecessary re-renders
+  const silenceDetectionAPI = useMemo(() => ({
+    ...state,
+    setEnabled,
+    setAppuSpeaking,
+    setUserSpeaking,
+    interruptSilence,
+    resetSilenceDetection
+  }), [state, setEnabled, setAppuSpeaking, setUserSpeaking, interruptSilence, resetSilenceDetection]);
+
   // Manually interrupt silence detection (for external triggers)
   const interruptSilence = useCallback(() => {
     if (state.isDetectingSilence) {
@@ -225,12 +235,5 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
     setState(prev => ({ ...prev, isEnabled: enabled }));
   }, [enabled]);
 
-  return {
-    ...state,
-    setEnabled,
-    setAppuSpeaking,
-    setUserSpeaking, // Keep for manual control if needed
-    interruptSilence,
-    resetSilenceDetection
-  };
+  return silenceDetectionAPI;
 }
