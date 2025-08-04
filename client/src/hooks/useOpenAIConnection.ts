@@ -78,6 +78,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     if (selectedChildId) {
       return selectedChildId;
     }
+    //this logic needs to improve.
     return "1085268853542289410";
   }, []);
 
