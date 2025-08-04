@@ -946,6 +946,11 @@ const Home = memo(() => {
     setIsStorybookVisible(false);
     setCurrentStorybookPage(null);
 
+    // Exit reading session to restore normal AI settings
+    if (realtimeAudio?.openaiConnection?.exitReadingSession) {
+      realtimeAudio.openaiConnection.exitReadingSession();
+    }
+
     // Send a brief message to Appu that reading session ended
     if (realtimeAudio.isConnected) {
       // This will help Appu know to exit reading mode and optimize tokens
