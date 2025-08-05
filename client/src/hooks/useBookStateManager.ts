@@ -129,14 +129,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
 
       // Call the storybook display callback
       if (options.onStorybookPageDisplay) {
-        options.onStorybookPageDisplay({
-          pageImageUrl: pageData.pageImageUrl,
-          pageText: pageData.pageText,
-          pageNumber: pageData.pageNumber,
-          totalPages: pageData.totalPages,
-          bookTitle: pageData.bookTitle,
-          audioUrl: pageData.audioUrl,
-        });
+        options.onStorybookPageDisplay(pageData);
       }
 
       // Emit success result
