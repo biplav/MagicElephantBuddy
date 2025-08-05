@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from "react";
 import { createServiceLogger } from "@/lib/logger";
 import { useWebRTCConnection } from "./useWebRTCConnection";
 import { useOpenAISession } from "./useOpenAISession";
+import { useBookStateManager } from "./useBookStateManager";
 interface OpenAIConnectionOptions {
   childId?: string;
   onTranscriptionReceived?: (transcription: string) => void;
@@ -90,14 +91,11 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
   const conversationIdRef = useRef<string | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  // Book tracking refs - moved to top level to avoid hook call in callback
-  const selectedBookRef = useRef<any>(null);
-  const currentPageRef = useRef<number>(1);
 
-  // Reading session optimization refs
-  const isInReadingSessionRef = useRef<boolean>(false);
-  const readingSessionMessagesRef = useRef<any[]>([]);
-  const preReadingConversationRef = useRef<any[]>([]);
+  // Initialize book state manager - dataChannel will be passed to methods when needed
+  const bookStateManager = useBookStateManager({
+    onStorybookPageDisplay: options.onStorybookPageDisplay
+  });
 
   // Helper method to send function call output
   const sendFunctionCallOutput = useCallback((callId: string, result: any) => {
@@ -135,6 +133,9 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
       channel.onopen = async () => {
         logger.info("Data channel opened");
         clearInterval(stateCheckInterval);
+        
+        // Update book state manager with the active data channel
+        // This will be handled via a different approach since we can't call hooks conditionally
 
         try {
           const childId = getSelectedChildId();
@@ -214,233 +215,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         }
       };
 
-      // Book refs are now available at hook level
-
-      // Helper function to manage reading session state
-      const enterReadingSession = () => {
-        if (!isInReadingSessionRef.current) {
-          logger.info("Entering optimized reading session mode");
-          isInReadingSessionRef.current = true;
-
-          // Send optimized session update for reading
-          dataChannelRef.current?.send(JSON.stringify({
-            type: "session.update",
-            session: {
-              max_response_output_tokens: 250, // Shorter responses during reading
-              temperature: 0.6, // Slightly more consistent for storytelling
-            }
-          }));
-        }
-      };
-
-      const exitReadingSession = () => {
-        if (isInReadingSessionRef.current) {
-          logger.info("Exiting reading session mode");
-          isInReadingSessionRef.current = false;
-          selectedBookRef.current = null;
-          currentPageRef.current = 1;
-
-          // Restore normal session settings
-          dataChannelRef.current?.send(JSON.stringify({
-            type: "session.update",
-            session: {
-              max_response_output_tokens: 300,
-              temperature: 0.8,
-            }
-          }));
-        }
-      };
-
-      const handleBookSearchTool = async (callId: string, args: any) => {
-        logger.info("bookSearchTool was called!", { callId, args });
-
-        const argsJson = JSON.parse(args);
-        logger.info("Parsed JSON arguments", { callId, argsJson });
-
-        try {
-          // Search for books
-          const searchBody = {
-            context: argsJson.context,
-            bookTitle: argsJson.bookTitle,
-            keywords: argsJson.keywords,
-            ageRange: argsJson.ageRange
-          };
-
-          const response = await fetch('/api/books/search', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(searchBody),
-          });
-
-          if (!response.ok) {
-            throw new Error(`Book search failed: ${response.status}`);
-          }
-
-          const searchResults = await response.json();
-          logger.info("Book search completed", {
-            resultsCount: searchResults.books?.length || 0,
-            searchParams: args
-          });
-
-          let resultMessage: string;
-
-          if (searchResults.books?.length > 0) {
-            // Store the first book for later display
-            selectedBookRef.current = searchResults.books[0];
-            currentPageRef.current = 1;
-
-            // Enter reading session mode for token optimization
-            enterReadingSession();
-
-            logger.info("Stored book for display", {
-              bookTitle: selectedBookRef.current.title,
-              totalPages: selectedBookRef.current.pages?.length || selectedBookRef.current.totalPages
-            });
-
-            // Optimized response - shorter and more direct
-            if (searchResults.books.length === 1) {
-              resultMessage = `Found "${selectedBookRef.current.title}"! Ready to read it to you. Should I start?`;
-            } else {
-              resultMessage = `Found ${searchResults.books.length} books! Selected "${selectedBookRef.current.title}". Should I start reading?`;
-            }
-          } else {
-            resultMessage = `No books found. Let me suggest something else!`;
-            selectedBookRef.current = null;
-          }
-
-          sendFunctionCallOutput(callId, resultMessage);
-
-          // Trigger model response
-          dataChannelRef.current?.send(JSON.stringify({
-            type: 'response.create'
-          }));
-
-        } catch (error: any) {
-          logger.error("Error handling bookSearchTool", {
-            error: error.message,
-            args
-          });
-
-          sendFunctionCallOutput(
-            callId,
-            "I'm having trouble searching for books right now. Can you try asking for a story in a different way?"
-          );
-
-          // Trigger model response after error
-          dataChannelRef.current?.send(JSON.stringify({
-            type: 'response.create'
-          }));
-        }
-      };
-
-      const handleDisplayBookPage = async (callId: string, args: any) => {
-        logger.info("display_book_page was called!", { callId, args });
-
-        try {
-          // Check if we have a stored book
-          if (!selectedBookRef.current) {
-            sendFunctionCallOutput(
-              callId,
-              "I need to search for a book first before I can display pages. What kind of story would you like to read?"
-            );
-
-            dataChannelRef.current?.send(JSON.stringify({
-              type: 'response.create'
-            }));
-            return;
-          }
-
-          // Parse the page request (could be "first", "next", "previous", or a number)
-          let targetPageNumber = currentPageRef.current;
-          if(!args.pageRequest) args = JSON.parse(args);
-          if (args.pageRequest) {
-            const request = args.pageRequest.toLowerCase();
-            if (request === 'first' || request === 'start') {
-              targetPageNumber = 1;
-            } else if (request === 'next') {
-              targetPageNumber = Math.min(currentPageRef.current + 1, selectedBookRef.current.pages?.length || selectedBookRef.current.totalPages);
-            } else if (request === 'previous' || request === 'back') {
-              targetPageNumber = Math.max(currentPageRef.current - 1, 1);
-            } else if (!isNaN(parseInt(request))) {
-              targetPageNumber = Math.max(1, Math.min(parseInt(request), selectedBookRef.current.pages?.length || selectedBookRef.current.totalPages));
-            }
-          }
-
-          // Get the page data from stored book
-          const pages = selectedBookRef.current.pages || [];
-          const targetPage = pages.find((p: any) => p.pageNumber === targetPageNumber);
-
-          if (!targetPage) {
-            sendFunctionCallOutput(
-              callId,
-              `I couldn't find page ${targetPageNumber} in "${selectedBookRef.current.title}". This book has ${pages.length} pages. Would you like me to show you page 1 instead?`
-            );
-
-            dataChannelRef.current?.send(JSON.stringify({
-              type: 'response.create'
-            }));
-            return;
-          }
-
-          // Update current page
-          currentPageRef.current = targetPageNumber;
-
-          // Trigger the storybook display component
-          if (options.onStorybookPageDisplay) {
-            options.onStorybookPageDisplay({
-              pageImageUrl: targetPage.imageUrl,
-              pageText: targetPage.pageText,
-              pageNumber: targetPage.pageNumber,
-              totalPages: pages.length,
-              bookTitle: selectedBookRef.current.title
-            });
-          }
-
-          // Optimized page context - much shorter to save tokens
-          const isFirstPage = targetPage.pageNumber === 1;
-          const isLastPage = targetPage.pageNumber === pages.length;
-
-          let pageContext: string;
-          if (isFirstPage) {
-            pageContext = `Page 1 displayed. Read this story in Hinglish (mix of Hindi and English) to make it engaging for the child. Page text: "${targetPage.pageText}" - Use simple Hindi words mixed with English, add expressions like "dekho", "kya baat hai", "wah", and make it playful and interactive.`;
-          } else if (isLastPage) {
-            pageContext = `Final page displayed. Read in Hinglish: "${targetPage.pageText}" Then say "Bas! Kahani khatam! The End! Kya maza aaya na?"`;
-          } else {
-            pageContext = `Page ${targetPage.pageNumber} displayed. Continue reading in Hinglish (Hindi-English mix): "${targetPage.pageText}" - Keep it engaging with expressions like "aur phir", "dekho kya hua", "kitna mazedaar hai na!"`;
-          }
-
-          sendFunctionCallOutput(callId, pageContext);
-
-          // Trigger model response
-          dataChannelRef.current?.send(JSON.stringify({
-            type: 'response.create'
-          }));
-
-          logger.info("Displayed page and sent context to Appu", {
-            pageNumber: targetPageNumber,
-            bookTitle: selectedBookRef.current.title,
-            pageText: targetPage.pageText?.substring(0, 100) + "..."
-          });
-
-        } catch (error: any) {
-          logger.error("Error handling display_book_page", {
-            error: error.message,
-            args
-          });
-
-          sendFunctionCallOutput(
-            callId,
-            "I'm having trouble displaying the book page right now. Let me try to continue with the story."
-          );
-
-          // Trigger model response after error
-          dataChannelRef.current?.send(JSON.stringify({
-            type: 'response.create'
-          }));
-        }
-      };
+      // Book-related functionality now handled by bookStateManager
 
       const handleGetEyesTool = async (callId: string, args: any) => {
         logger.info("getEyesTool was called!", { callId, args });
@@ -702,9 +477,9 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
               if (message.name === "getEyesTool") {
                 await handleGetEyesTool(message.call_id, message.arguments);
               } else if (message.name === "bookSearchTool") {
-                await handleBookSearchTool(message.call_id, message.arguments);
+                await bookStateManager.handleBookSearchTool(message.call_id, message.arguments, dataChannelRef.current);
               } else if (message.name === "display_book_page") {
-                await handleDisplayBookPage(message.call_id, message.arguments);
+                await bookStateManager.handleDisplayBookPage(message.call_id, message.arguments, dataChannelRef.current);
               }
               break;
             case "response.done":
@@ -720,15 +495,8 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
                 options.onAppuSpeakingChange?.(false);
               }
 
-              // During reading sessions, periodically clear conversation history to save tokens
-              if (isInReadingSessionRef.current && readingSessionMessagesRef.current.length > 6) {
-                logger.info("Clearing conversation history to optimize tokens");
-                dataChannelRef.current?.send(JSON.stringify({
-                  type: "conversation.item.truncate",
-                  audio_end_ms: 0
-                }));
-                readingSessionMessagesRef.current = [];
-              }
+              // Optimize token usage during reading sessions
+              bookStateManager.optimizeTokenUsage();
 
               break;
             case "error":
