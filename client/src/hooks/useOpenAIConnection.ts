@@ -1,5 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { createServiceLogger } from "@/lib/logger";
+import { useWebRTCConnection } from "./useWebRTCConnection";
+import { useOpenAISession } from "./useOpenAISession";
 interface OpenAIConnectionOptions {
   onTranscriptionReceived?: (transcription: string) => void;
   onResponseReceived?: (text: string) => void;
@@ -56,8 +58,31 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
   const [isAppuSpeaking, setIsAppuSpeaking] = useState(false);
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
 
-  const pcRef = useRef<RTCPeerConnection | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  // Initialize modular hooks
+  const webrtcConnection = useWebRTCConnection({
+    onConnectionStateChange: (state) => {
+      setState((prev) => ({
+        ...prev,
+        isConnected: state === 'connected',
+        isRecording: state === 'connected',
+      }));
+    },
+    onTrackReceived: (event) => {
+      logger.info("Received audio track from OpenAI");
+    },
+    onError: (error) => {
+      setState((prev) => ({ ...prev, error }));
+      options.onError?.(error);
+    },
+  });
+
+  const openaiSession = useOpenAISession({
+    onError: (error) => {
+      setState((prev) => ({ ...prev, error }));
+      options.onError?.(error);
+    },
+  });
+
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const conversationIdRef = useRef<string | null>(null);
   // Book tracking refs - moved to top level to avoid hook call in callback
@@ -68,155 +93,6 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
   const isInReadingSessionRef = useRef<boolean>(false);
   const readingSessionMessagesRef = useRef<any[]>([]);
   const preReadingConversationRef = useRef<any[]>([]);
-
-  // Use the media capture instance passed from parent - store in ref to avoid dependency issues
-  // const mediaCaptureRef = useRef(options.mediaCapture);
-  // mediaCaptureRef.current = options.mediaCapture;
-
-  const getSelectedChildId = useCallback((): string => {
-    const selectedChildId = localStorage.getItem("selectedChildId");
-    if (selectedChildId) {
-      return selectedChildId;
-    }
-    //this logic needs to improve.
-    return "1085268853542289410";
-  }, []);
-
-  const createSession = useCallback(async (): Promise<string> => {
-    const childId = getSelectedChildId();
-    const response = await fetch("/api/session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ childId, modelType: "openai" }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(
-        `Failed to create session: ${response.status} - ${errorText}`,
-      );
-    }
-
-    const { client_secret } = await response.json();
-    if (!client_secret) {
-      throw new Error("No client secret received from server");
-    }
-    return client_secret;
-  }, [getSelectedChildId]);
-
-  const setupPeerConnection = useCallback((pc: RTCPeerConnection) => {
-    pc.ontrack = (event) => {
-      logger.info("Received audio track from OpenAI");
-      const remoteStream = event.streams[0];
-      const audio = new Audio();
-      audio.srcObject = remoteStream;
-      audio.autoplay = true;
-    };
-
-    pc.onconnectionstatechange = () => {
-      logger.info("WebRTC connection state", { state: pc.connectionState });
-      switch (pc.connectionState) {
-        case "connected":
-          setState((prev) => ({
-            ...prev,
-            isConnected: true,
-            isRecording: true,
-          }));
-          break;
-        case "disconnected":
-        case "failed":
-        case "closed":
-          setState((prev) => ({
-            ...prev,
-            isConnected: false,
-            isRecording: false,
-          }));
-          break;
-      }
-    };
-
-    // Handle ICE connection state changes
-    pc.oniceconnectionstatechange = () => {
-      logger.info("ICE connection state changed", {
-        iceConnectionState: pc.iceConnectionState,
-        iceGatheringState: pc.iceGatheringState,
-      });
-
-      if (pc.iceConnectionState === "failed") {
-        logger.error("ICE connection failed");
-        setState((prev) => ({ ...prev, error: "Connection failed" }));
-        options.onError?.("Connection failed");
-      }
-    };
-
-    // Handle ICE gathering state changes
-    pc.onicegatheringstatechange = () => {
-      logger.info("ICE gathering state changed", {
-        iceGatheringState: pc.iceGatheringState,
-      });
-    };
-
-    // Handle ICE candidates
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        logger.info("ICE candidate received", {
-          candidate: event.candidate.candidate.substring(0, 50) + "...",
-        });
-      } else {
-        logger.info("ICE candidate gathering complete");
-      }
-    };
-
-    // Handle signaling state changes
-    pc.onsignalingstatechange = () => {
-      logger.info("Signaling state changed", {
-        signalingState: pc.signalingState,
-      });
-    };
-
-    // Handle negotiation needed
-    pc.onnegotiationneeded = () => {
-      logger.info("Negotiation needed");
-    };
-  }, []);
-
-  const fetchEnhancedPrompt = useCallback(
-    async (childId: string): Promise<string> => {
-      try {
-        logger.info(
-          "Fetching enhanced prompt from backend for child:",
-          { childId },
-        );
-        const promptResponse = await fetch(
-          `/api/debug/enhanced-prompt/${childId}`,
-        );
-
-        if (!promptResponse.ok) {
-          throw new Error(
-            `Failed to fetch enhanced prompt: ${promptResponse.status}`,
-          );
-        }
-
-        const promptData = await promptResponse.json();
-        const enhancedInstructions = promptData.fullPrompt;
-
-        logger.info("Enhanced prompt fetched successfully", {
-          promptLength: enhancedInstructions.length,
-          childId: childId,
-        });
-
-        return enhancedInstructions;
-      } catch (error) {
-        logger.error("Error fetching enhanced prompt", {
-          error: error instanceof Error ? error.message : String(error),
-          childId: childId,
-        });
-        // Return fallback prompt
-        return `You are Appu, a friendly AI assistant helping child ${childId}. Keep responses short, simple, and engaging for young children.`;
-      }
-    },
-    [],
-  );
 
   // Helper method to send function call output
   const sendFunctionCallOutput = useCallback((callId: string, result: any) => {
