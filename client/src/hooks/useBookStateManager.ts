@@ -10,6 +10,8 @@ interface BookStateManagerOptions {
     totalPages: number;
     bookTitle: string;
   }) => void;
+  onFunctionCallResult?: (callId: string, result: string) => void;
+  onError?: (callId: string, error: string) => void;
 }
 
 export function useBookStateManager(options: BookStateManagerOptions = {}) {
@@ -23,62 +25,24 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
   const isInReadingSessionRef = useRef<boolean>(false);
   const readingSessionMessagesRef = useRef<any[]>([]);
 
-  // Helper method to send function call output
-  const sendFunctionCallOutput = useCallback((callId: string, result: any, dataChannel: RTCDataChannel | null) => {
-    if (!dataChannel) {
-      logger.warn('No data channel available for function call output', { callId });
-      return;
-    }
-
-    const response = JSON.stringify({
-      type: "conversation.item.create",
-      item: {
-        type: "function_call_output",
-        call_id: callId,
-        output: result,
-      },
-    });
-    
-    logger.info("Sending function call output", { callId, response });
-    dataChannel.send(response);
-  }, [logger]);
-
   // Helper function to manage reading session state
-  const enterReadingSession = useCallback((dataChannel: RTCDataChannel | null) => {
+  const enterReadingSession = useCallback(() => {
     if (!isInReadingSessionRef.current) {
       logger.info("Entering optimized reading session mode");
       isInReadingSessionRef.current = true;
-
-      // Send optimized session update for reading
-      dataChannel?.send(JSON.stringify({
-        type: "session.update",
-        session: {
-          max_response_output_tokens: 250, // Shorter responses during reading
-          temperature: 0.6, // Slightly more consistent for storytelling
-        }
-      }));
     }
   }, [logger]);
 
-  const exitReadingSession = useCallback((dataChannel: RTCDataChannel | null) => {
+  const exitReadingSession = useCallback(() => {
     if (isInReadingSessionRef.current) {
       logger.info("Exiting reading session mode");
       isInReadingSessionRef.current = false;
       selectedBookRef.current = null;
       currentPageRef.current = 1;
-
-      // Restore normal session settings
-      dataChannel?.send(JSON.stringify({
-        type: "session.update",
-        session: {
-          max_response_output_tokens: 300,
-          temperature: 0.8,
-        }
-      }));
     }
   }, [logger]);
 
-  const handleBookSearchTool = useCallback(async (callId: string, args: any, dataChannel: RTCDataChannel | null) => {
+  const handleBookSearchTool = useCallback(async (callId: string, args: any) => {
     logger.info("bookSearchTool was called!", { callId, args });
 
     const argsJson = JSON.parse(args);
@@ -98,31 +62,21 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       const searchResults = await searchResponse.json();
       logger.info("Book search results", { results: searchResults });
 
-      // Send search results back to OpenAI
-      sendFunctionCallOutput(callId, JSON.stringify(searchResults), dataChannel);
-
-      // Trigger model response after function call
-      dataChannel?.send(JSON.stringify({
-        type: 'response.create'
-      }));
+      // Emit result via callback instead of sending to dataChannel
+      options.onFunctionCallResult?.(callId, JSON.stringify(searchResults));
       
     } catch (error: any) {
       logger.error("Error in book search", { error: error.message });
       
-      sendFunctionCallOutput(
+      // Emit error via callback
+      options.onError?.(
         callId,
-        "I'm having trouble searching for books right now. Please try again later.",
-        dataChannel
+        "I'm having trouble searching for books right now. Please try again later."
       );
-
-      // Trigger model response after error
-      dataChannel?.send(JSON.stringify({
-        type: 'response.create'
-      }));
     }
-  }, [sendFunctionCallOutput, logger]);
+  }, [options.onFunctionCallResult, options.onError, logger]);
 
-  const handleDisplayBookPage = useCallback(async (callId: string, args: any, dataChannel: RTCDataChannel | null) => {
+  const handleDisplayBookPage = useCallback(async (callId: string, args: any) => {
     logger.info("display_book_page was called!", { callId, args });
 
     const argsJson = JSON.parse(args);
@@ -146,7 +100,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       currentPageRef.current = pageNumber;
 
       // Enter reading session mode
-      enterReadingSession(dataChannel);
+      enterReadingSession();
 
       // Call the storybook display callback
       if (options.onStorybookPageDisplay) {
@@ -159,32 +113,22 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
         });
       }
 
-      // Send success response
-      sendFunctionCallOutput(
+      // Emit success result
+      options.onFunctionCallResult?.(
         callId,
-        `Successfully displayed page ${pageNumber} of "${pageData.bookTitle}"`,
-        dataChannel
+        `Successfully displayed page ${pageNumber} of "${pageData.bookTitle}"`
       );
-
-      // Trigger model response
-      dataChannel?.send(JSON.stringify({
-        type: 'response.create'
-      }));
 
     } catch (error: any) {
       logger.error("Error displaying book page", { error: error.message });
       
-      sendFunctionCallOutput(
+      // Emit error
+      options.onError?.(
         callId,
-        "I'm having trouble displaying that book page right now. Please try again.",
-        dataChannel
+        "I'm having trouble displaying that book page right now. Please try again."
       );
-
-      dataChannel?.send(JSON.stringify({
-        type: 'response.create'
-      }));
     }
-  }, [sendFunctionCallOutput, enterReadingSession, options.onStorybookPageDisplay, logger]);
+  }, [enterReadingSession, options.onStorybookPageDisplay, options.onFunctionCallResult, options.onError, logger]);
 
   const optimizeTokenUsage = useCallback(() => {
     if (isInReadingSessionRef.current) {
@@ -214,5 +158,10 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
     enterReadingSession,
     exitReadingSession,
     optimizeTokenUsage,
+    
+    // Current state getters
+    selectedBook: selectedBookRef.current,
+    currentPage: currentPageRef.current,
+    isInReadingSession: isInReadingSessionRef.current,
   };
 }

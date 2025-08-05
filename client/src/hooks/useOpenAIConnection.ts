@@ -92,9 +92,23 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // Initialize book state manager - dataChannel will be passed to methods when needed
+  // Initialize book state manager with event callbacks
   const bookStateManager = useBookStateManager({
-    onStorybookPageDisplay: options.onStorybookPageDisplay
+    onStorybookPageDisplay: options.onStorybookPageDisplay,
+    onFunctionCallResult: (callId: string, result: string) => {
+      sendFunctionCallOutput(callId, result);
+      // Trigger model response after function call
+      dataChannelRef.current?.send(JSON.stringify({
+        type: 'response.create'
+      }));
+    },
+    onError: (callId: string, error: string) => {
+      sendFunctionCallOutput(callId, error);
+      // Trigger model response after error
+      dataChannelRef.current?.send(JSON.stringify({
+        type: 'response.create'
+      }));
+    }
   });
 
   // Helper method to send function call output
@@ -477,9 +491,9 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
               if (message.name === "getEyesTool") {
                 await handleGetEyesTool(message.call_id, message.arguments);
               } else if (message.name === "bookSearchTool") {
-                await bookStateManager.handleBookSearchTool(message.call_id, message.arguments, dataChannelRef.current);
+                await bookStateManager.handleBookSearchTool(message.call_id, message.arguments);
               } else if (message.name === "display_book_page") {
-                await bookStateManager.handleDisplayBookPage(message.call_id, message.arguments, dataChannelRef.current);
+                await bookStateManager.handleDisplayBookPage(message.call_id, message.arguments);
               }
               break;
             case "response.done":
