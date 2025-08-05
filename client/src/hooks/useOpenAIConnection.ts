@@ -87,6 +87,8 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
 
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const conversationIdRef = useRef<string | null>(null);
+  const pcRef = useRef<RTCPeerConnection | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   // Book tracking refs - moved to top level to avoid hook call in callback
   const selectedBookRef = useRef<any>(null);
   const currentPageRef = useRef<number>(1);
@@ -797,6 +799,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
       getSelectedChildId,
       fetchEnhancedPrompt,
       sendFunctionCallOutput,
+      webrtcConnection,
       // Remove function dependencies that change on every render
       // These will be accessed via options parameter
     ],
@@ -834,10 +837,10 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         throw new Error(`Session creation failed: ${sessionError.message}`);
       });
 
-      const pc = new RTCPeerConnection();
+      // Create peer connection using webrtcConnection
+      const pc = webrtcConnection.createPeerConnection();
       pcRef.current = pc;
 
-      setupPeerConnection(pc);
       setupDataChannel(pc);
 
       const mediaConstraints = {
@@ -964,7 +967,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     }
   }, [
     createSession,
-    setupPeerConnection,
+    webrtcConnection,
     setupDataChannel,
     options.enableVideo,
     // Remove function dependencies that are accessed via options
