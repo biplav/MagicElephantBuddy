@@ -899,22 +899,8 @@ const Home = memo(() => {
     }
 
     try {
-      // Initialize camera when starting conversation
-      if (enableVideo) {
-        try {
-          if (modelType === 'openai') {
-            // For OpenAI, camera will be handled by the realtime connection
-            console.log('Camera will be initialized with OpenAI connection');
-          } else if (modelType === 'gemini') {
-            // For Gemini, use standalone media capture
-            await mediaManager.requestPermissions();
-            console.log('Gemini camera initialized for conversation');
-          }
-        } catch (cameraError) {
-          console.error('Failed to initialize camera:', cameraError);
-          // Continue with conversation even if camera fails
-        }
-      }
+      // Camera will be initialized on-demand when AI needs to see something
+      console.log('Conversation started - camera will initialize when needed');
     } catch (error) {
       console.error('Failed to start conversation:', error);
     }

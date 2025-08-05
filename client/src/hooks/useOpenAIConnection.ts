@@ -517,21 +517,8 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     try {
       logger.info("Starting OpenAI WebRTC connection");
 
-      // If video is enabled, ensure media capture is initialized first
-      if (options.enableVideo) {
-        logger.info("Video enabled, requesting media permissions first");
-        try {
-          await mediaManager.initialize();
-          // Wait for video to be properly initialized
-          await new Promise((resolve) => setTimeout(resolve, 1500));
-          logger.info("Media permissions granted and video initialized");
-        } catch (mediaError) {
-          logger.warn(
-            "Video permission request failed, continuing without video",
-            { error: mediaError },
-          );
-        }
-      }
+      // Camera will be initialized on-demand when getEyesTool is called
+      logger.info("Connection starting - camera will initialize when AI needs to see something");
 
       // Handle session creation with explicit error handling
       const client_secret = await createSession().catch((sessionError) => {
