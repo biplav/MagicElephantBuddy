@@ -45,7 +45,7 @@ export default function StorybookDisplay({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isFlipping, setIsFlipping] = useState(false);
   const [flipDirection, setFlipDirection] = useState<'next' | 'previous'>('next');
-  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
+  const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const onAppuSpeakingChangeRef = useRef(onAppuSpeakingChange);
 
@@ -59,8 +59,8 @@ export default function StorybookDisplay({
       console.log('Auto-advancing to next page due to silence');
 
       // Stop current audio
-      if (audioElement) {
-        audioElement.pause();
+      if (audioElementRef.current) {
+        audioElementRef.current.pause();
         setIsPlayingAudio(false);
         onAppuSpeakingChangeRef.current?.(false);
       }
@@ -77,7 +77,7 @@ export default function StorybookDisplay({
       console.log('Reached end of book - auto page advance disabled');
       // Could trigger end-of-book celebration or suggestions here
     }
-  }, [currentPage, isFlipping, onNextPage, onPageNavigation, audioElement]);
+  }, [currentPage, isFlipping, onNextPage, onPageNavigation]);
 
   const handleSilenceInterrupted = useCallback(() => {
     console.log('Auto page advance interrupted by speech');
@@ -97,9 +97,9 @@ export default function StorybookDisplay({
       console.log('Playing page audio:', currentPage.audioUrl);
 
       // Stop any existing audio
-      if (audioElement) {
-        audioElement.pause();
-        audioElement.currentTime = 0;
+      if (audioElementRef.current) {
+        audioElementRef.current.pause();
+        audioElementRef.current.currentTime = 0;
         setIsPlayingAudio(false);
         onAppuSpeakingChangeRef.current?.(false);
       }
@@ -126,14 +126,14 @@ export default function StorybookDisplay({
         console.log('Audio finished playing');
         setIsPlayingAudio(false);
         onAppuSpeakingChangeRef.current?.(false);
-        setAudioElement(null);
+        audioElementRef.current = null;
       };
 
       audio.onerror = (error) => {
         console.error('Error playing audio:', error, audio.error);
         setIsPlayingAudio(false);
         onAppuSpeakingChangeRef.current?.(false);
-        setAudioElement(null);
+        audioElementRef.current = null;
       };
 
       audio.onpause = () => {
@@ -142,7 +142,7 @@ export default function StorybookDisplay({
         onAppuSpeakingChangeRef.current?.(false);
       };
 
-      setAudioElement(audio);
+      audioElementRef.current = audio;
 
       // Try to play with better error handling
       const playPromise = audio.play();
@@ -163,7 +163,7 @@ export default function StorybookDisplay({
           });
       }
     }
-  }, [currentPage?.audioUrl, audioElement]);
+  }, [currentPage?.audioUrl, onAppuSpeakingChangeRef]);
 
   // Auto-play audio when page loads (without triggering Appu)
   useEffect(() => {
@@ -190,18 +190,18 @@ export default function StorybookDisplay({
   // Cleanup audio on unmount
   useEffect(() => {
     return () => {
-      if (audioElement) {
-        audioElement.pause();
-        audioElement.currentTime = 0;
+      if (audioElementRef.current) {
+        audioElementRef.current.pause();
+        audioElementRef.current.currentTime = 0;
       }
     };
-  }, [audioElement]);
+  }, []);
 
   const handleNextPage = useCallback(() => {
     if (currentPage && currentPage.pageNumber < currentPage.totalPages) {
       // Stop current audio
-      if (audioElement) {
-        audioElement.pause();
+      if (audioElementRef.current) {
+        audioElementRef.current.pause();
         setIsPlayingAudio(false);
         onAppuSpeakingChangeRef.current?.(false);
       }
@@ -217,13 +217,13 @@ export default function StorybookDisplay({
         setIsFlipping(false);
       }, 500);
     }
-  }, [currentPage, onNextPage, onPageNavigation, silenceDetection, audioElement]);
+  }, [currentPage, onNextPage, onPageNavigation, silenceDetection]);
 
   const handlePreviousPage = useCallback(() => {
     if (currentPage && currentPage.pageNumber > 1) {
       // Stop current audio
-      if (audioElement) {
-        audioElement.pause();
+      if (audioElementRef.current) {
+        audioElementRef.current.pause();
         setIsPlayingAudio(false);
         onAppuSpeakingChangeRef.current?.(false);
       }
@@ -239,7 +239,7 @@ export default function StorybookDisplay({
         setIsFlipping(false);
       }, 500);
     }
-  }, [currentPage, onPreviousPage, onPageNavigation, silenceDetection, audioElement]);
+  }, [currentPage, onPreviousPage, onPageNavigation, silenceDetection]);
 
   if (!isVisible || !currentPage) {
     return null;
