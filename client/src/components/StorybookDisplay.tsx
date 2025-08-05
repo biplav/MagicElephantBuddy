@@ -127,7 +127,7 @@ export default function StorybookDisplay({
     }
   }, [currentPage?.audioUrl, isPlayingAudio, audioElement, onAppuSpeakingChange]);
 
-  // Auto-play audio when page loads
+  // Auto-play audio when page loads (without triggering Appu)
   useEffect(() => {
     if (currentPage?.audioUrl && imageLoaded && isVisible) {
       // Small delay to ensure smooth page transition

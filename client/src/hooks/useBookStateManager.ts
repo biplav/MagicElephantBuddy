@@ -145,10 +145,10 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
         });
       }
 
-      // Emit success result
+      // Emit success result - silent mode for audio playback
       options.onFunctionCallResult?.(
         callId,
-        `Successfully displayed page ${pageNumber} of "${pageData.bookTitle}"`
+        `Page ${pageNumber} ready. Audio will play automatically.`
       );
 
     } catch (error: any) {
