@@ -523,11 +523,11 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
 
           let pageContext: string;
           if (isFirstPage) {
-            pageContext = `Page 1 displayed. Read this aloud: "${targetPage.pageText}"`;
+            pageContext = `Page 1 displayed. Read this story in Hinglish (mix of Hindi and English) to make it engaging for the child. Page text: "${targetPage.pageText}" - Use simple Hindi words mixed with English, add expressions like "dekho", "kya baat hai", "wah", and make it playful and interactive.`;
           } else if (isLastPage) {
-            pageContext = `Final page displayed. Read: "${targetPage.pageText}" Then say "The End!"`;
+            pageContext = `Final page displayed. Read in Hinglish: "${targetPage.pageText}" Then say "Bas! Kahani khatam! The End! Kya maza aaya na?"`;
           } else {
-            pageContext = `Page ${targetPage.pageNumber} displayed. Read: "${targetPage.pageText}"`;
+            pageContext = `Page ${targetPage.pageNumber} displayed. Continue reading in Hinglish (Hindi-English mix): "${targetPage.pageText}" - Keep it engaging with expressions like "aur phir", "dekho kya hua", "kitna mazedaar hai na!"`;
           }
 
           sendFunctionCallOutput(callId, pageContext);
