@@ -542,16 +542,11 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
           echoCancellation: true,
           noiseSuppression: true,
         },
-        video: options.enableVideo
-          ? {
-              width: { ideal: 320 },
-              height: { ideal: 240 },
-              frameRate: { ideal: 2 },
-            }
-          : false,
+        // Video will be requested lazily when getEyesTool is called
+        video: false,
       };
 
-      // Handle media stream with explicit error handling
+      // Handle media stream with explicit error handling (audio only)
       const stream = await navigator.mediaDevices
         .getUserMedia(mediaConstraints)
         .catch((mediaError) => {
