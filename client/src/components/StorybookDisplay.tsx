@@ -88,44 +88,77 @@ export default function StorybookDisplay({
 
   // Play audio when page changes
   const playPageAudio = useCallback(() => {
-    if (currentPage?.audioUrl && !isPlayingAudio) {
+    if (currentPage?.audioUrl) {
       console.log('Playing page audio:', currentPage.audioUrl);
       
       // Stop any existing audio
       if (audioElement) {
         audioElement.pause();
         audioElement.currentTime = 0;
+        setIsPlayingAudio(false);
+        onAppuSpeakingChange?.(false);
       }
 
       const audio = new Audio(currentPage.audioUrl);
       audio.volume = 0.8;
+      audio.preload = 'auto';
+
+      audio.onloadstart = () => {
+        console.log('Audio loading started');
+      };
+
+      audio.oncanplay = () => {
+        console.log('Audio can start playing');
+      };
 
       audio.onplay = () => {
+        console.log('Audio started playing');
         setIsPlayingAudio(true);
         onAppuSpeakingChange?.(true);
       };
 
       audio.onended = () => {
+        console.log('Audio finished playing');
         setIsPlayingAudio(false);
         onAppuSpeakingChange?.(false);
         setAudioElement(null);
       };
 
       audio.onerror = (error) => {
-        console.error('Error playing audio:', error);
+        console.error('Error playing audio:', error, audio.error);
         setIsPlayingAudio(false);
         onAppuSpeakingChange?.(false);
         setAudioElement(null);
       };
 
-      setAudioElement(audio);
-      audio.play().catch(error => {
-        console.error('Failed to play audio:', error);
+      audio.onpause = () => {
+        console.log('Audio paused');
         setIsPlayingAudio(false);
         onAppuSpeakingChange?.(false);
-      });
+      };
+
+      setAudioElement(audio);
+      
+      // Try to play with better error handling
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log('Audio play promise resolved successfully');
+          })
+          .catch(error => {
+            console.error('Failed to play audio:', error);
+            setIsPlayingAudio(false);
+            onAppuSpeakingChange?.(false);
+            
+            // Handle common autoplay restrictions
+            if (error.name === 'NotAllowedError') {
+              console.warn('Audio autoplay blocked by browser. User interaction required.');
+            }
+          });
+      }
     }
-  }, [currentPage?.audioUrl, isPlayingAudio, audioElement, onAppuSpeakingChange]);
+  }, [currentPage?.audioUrl, audioElement, onAppuSpeakingChange]);
 
   // Auto-play audio when page loads (without triggering Appu)
   useEffect(() => {
@@ -231,6 +264,16 @@ export default function StorybookDisplay({
               <Badge variant="default" className="text-xs animate-pulse bg-green-600">
                 🔊 Playing Audio
               </Badge>
+            )}
+            {currentPage?.audioUrl && !isPlayingAudio && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={playPageAudio}
+                className="text-xs"
+              >
+                ▶️ Play Audio
+              </Button>
             )}
             {silenceDetection.isDetectingSilence && !isPlayingAudio && (
               <Badge variant="outline" className="text-xs animate-pulse">
