@@ -80,6 +80,21 @@ export default function StorybookDisplay({
     silenceDetection.setEnabled(autoPageTurnEnabled && isVisible);
   }, [autoPageTurnEnabled, isVisible, silenceDetection]);
 
+  // Reset and restart silence detection when page changes
+  useEffect(() => {
+    if (currentPage && autoPageTurnEnabled && isVisible) {
+      console.log('Page changed, resetting silence detection for new page:', currentPage.pageNumber);
+      // Reset any existing silence detection
+      silenceDetection.resetSilenceDetection();
+      // Small delay to ensure the reset is complete before potentially starting new detection
+      setTimeout(() => {
+        if (autoPageTurnEnabled && isVisible) {
+          console.log('Silence detection ready for new page:', currentPage.pageNumber);
+        }
+      }, 100);
+    }
+  }, [currentPage?.pageNumber, autoPageTurnEnabled, isVisible, silenceDetection]);
+
   useEffect(() => {
     if (currentPage?.pageImageUrl) {
       setImageLoaded(false);

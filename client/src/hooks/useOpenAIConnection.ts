@@ -1129,6 +1129,24 @@ offerToReceiveAudio: true,
     disconnect,
     isAppuSpeaking,
     isUserSpeaking,
-    // mediaCapture: mediaCaptureRef.current,
+    dataChannel: dataChannelRef.current,
+    // Expose methods for reading session management
+    exitReadingSession: () => {
+      if (isInReadingSessionRef.current) {
+        logger.info("Exiting reading session mode");
+        isInReadingSessionRef.current = false;
+        selectedBookRef.current = null;
+        currentPageRef.current = 1;
+
+        // Restore normal session settings
+        dataChannelRef.current?.send(JSON.stringify({
+          type: "session.update",
+          session: {
+            max_response_output_tokens: 300,
+            temperature: 0.8,
+          }
+        }));
+      }
+    }
   };
 }

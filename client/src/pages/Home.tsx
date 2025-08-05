@@ -1697,9 +1697,10 @@ const Home = memo(() => {
           onClose={handleCloseStorybook}
           isVisible={isStorybookVisible}
           onPageNavigation={handlePageNavigation}
-          autoPageTurnEnabled={autoPageTurnEnabled}
-          isAppuSpeaking={isAppuSpeaking}
-          isUserSpeaking={isUserSpeaking}
+          autoPageTurnEnabled={true} // You can make this configurable
+          onAppuSpeakingChange={(speaking) => console.log('Appu speaking:', speaking)}
+          isAppuSpeaking={realtimeAudio?.isAppuSpeaking || false}
+          isUserSpeaking={realtimeAudio?.isUserSpeaking || false}
           openaiConnection={realtimeAudio?.openaiConnection}
         />
       )}
