@@ -276,7 +276,7 @@ const Home = memo(() => {
   // Get individual connections for direct access
   const openaiConnection = (realtimeAudio as any).openaiConnection || { mediaCapture: null, lastCapturedFrame: null };
   const geminiConnection = (realtimeAudio as any).geminiConnection || {};
-  const mediaCapture = (realtimeAudio as any).mediaCapture || { hasVideoPermission: false, videoElement: null };
+  const mediaManager = (realtimeAudio as any).mediaManager || { hasVideoPermission: false, videoElement: null };
 
   // Destructure realtime audio properties
   const {
@@ -418,9 +418,9 @@ const Home = memo(() => {
       }
 
       // For Gemini connection
-      if (modelType === 'gemini' && realtimeAudio.mediaCapture) {
+      if (modelType === 'gemini' && realtimeAudio.mediaManager) {
         try {
-          await realtimeAudio.mediaCapture.cleanup();
+          await realtimeAudio.mediaManager.cleanup();
           console.log("✅ Gemini media capture cleaned up");
         } catch (error) {
           console.error("❌ Error cleaning up Gemini media capture:", error);
@@ -906,7 +906,7 @@ const Home = memo(() => {
             console.log('Camera will be initialized with OpenAI connection');
           } else if (modelType === 'gemini') {
             // For Gemini, use standalone media capture
-            await mediaCapture.requestPermissions();
+            await mediaManager.requestPermissions();
             console.log('Gemini camera initialized for conversation');
           }
         } catch (cameraError) {
@@ -917,14 +917,14 @@ const Home = memo(() => {
     } catch (error) {
       console.error('Failed to start conversation:', error);
     }
-  }, [selectedChildId, enableVideo, modelType, mediaCapture]);
+  }, [selectedChildId, enableVideo, modelType, mediaManager]);
 
   const handleEndConversation = useCallback(async () => {
     try {
       // Cleanup camera when ending conversation
       if (enableVideo) {
         if (modelType === 'gemini') {
-          mediaCapture.cleanup();
+          mediaManager.cleanup();
           console.log('Gemini camera cleaned up');
         }
         // OpenAI camera cleanup is handled by the realtime connection
@@ -932,7 +932,7 @@ const Home = memo(() => {
     } catch (error) {
       console.error('Failed to end conversation:', error);
     }
-  }, [enableVideo, modelType, mediaCapture]);
+  }, [enableVideo, modelType, mediaManager]);
 
   const handleNextPage = () => {
     console.log("Next page requested");
@@ -1185,8 +1185,8 @@ const Home = memo(() => {
               {enableVideo && realtimeAudio && (
                 (modelType === 'openai' && realtimeAudio.openaiConnection?.mediaCapture && 
                  (realtimeAudio.openaiConnection.mediaCapture.hasVideoPermission || realtimeAudio.openaiConnection.lastCapturedFrame)) ||
-                (modelType === 'gemini' && realtimeAudio.mediaCapture && 
-                 (realtimeAudio.mediaCapture.hasVideoPermission || realtimeAudio.lastCapturedFrame))
+                (modelType === 'gemini' && realtimeAudio.mediaManager && 
+                 (realtimeAudio.mediaManager.hasVideoPermission || realtimeAudio.lastCapturedFrame))
               ) && (
                 <motion.div
                   className="w-full flex flex-col sm:flex-row justify-center space-y-2 sm:space-y-0 sm:space-x-2 mb-2"
@@ -1211,13 +1211,13 @@ const Home = memo(() => {
 
                   {/* Live video feed - For Gemini connection */}
                   {modelType === 'gemini' && 
-                   mediaCapture.hasVideoPermission && 
-                   mediaCapture.videoElement && (
+                   mediaManager.hasVideoPermission && 
+                   mediaManager.videoElement && (
                     <div className="flex flex-col items-center space-y-2">
                       <p className="text-xs text-neutral font-medium">Live Camera</p>
                       <VideoDisplay 
-                        videoElement={mediaCapture.videoElement}
-                        isEnabled={enableVideo && mediaCapture.hasVideoPermission}
+                        videoElement={mediaManager.videoElement}
+                        isEnabled={enableVideo && mediaManager.hasVideoPermission}
                         className="w-28 h-20 sm:w-32 sm:h-24 rounded-lg shadow-md border border-gray-200"
                       />
 
@@ -1286,12 +1286,12 @@ const Home = memo(() => {
                     <div className="flex items-center space-x-2 text-xs text-neutral">
                       <div className={`w-2 h-2 rounded-full ${
                         (modelType === 'openai' && realtimeAudio.openaiConnection?.mediaCapture?.hasVideoPermission) ||
-                        (modelType === 'gemini' && mediaCapture.hasVideoPermission)
+                        (modelType === 'gemini' && mediaManager.hasVideoPermission)
                           ? 'bg-green-500' : 'bg-gray-400'
                       }`}></div>
                       <span>{
                         (modelType === 'openai' && realtimeAudio.openaiConnection?.mediaCapture?.hasVideoPermission) ||
-                        (modelType === 'gemini' && mediaCapture.hasVideoPermission)
+                        (modelType === 'gemini' && mediaManager.hasVideoPermission)
                           ? 'Camera ready' : 'Camera not ready'
                       }</span>
                     </div>
@@ -1324,7 +1324,7 @@ const Home = memo(() => {
                       )}
 
                       <Button
-                        className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full shadow-lg transition transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-pink-300 flex items-center justify-center relative z-10 ${
+                        className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full shadow-lg transition transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-pink-300 relative z-10 ${
                           currentRecorder.isRecording
                             ? "bg-[hsl(var(--success))] hover:bg-green-600"
                             : "bg-accent hover:bg-pink-400"
@@ -1378,7 +1378,7 @@ const Home = memo(() => {
                       : currentRecorder.isRecording
                         ? enableVideo && realtimeAudio && (
                             (modelType === 'openai' && realtimeAudio.openaiConnection?.mediaCapture?.hasVideoPermission) ||
-                            (modelType === 'gemini' && realtimeAudio.mediaCapture?.hasVideoPermission)
+                            (modelType === 'gemini' && mediaManager.hasVideoPermission)
                           )
                           ? "Appu is listening and watching! Tap when you're done talking"
                           : "Appu is listening to you now! Tap when you're done talking"

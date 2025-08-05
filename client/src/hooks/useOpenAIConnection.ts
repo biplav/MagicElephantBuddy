@@ -32,9 +32,12 @@ interface OpenAIConnectionState {
 }
 
 interface UseOpenAIConnectionOptions {
+  childId?: string;
+  enableVideo?: boolean;
   onTranscriptionReceived?: (transcription: string) => void;
   onResponseReceived?: (response: string) => void;
-  onFrameCaptured?: (frameData: string, analysis: string) => void;
+  onAudioResponseReceived?: (audioData: string) => void;
+  onError?: (error: string) => void;
   onStorybookPageDisplay?: (pageData: {
     pageImageUrl: string;
     pageText: string;
@@ -43,8 +46,9 @@ interface UseOpenAIConnectionOptions {
     bookTitle: string;
   }) => void;
   onBookSelected?: (book: any) => void;
-  onAppuSpeakingChange?: (speaking: boolean) => void;
-  onUserSpeakingChange?: (speaking: boolean) => void;
+  onAppuSpeakingChange?: (isSpeaking: boolean) => void;
+  // Media functions
+  captureFrame?: () => string | null;
 }
 
 export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
@@ -95,7 +99,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
   // Initialize book state manager with event callbacks
   const bookStateManager = useBookStateManager({
     onStorybookPageDisplay: options.onStorybookPageDisplay,
-    onFunctionCallResult: (callId: string, result: string) => {
+    onFunctionCallResult: (callId: string, result: any) => {
       sendFunctionCallOutput(callId, result);
       // Trigger model response after function call
       dataChannelRef.current?.send(JSON.stringify({
