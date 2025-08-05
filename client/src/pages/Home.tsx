@@ -931,15 +931,19 @@ const Home = memo(() => {
     }
   }, [enableVideo, modelType, mediaCapture]);
 
-  const handleNextPage = () => {
+  const handleNextPage = useCallback(() => {
     console.log("Next page requested");
-    // Implement logic to fetch the next page and update state
-  };
+    if (realtimeAudio?.openaiConnection?.navigateToNextPage) {
+      realtimeAudio.openaiConnection.navigateToNextPage();
+    }
+  }, [realtimeAudio]);
 
-  const handlePreviousPage = () => {
+  const handlePreviousPage = useCallback(() => {
     console.log("Previous page requested");
-    // Implement logic to fetch the previous page and update state
-  };
+    if (realtimeAudio?.openaiConnection?.navigateToPreviousPage) {
+      realtimeAudio.openaiConnection.navigateToPreviousPage();
+    }
+  }, [realtimeAudio]);
 
   const handleCloseStorybook = () => {
     console.log("Closing storybook");
