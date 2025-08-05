@@ -345,7 +345,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
           dataChannelRef.current?.send(JSON.stringify({
             type: "session.update",
             session: {
-              max_response_output_tokens: 350, // Shorter responses during reading
+              max_response_output_tokens: 250, // Shorter responses during reading
               temperature: 0.6, // Slightly more consistent for storytelling
             }
           }));
