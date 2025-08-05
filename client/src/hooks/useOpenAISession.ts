@@ -1,6 +1,7 @@
 
 import { useState, useCallback } from 'react';
 import { createServiceLogger } from '@/lib/logger';
+import { getSelectedChildId as getChildId } from '@/lib/childUtils';
 
 interface OpenAISessionOptions {
   childId?: string;
@@ -24,15 +25,7 @@ export function useOpenAISession(options: OpenAISessionOptions = {}) {
   });
 
   const getSelectedChildId = useCallback((): string => {
-    if (options.childId) {
-      return options.childId;
-    }
-    const selectedChildId = localStorage.getItem("selectedChildId");
-    if (selectedChildId) {
-      return selectedChildId;
-    }
-    // Default fallback
-    return "1085268853542289410";
+    return getChildId(options.childId);
   }, [options.childId]);
 
   const fetchEnhancedPrompt = useCallback(

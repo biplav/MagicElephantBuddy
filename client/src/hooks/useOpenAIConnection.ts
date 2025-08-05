@@ -76,12 +76,14 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     },
   });
 
-  const openaiSession = useOpenAISession({
-    onError: (error) => {
-      setState((prev) => ({ ...prev, error }));
-      options.onError?.(error);
-    },
-  });
+  const {
+    createSession,
+    createSessionConfig,
+    updateSessionForReading,
+    restoreNormalSession,
+    fetchEnhancedPrompt,
+    getSelectedChildId,
+  } = useOpenAISession({ childId: options.childId });
 
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const conversationIdRef = useRef<string | null>(null);
@@ -274,9 +276,9 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
           }
 
           const searchResults = await response.json();
-          logger.info("Book search completed", { 
+          logger.info("Book search completed", {
             resultsCount: searchResults.books?.length || 0,
-            searchParams: args 
+            searchParams: args
           });
 
           let resultMessage: string;
@@ -289,7 +291,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
             // Enter reading session mode for token optimization
             enterReadingSession();
 
-            logger.info("Stored book for display", { 
+            logger.info("Stored book for display", {
               bookTitle: selectedBookRef.current.title,
               totalPages: selectedBookRef.current.pages?.length || selectedBookRef.current.totalPages
             });
@@ -876,7 +878,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
       // Handle offer creation with explicit error handling
       const offer = await pc
         .createOffer({
-offerToReceiveAudio: true,
+          offerToReceiveAudio: true,
           offerToReceiveVideo: false,
         })
         .catch((offerError) => {
@@ -936,7 +938,7 @@ offerToReceiveAudio: true,
             error: remoteDescError.message,
           });
           throw new Error(
-`Set remote description failed: ${remoteDescError.message}`,
+            `Set remote description failed: ${remoteDescError.message}`,
           );
         });
 
