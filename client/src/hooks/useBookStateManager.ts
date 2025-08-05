@@ -68,9 +68,9 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
         const selectedBook = searchResults.books[0];
         const responseData = {
           title: selectedBook.title,
-          summary: searchResults.books.length === 1 
-            ? `Found "${selectedBook.title}"! This looks like a wonderful story. Ready to read it to you. Should I start?`
-            : `Found ${searchResults.books.length} books! Selected "${selectedBook.title}" for you. Should I start reading?`
+          summary: selectedBook.summary,
+          id: selectedBook.id,
+          totalPages: selectedBook.totalPages
         };
         resultMessage = JSON.stringify(responseData);
       } else {
@@ -102,8 +102,11 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
     logger.info("Parsed display book page arguments", { callId, argsJson });
 
     try {
-      const { bookId, pageNumber } = argsJson;
-      
+      let { bookId, pageNumber } = argsJson;
+      if (!bookId || !pageNumber) {
+        bookId = selectedBookRef.current?.id;
+        pageNumber = currentPageRef?.current + 1;
+      }
       // Fetch page data from API
       const pageResponse = await fetch(`/api/books/${bookId}/pages/${pageNumber}`);
       
