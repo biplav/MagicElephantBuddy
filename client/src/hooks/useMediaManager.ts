@@ -93,65 +93,45 @@ export function useMediaManager(options: MediaManagerOptions = {}) {
     setState(prev => ({ ...prev, videoEnabled: true }));
   }, [options.enableVideo, logger]);
 
-  // Initialize media permissions and setup
+  // Initialize media permissions and setup (now only for audio)
   const initialize = useCallback(async () => {
     try {
-      logger.info("Initializing media manager", { enableVideo: options.enableVideo });
+      logger.info("Initializing media manager for audio", { enableVideo: options.enableVideo });
       
       const constraints: MediaStreamConstraints = {
         audio: true,
+        // Video will be initialized lazily when needed
       };
-
-      if (options.enableVideo) {
-        constraints.video = {
-          width: { ideal: 320 },
-          height: { ideal: 240 },
-          facingMode: "user",
-          frameRate: { ideal: 2 },
-        };
-      }
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
-      
-      setupVideoElements(stream);
-
-      // Wait for video to be ready if video is enabled
-      if (options.enableVideo && videoRef.current) {
-        await new Promise<void>((resolve) => {
-          const video = videoRef.current!;
-          if (video.readyState >= 2) {
-            resolve();
-          } else {
-            video.addEventListener('loadeddata', () => resolve(), { once: true });
-          }
-        });
-      }
 
       setState(prev => ({
         ...prev,
         isInitialized: true,
-        hasVideoPermission: true,
+        hasVideoPermission: true, // We'll check video permission when actually needed
         stream,
       }));
 
-      logger.info("Media manager initialized successfully");
+      logger.info("Media manager initialized successfully (audio only)");
       return stream;
 
     } catch (error) {
       logger.error("Failed to initialize media manager", { error });
-      options.onError?.('Failed to access camera/microphone');
+      options.onError?.('Failed to access microphone');
       throw error;
     }
-  }, [options.enableVideo, options.onError, setupVideoElements, logger]);
+  }, [options.enableVideo, options.onError, logger]);
 
-  // Capture frame from video
+  // Capture frame from video (deprecated - use getFrameAnalysis instead)
   const captureFrame = useCallback((): string | null => {
+    logger.warn("captureFrame called - consider using getFrameAnalysis for better camera management");
+    
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
     if (!video || !canvas) {
-      logger.warn("Video or canvas not available for capture");
+      logger.warn("Video or canvas not available for capture - use getFrameAnalysis instead");
       return null;
     }
 
@@ -281,7 +261,7 @@ export function useMediaManager(options: MediaManagerOptions = {}) {
     }
   }, [captureFrame, options.childId, options.onFrameAnalyzed, options.onError, logger]);
 
-  // Get current frame analysis with video availability check
+  // Get current frame analysis with lazy camera initialization
   const getFrameAnalysis = useCallback(async (context?: {
     reason?: string;
     lookingFor?: string;
@@ -298,61 +278,149 @@ export function useMediaManager(options: MediaManagerOptions = {}) {
       };
     }
 
-    // Check if we have permission and are initialized
-    if (!state.hasVideoPermission || !state.isInitialized) {
-      logger.info("Requesting camera permission for frame analysis");
-      try {
-        await initialize();
-        // Wait for video to be properly initialized
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        logger.info("Media initialized, proceeding with frame analysis");
-      } catch (permissionError) {
-        logger.warn("Camera permission denied for frame analysis", {
-          error: permissionError,
-        });
-        return {
-          success: false,
-          message: "I need camera permission to see what you're showing me. Please allow camera access and try again!",
-          analysis: null
-        };
+    logger.info("Starting camera for frame analysis");
+    let tempStream: MediaStream | null = null;
+    let tempVideo: HTMLVideoElement | null = null;
+    let tempCanvas: HTMLCanvasElement | null = null;
+
+    try {
+      // Start camera only for this analysis
+      const constraints: MediaStreamConstraints = {
+        video: {
+          width: { ideal: 320 },
+          height: { ideal: 240 },
+          facingMode: "user",
+          frameRate: { ideal: 2 },
+        }
+      };
+
+      tempStream = await navigator.mediaDevices.getUserMedia(constraints);
+      
+      // Create temporary video element for this analysis
+      tempVideo = document.createElement("video");
+      tempVideo.autoplay = true;
+      tempVideo.muted = true;
+      tempVideo.playsInline = true;
+      tempVideo.width = 320;
+      tempVideo.height = 240;
+      tempVideo.style.display = 'none';
+      
+      tempVideo.srcObject = tempStream;
+      document.body.appendChild(tempVideo);
+      
+      // Wait for video to be ready
+      await new Promise<void>((resolve) => {
+        if (tempVideo!.readyState >= 2) {
+          resolve();
+        } else {
+          tempVideo!.addEventListener('loadeddata', () => resolve(), { once: true });
+        }
+      });
+
+      // Create temporary canvas for frame capture
+      tempCanvas = document.createElement("canvas");
+      tempCanvas.width = 320;
+      tempCanvas.height = 240;
+      tempCanvas.style.display = "none";
+      document.body.appendChild(tempCanvas);
+
+      // Capture frame from temporary video
+      const context = tempCanvas.getContext("2d");
+      if (!context) {
+        throw new Error("Could not get canvas context");
       }
-    }
 
-    // Try capturing frame with retry mechanism
-    let attempts = 0;
-    const maxAttempts = 3;
-    let frameData: string | null = null;
+      // Set canvas size to match video
+      tempCanvas.width = tempVideo.videoWidth || 320;
+      tempCanvas.height = tempVideo.videoHeight || 240;
 
-    while (attempts < maxAttempts && !frameData) {
-      attempts++;
-      logger.info(`Frame capture attempt ${attempts}/${maxAttempts}`);
+      // Draw video frame to canvas
+      context.drawImage(tempVideo, 0, 0, tempCanvas.width, tempCanvas.height);
 
-      frameData = captureFrame();
+      // Convert to base64 string
+      const dataURL = tempCanvas.toDataURL("image/jpeg", 0.8);
+      const frameData = dataURL.split(",")[1];
 
-      if (!frameData && attempts < maxAttempts) {
-        // Wait a bit before retrying
-        await new Promise((resolve) => setTimeout(resolve, 500));
+      if (!frameData) {
+        throw new Error("Failed to capture frame data");
       }
-    }
 
-    if (!frameData) {
-      logger.warn("Failed to capture frame after all attempts");
+      logger.info("Frame captured successfully for analysis", {
+        width: tempCanvas.width,
+        height: tempCanvas.height,
+        dataSize: frameData.length,
+      });
+
+      // Analyze the captured frame
+      setState(prev => ({ ...prev, isCapturing: true }));
+
+      const response = await fetch('/api/analyze-frame', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          childId: options.childId,
+          frameData,
+          timestamp: Date.now(),
+          reason: context?.reason || "Child wants to show something",
+          lookingFor: context?.lookingFor || null,
+          context: context?.context || null,
+          conversationId: context?.conversationId || null,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Frame analysis failed: ${response.status}`);
+      }
+
+      const analysisResult = await response.json();
+      
+      setState(prev => ({ ...prev, lastAnalysis: analysisResult }));
+      options.onFrameAnalyzed?.(analysisResult);
+
+      logger.info("Frame analysis completed", { analysis: analysisResult.analysis });
+      
+      return {
+        success: true,
+        message: analysisResult.analysis,
+        analysis: analysisResult
+      };
+
+    } catch (error) {
+      logger.error("Frame analysis failed", { error });
+      const errorMessage = error instanceof Error ? error.message : 'I\'m having trouble seeing what you\'re showing me right now. Can you try again?';
+      options.onError?.(errorMessage);
+      
       return {
         success: false,
-        message: "I can't see anything right now. Please make sure your camera is working and try showing me again!",
+        message: errorMessage,
         analysis: null
       };
+    } finally {
+      // Always cleanup temporary resources
+      setState(prev => ({ ...prev, isCapturing: false }));
+      
+      if (tempStream) {
+        tempStream.getTracks().forEach(track => {
+          track.stop();
+          logger.info("Stopped camera track after analysis");
+        });
+      }
+      
+      if (tempVideo && document.body.contains(tempVideo)) {
+        document.body.removeChild(tempVideo);
+      }
+      
+      if (tempCanvas && document.body.contains(tempCanvas)) {
+        document.body.removeChild(tempCanvas);
+      }
+      
+      logger.info("Camera stopped and cleaned up after frame analysis");
     }
-
-    // Analyze the captured frame
-    return await analyzeCurrentFrame(context);
   }, [
     options.enableVideo,
-    state.hasVideoPermission,
-    state.isInitialized,
-    initialize,
-    captureFrame,
-    analyzeCurrentFrame,
+    options.childId,
+    options.onFrameAnalyzed,
+    options.onError,
     logger
   ]);
 
