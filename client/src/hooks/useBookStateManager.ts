@@ -62,8 +62,20 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       const searchResults = await searchResponse.json();
       logger.info("Book search results", { results: searchResults });
 
-      // Emit result via callback instead of sending to dataChannel
-      options.onFunctionCallResult?.(callId, JSON.stringify(searchResults));
+      // Send a concise message instead of the full JSON
+      let resultMessage: string;
+      if (searchResults.books?.length > 0) {
+        if (searchResults.books.length === 1) {
+          resultMessage = `Found "${searchResults.books[0].title}"! Ready to read it to you. Should I start?`;
+        } else {
+          resultMessage = `Found ${searchResults.books.length} books! Selected "${searchResults.books[0].title}". Should I start reading?`;
+        }
+      } else {
+        resultMessage = `No books found. Let me suggest something else!`;
+      }
+
+      // Emit concise result message instead of full JSON
+      options.onFunctionCallResult?.(callId, resultMessage);
       
     } catch (error: any) {
       logger.error("Error in book search", { error: error.message });
