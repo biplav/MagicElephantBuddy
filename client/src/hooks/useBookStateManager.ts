@@ -62,19 +62,26 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       const searchResults = await searchResponse.json();
       logger.info("Book search results", { results: searchResults });
 
-      // Send a concise message instead of the full JSON
+      // Send a structured JSON response with summary and title
       let resultMessage: string;
       if (searchResults.books?.length > 0) {
-        if (searchResults.books.length === 1) {
-          resultMessage = `Found "${searchResults.books[0].title}"! Ready to read it to you. Should I start?`;
-        } else {
-          resultMessage = `Found ${searchResults.books.length} books! Selected "${searchResults.books[0].title}". Should I start reading?`;
-        }
+        const selectedBook = searchResults.books[0];
+        const responseData = {
+          title: selectedBook.title,
+          summary: searchResults.books.length === 1 
+            ? `Found "${selectedBook.title}"! This looks like a wonderful story. Ready to read it to you. Should I start?`
+            : `Found ${searchResults.books.length} books! Selected "${selectedBook.title}" for you. Should I start reading?`
+        };
+        resultMessage = JSON.stringify(responseData);
       } else {
-        resultMessage = `No books found. Let me suggest something else!`;
+        const responseData = {
+          title: "No Books Found",
+          summary: "No books found matching your search. Let me suggest something else!"
+        };
+        resultMessage = JSON.stringify(responseData);
       }
 
-      // Emit concise result message instead of full JSON
+      // Emit structured JSON result instead of plain text
       options.onFunctionCallResult?.(callId, resultMessage);
       
     } catch (error: any) {
