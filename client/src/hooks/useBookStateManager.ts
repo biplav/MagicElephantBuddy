@@ -66,6 +66,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       let resultMessage: string;
       if (searchResults.books?.length > 0) {
         const selectedBook = searchResults.books[0];
+        selectedBookRef.current = selectedBook;
         const responseData = {
           title: selectedBook.title,
           summary: selectedBook.summary,
