@@ -529,7 +529,7 @@ export class DatabaseStorage implements IStorage {
     return book;
   }
 
-  async getBook(bookId: number): Promise<Book | undefined> {
+  async getBook(bookId: string): Promise<Book | undefined> {
     const [book] = await db
       .select()
       .from(books)
@@ -679,6 +679,16 @@ export class DatabaseStorage implements IStorage {
       .from(pages)
       .where(eq(pages.bookId, bookId))
       .orderBy(pages.pageNumber);
+  }
+
+  
+  async getPageByBookByPageNumber(bookId: string, pageNumber: string): Promise<Page | undefined> {
+    const [page] = await db
+      .select()
+      .from(pages)
+      .where(and(eq(pages.bookId, bookId), eq(pages.pageNumber, pageNumber)))
+      .limit(1);
+    return page || undefined;
   }
 
   async deletePagesByBook(bookId: number): Promise<void> {

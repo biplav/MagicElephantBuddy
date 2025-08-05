@@ -1704,11 +1704,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/admin/books/:bookId", async (req: Request, res: Response) => {
     try {
-      const bookId = parseInt(req.params.bookId);
-
-      if (isNaN(bookId)) {
-        return res.status(400).json({ error: "Invalid book ID" });
-      }
+      const bookId = req.params.bookId;
 
       console.log(`Deleting book ${bookId}...`);
 
@@ -1766,6 +1762,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/books/search", async (req: Request, res: Response) => {
     try {
       const { context, bookTitle, keywords, ageRange } = req.body;
+      
+      if(req) {
+        //Below code is a hack needs to be removed later
+        const babyTigerBook = await storage.getBookByTitle('the baby tiger');
+        const babyTigerBookPages = await storage.getPagesByBook(babyTigerBook.id.toString());
+        return res.json({
+          success: true,
+          message: `I found "${babyTigerBookPages.title}"! This looks like a wonderful story.`,
+          books: [{
+            ...babyTigerBook,
+            pages: babyTigerBookPages.map(page => ({
+              pageNumber: page.pageNumber,
+              imageUrl: page.imageUrl,
+              pageText: page.pageText,
+              imageDescription: page.imageDescription
+            }))
+          }]
+        });
+        //Above code is a hack needs to be removed later
+      }
+      
 
       console.log(`📚 Book search request:`, { context, bookTitle, keywords, ageRange });
 
@@ -1928,16 +1945,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 // Get a specific page from a book
 app.get('/api/books/:bookId/page/:pageNumber', async (req, res) => {
   try {
-    const bookId = parseInt(req.params.bookId);
-    const pageNumber = parseInt(req.params.pageNumber);
+    const bookId = req.params.bookId;
+    const pageNumber = req.params.pageNumber;
 
     const book = await storage.getBook(bookId);
     if (!book) {
       return res.status(404).json({ error: 'Book not found' });
     }
 
-    const pages = await storage.getPagesByBook(bookId);
-    const page = pages.find(p => p.pageNumber === pageNumber);
+    const page = await storage.getPageByBookByPageNumber(bookId, pageNumber);
 
     if (!page) {
       return res.status(404).json({ error: 'Page not found' });
@@ -1952,7 +1968,8 @@ app.get('/api/books/:bookId/page/:pageNumber', async (req, res) => {
         pageText: page.pageText,
         imageDescription: page.imageDescription,
         totalPages: book.totalPages,
-        bookTitle: book.title
+        bookTitle: book.title,
+        audioUrl: page.audio_url
       }
     });
 

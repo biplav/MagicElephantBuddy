@@ -67,6 +67,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       if (searchResults.books?.length > 0) {
         const selectedBook = searchResults.books[0];
         selectedBookRef.current = selectedBook;
+        currentPageRef.current = 0;
         const responseData = {
           title: selectedBook.title,
           summary: selectedBook.summary,
@@ -109,7 +110,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
         pageNumber = currentPageRef?.current + 1;
       }
       // Fetch page data from API
-      const pageResponse = await fetch(`/api/books/${bookId}/pages/${pageNumber}`);
+      const pageResponse = await fetch(`/api/books/${bookId}/page/${pageNumber}`);
       
       if (!pageResponse.ok) {
         throw new Error(`Failed to fetch page: ${pageResponse.status}`);
