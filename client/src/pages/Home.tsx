@@ -246,7 +246,7 @@ const Home = memo(() => {
   const [autoPageTurnEnabled, setAutoPageTurnEnabled] = useState<boolean>(true);
 
   const realtimeOptions = useMemo(() => ({
-    childId: selectedChildId?.toString(),
+    childId: selectedChildId ? String(selectedChildId) : undefined,
     onTranscriptionReceived: handleTranscription,
     onResponseReceived: handleResponse,
     onAudioResponseReceived: handleAudioResponse,

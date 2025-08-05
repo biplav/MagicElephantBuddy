@@ -147,7 +147,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
       channel.onopen = async () => {
         logger.info("Data channel opened");
         clearInterval(stateCheckInterval);
-        
+
         // Update book state manager with the active data channel
         // This will be handled via a different approach since we can't call hooks conditionally
 
@@ -195,19 +195,18 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         type: "child_input" | "appu_response",
       ) => {
         try {
-          const childId = getSelectedChildId();
-          const apiType =
-            type === "child_input" ? "child_input" : "appu_response";
+          const childId = options.childId || getSelectedChildId?.() || "1085268853542289410";
+
           const requestBody =
             type === "child_input"
               ? {
-                  type: apiType,
+                  type: "child_input",
                   content: transcript,
                   transcription: transcript,
                   childId: childId,
                 }
               : {
-                  type: apiType,
+                  type: "appu_response",
                   content: transcript,
                   childId: childId,
                 };
