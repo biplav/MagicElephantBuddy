@@ -2,11 +2,14 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createServiceLogger } from '@/lib/logger';
 
 interface SilenceDetectionOptions {
-  silenceDuration?: number; // milliseconds of silence before triggering
+  silenceDuration?: number; // milliseconds of silence before triggering page turn
+  initialAudioDelay?: number; // milliseconds to wait after Appu stops before playing audio
   onSilenceDetected?: () => void;
   onSilenceInterrupted?: () => void;
+  onInitialAudioTrigger?: () => void; // Called when initial audio should play
   enabled?: boolean;
   openaiConnection?: any; // OpenAI connection instance to listen to events
+  isPlayingAudio?: boolean; // Whether page audio is currently playing
 }
 
 interface SilenceDetectionState {
@@ -14,6 +17,8 @@ interface SilenceDetectionState {
   isSilent: boolean;
   silenceTimer: number; // remaining time in ms
   isEnabled: boolean;
+  isWaitingForInitialAudio: boolean; // waiting for initial audio after Appu stops
+  initialAudioTimer: number; // remaining time for initial audio delay
 }
 
 export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
@@ -21,10 +26,13 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
 
   const {
     silenceDuration = 3000, // 3 seconds
+    initialAudioDelay = 1000, // 1 second
     onSilenceDetected,
     onSilenceInterrupted,
+    onInitialAudioTrigger,
     enabled = false,
-    openaiConnection
+    openaiConnection,
+    isPlayingAudio = false
   } = options;
 
   // UI state - only for things that need to trigger re-renders
@@ -32,7 +40,9 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
     isDetectingSilence: false,
     isSilent: false,
     silenceTimer: 0,
-    isEnabled: enabled
+    isEnabled: enabled,
+    isWaitingForInitialAudio: false,
+    initialAudioTimer: 0
   });
 
   // Internal state - using refs for performance
@@ -40,25 +50,30 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
     isDetectingSilence: false,
     isSilent: false,
     isEnabled: enabled,
-    silenceStartTime: null as number | null
+    silenceStartTime: null as number | null,
+    isWaitingForInitialAudio: false,
+    initialAudioStartTime: null as number | null
   });
 
   // Timer refs
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const initialAudioTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Stable callback refs - these won't change unless the actual functions change
   const callbacksRef = useRef({
     onSilenceDetected,
-    onSilenceInterrupted
+    onSilenceInterrupted,
+    onInitialAudioTrigger
   });
 
   // Update callback refs when they change
   useEffect(() => {
     callbacksRef.current = {
       onSilenceDetected,
-      onSilenceInterrupted
+      onSilenceInterrupted,
+      onInitialAudioTrigger
     };
-  }, [onSilenceDetected, onSilenceInterrupted]);
+  }, [onSilenceDetected, onSilenceInterrupted, onInitialAudioTrigger]);
 
   // Update enabled state
   useEffect(() => {
@@ -71,10 +86,17 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
     internalState.current.silenceStartTime = null;
     internalState.current.isDetectingSilence = false;
     internalState.current.isSilent = false;
+    internalState.current.isWaitingForInitialAudio = false;
+    internalState.current.initialAudioStartTime = null;
 
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
+    }
+
+    if (initialAudioTimerRef.current) {
+      clearInterval(initialAudioTimerRef.current);
+      initialAudioTimerRef.current = null;
     }
 
     // Batch UI update
@@ -82,11 +104,62 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
       ...prev,
       isDetectingSilence: false,
       isSilent: false,
-      silenceTimer: 0
+      silenceTimer: 0,
+      isWaitingForInitialAudio: false,
+      initialAudioTimer: 0
     }));
 
     logger.debug('Silence detection reset');
   }, [logger]);
+
+  // Start initial audio timer - stable function
+  const startInitialAudioTimer = useCallback(() => {
+    if (initialAudioTimerRef.current) {
+      clearInterval(initialAudioTimerRef.current);
+    }
+
+    const startTime = Date.now();
+    internalState.current.initialAudioStartTime = startTime;
+    internalState.current.isWaitingForInitialAudio = true;
+
+    logger.debug('Starting initial audio timer', { delay: initialAudioDelay });
+
+    // Update UI to show initial audio timer started
+    setUIState(prev => ({
+      ...prev,
+      isWaitingForInitialAudio: true,
+      initialAudioTimer: initialAudioDelay
+    }));
+
+    initialAudioTimerRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const remaining = Math.max(0, initialAudioDelay - elapsed);
+
+      // Update only the timer in UI
+      setUIState(prev => ({ ...prev, initialAudioTimer: remaining }));
+
+      if (remaining <= 0) {
+        // Initial audio delay completed
+        clearInterval(initialAudioTimerRef.current!);
+        initialAudioTimerRef.current = null;
+
+        // Reset internal state
+        internalState.current.isWaitingForInitialAudio = false;
+        internalState.current.initialAudioStartTime = null;
+
+        // Update UI
+        setUIState(prev => ({
+          ...prev,
+          isWaitingForInitialAudio: false,
+          initialAudioTimer: 0
+        }));
+
+        // Trigger initial audio callback
+        callbacksRef.current.onInitialAudioTrigger?.();
+        logger.info('Initial audio timer completed, triggering audio playback');
+      }
+    }, 100); // Update timer every 100ms for smooth countdown
+  }, [initialAudioDelay, logger]);
 
   // Start silence timer - stable function
   const startSilenceTimer = useCallback(() => {
@@ -139,6 +212,12 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
     }, 100); // Update timer every 100ms for smooth countdown
   }, [silenceDuration, logger]);
 
+  // Start page turn timer after audio ends
+  const startPageTurnTimer = useCallback(() => {
+    logger.debug('Starting page turn timer after audio ended');
+    startSilenceTimer();
+  }, [startSilenceTimer, logger]);
+
   // Stable public methods for backward compatibility (now simplified)
   const setAppuSpeaking = useCallback((speaking: boolean) => {
     // This is now handled by OpenAI events, but keeping for compatibility
@@ -178,8 +257,10 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
     setAppuSpeaking,
     setUserSpeaking,
     interruptSilence,
-    resetSilenceDetection
-  }), [uiState, setEnabled, setAppuSpeaking, setUserSpeaking, interruptSilence, resetSilenceDetection]);
+    resetSilenceDetection,
+    startPageTurnTimer,
+    startInitialAudioTimer
+  }), [uiState, setEnabled, setAppuSpeaking, setUserSpeaking, interruptSilence, resetSilenceDetection, startPageTurnTimer, startInitialAudioTimer]);
 
   // Listen to OpenAI Realtime API events for automatic speech detection
   useEffect(() => {
@@ -196,9 +277,13 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
 
       switch (event.type) {
         case 'output_audio_buffer.stopped':
-          // Appu finished speaking - start silence timer
-          logger.debug('Appu finished speaking (output_audio_buffer.stopped) - starting silence timer');
-          startSilenceTimer();
+          // Appu finished speaking - start initial audio timer if audio isn't already playing
+          if (!isPlayingAudio) {
+            logger.debug('Appu finished speaking (output_audio_buffer.stopped) - starting initial audio timer');
+            startInitialAudioTimer();
+          } else {
+            logger.debug('Appu finished speaking but audio is already playing - no action needed');
+          }
           break;
 
         case 'input_audio_buffer.speech_started':
@@ -227,7 +312,7 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
         openaiConnection.off('event', handleOpenAIEvent);
       }
     };
-  }, [openaiConnection, enabled, startSilenceTimer, resetSilenceDetection, logger]);
+  }, [openaiConnection, enabled, startSilenceTimer, startInitialAudioTimer, resetSilenceDetection, isPlayingAudio, logger]);
 
   // Cleanup on unmount
   useEffect(() => {

@@ -84,11 +84,14 @@ export default function StorybookDisplay({
   }, []);
 
   const silenceDetection = useSilenceDetection({
-    silenceDuration: 3000, // 3 seconds
+    silenceDuration: 3000, // 3 seconds for page turn
+    initialAudioDelay: 1000, // 1 second delay for initial audio after Appu stops
     onSilenceDetected: handleAutoPageAdvance,
     onSilenceInterrupted: handleSilenceInterrupted,
+    onInitialAudioTrigger: playPageAudio,
     enabled: autoPageTurnEnabled && isVisible,
-    openaiConnection: openaiConnection
+    openaiConnection: openaiConnection,
+    isPlayingAudio: isPlayingAudio
   });
 
   // Play audio when page changes
@@ -105,7 +108,6 @@ export default function StorybookDisplay({
       }
 
       const audio = new Audio(currentPage.audioUrl);
-      //audio.volume = 0.8;
       audio.preload = 'auto';
 
       audio.onloadstart = () => {
@@ -123,10 +125,13 @@ export default function StorybookDisplay({
       };
 
       audio.onended = () => {
-        console.log('Audio finished playing');
+        console.log('Audio finished playing - starting silence detection for page turn');
         setIsPlayingAudio(false);
         onAppuSpeakingChangeRef.current?.(false);
         audioElementRef.current = null;
+        
+        // Start silence detection for page turn after audio ends
+        silenceDetection.startPageTurnTimer();
       };
 
       audio.onerror = (error) => {
@@ -163,18 +168,16 @@ export default function StorybookDisplay({
           });
       }
     }
-  }, []); // Remove dependencies to avoid circular dependency
+  }, [silenceDetection]);
 
-  // Auto-play audio when page loads (without triggering Appu)
+  // Play audio based on different triggers
   useEffect(() => {
     if (currentPage?.audioUrl && imageLoaded && isVisible) {
-      // Small delay to ensure smooth page transition
-      const timer = setTimeout(() => {
-        playPageAudio();
-      }, 3000);
-      return () => clearTimeout(timer);
+      // On page load, play audio immediately
+      console.log('Page loaded - playing audio immediately');
+      playPageAudio();
     }
-  }, [currentPage?.audioUrl, imageLoaded, isVisible]); // Remove playPageAudio from dependencies
+  }, [currentPage?.pageNumber, imageLoaded, isVisible, playPageAudio]);
 
   // Enable/disable silence detection based on visibility and settings
   useEffect(() => {
