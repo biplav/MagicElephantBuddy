@@ -175,7 +175,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
               },
               temperature: 0.8,
               // Optimize context window for token efficiency
-              max_response_output_tokens: isInReadingSessionRef.current ? 150 : 300,
+              max_response_output_tokens: bookStateManager.isInReadingSession ? 150 : 300,
             },
           };
 
