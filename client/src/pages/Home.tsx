@@ -931,19 +931,15 @@ const Home = memo(() => {
     }
   }, [enableVideo, modelType, mediaCapture]);
 
-  const handleNextPage = useCallback(() => {
+  const handleNextPage = () => {
     console.log("Next page requested");
-    if (realtimeAudio?.openaiConnection?.navigateToNextPage) {
-      realtimeAudio.openaiConnection.navigateToNextPage();
-    }
-  }, [realtimeAudio]);
+    // Implement logic to fetch the next page and update state
+  };
 
-  const handlePreviousPage = useCallback(() => {
+  const handlePreviousPage = () => {
     console.log("Previous page requested");
-    if (realtimeAudio?.openaiConnection?.navigateToPreviousPage) {
-      realtimeAudio.openaiConnection.navigateToPreviousPage();
-    }
-  }, [realtimeAudio]);
+    // Implement logic to fetch the previous page and update state
+  };
 
   const handleCloseStorybook = () => {
     console.log("Closing storybook");

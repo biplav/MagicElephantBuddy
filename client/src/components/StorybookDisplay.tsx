@@ -52,7 +52,6 @@ export default function StorybookDisplay({
       // Call onNextPage directly, not handleNextPage to avoid circular dependency
       setFlipDirection('next');
       setIsFlipping(true);
-      silenceDetection.interruptSilence();
       setTimeout(() => {
         onNextPage();
         onPageNavigation?.('next');

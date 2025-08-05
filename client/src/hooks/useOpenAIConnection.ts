@@ -843,7 +843,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
               if (isInReadingSessionRef.current && readingSessionMessagesRef.current.length > 6) {
                 logger.info("Clearing conversation history to optimize tokens");
                 dataChannelRef.current?.send(JSON.stringify({
-                  type: "conversation.item.create",
+                  type: "conversation.item.truncate",
                   audio_end_ms: 0
                 }));
                 readingSessionMessagesRef.current = [];
@@ -1123,142 +1123,12 @@ offerToReceiveAudio: true,
     }));
   }, [options.cleanupMedia]);
 
-  // Navigation methods for storybook pages
-  const navigateToNextPage = useCallback(() => {
-    if (!selectedBookRef.current) {
-      logger.warn('No book selected for navigation');
-      return;
-    }
-
-    const pages = selectedBookRef.current.pages || [];
-    const nextPageNumber = currentPageRef.current + 1;
-
-    if (nextPageNumber <= pages.length) {
-      const targetPage = pages.find((p: any) => p.pageNumber === nextPageNumber);
-      if (targetPage) {
-        currentPageRef.current = nextPageNumber;
-
-        // Trigger the storybook display component
-        if (options.onStorybookPageDisplay) {
-          options.onStorybookPageDisplay({
-            pageImageUrl: targetPage.imageUrl,
-            pageText: targetPage.pageText,
-            pageNumber: targetPage.pageNumber,
-            totalPages: pages.length,
-            bookTitle: selectedBookRef.current.title
-          });
-        }
-
-        // Send context to AI about the new page
-        const isLastPage = nextPageNumber === pages.length;
-        let pageContext: string;
-
-        if (isLastPage) {
-          pageContext = `Final page displayed. Read in Hinglish: "${targetPage.pageText}" Then say "Bas! Kahani khatam! The End! Kya maza aaya na?"`;
-        } else {
-          pageContext = `Page ${targetPage.pageNumber} displayed. Continue reading in Hinglish (Hindi-English mix): "${targetPage.pageText}" - Keep it engaging with expressions like "aur phir", "dekho kya hua", "kitna mazedaar hai na!"`;
-        }
-
-        // Send the page context to the AI
-        if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
-          dataChannelRef.current.send(JSON.stringify({
-            type: 'conversation.item.create',
-            item: {
-              type: 'message',
-              role: 'user',
-              content: [{
-                type: 'input_text',
-                text: pageContext
-              }]
-            }
-          }));
-
-          dataChannelRef.current.send(JSON.stringify({
-            type: 'response.create'
-          }));
-        }
-
-        logger.info(`Navigated to next page: ${nextPageNumber}`);
-      }
-    } else {
-      logger.warn(`Cannot navigate to page ${nextPageNumber}. Book only has ${pages.length} pages.`);
-    }
-  }, [options, logger]);
-
-  const navigateToPreviousPage = useCallback(() => {
-    if (!selectedBookRef.current) {
-      logger.warn('No book selected for navigation');
-      return;
-    }
-
-    const pages = selectedBookRef.current.pages || [];
-    const previousPageNumber = currentPageRef.current - 1;
-
-    if (previousPageNumber >= 1) {
-      const targetPage = pages.find((p: any) => p.pageNumber === previousPageNumber);
-      if (targetPage) {
-        currentPageRef.current = previousPageNumber;
-
-        // Trigger the storybook display component
-        if (options.onStorybookPageDisplay) {
-          options.onStorybookPageDisplay({
-            pageImageUrl: targetPage.imageUrl,
-            pageText: targetPage.pageText,
-            pageNumber: targetPage.pageNumber,
-            totalPages: pages.length,
-            bookTitle: selectedBookRef.current.title
-          });
-        }
-
-        // Send context to AI about the new page
-        const isFirstPage = previousPageNumber === 1;
-        let pageContext: string;
-
-        if (isFirstPage) {
-          pageContext = `Back to page 1. Read this story in Hinglish (mix of Hindi and English) to make it engaging for the child. Page text: "${targetPage.pageText}" - Use simple Hindi words mixed with English, add expressions like "dekho", "kya baat hai", "wah", and make it playful and interactive.`;
-        } else {
-          pageContext = `Page ${targetPage.pageNumber} displayed. Continue reading in Hinglish (Hindi-English mix): "${targetPage.pageText}" - Keep it engaging with expressions like "aur phir", "dekho kya hua", "kitna mazedaar hai na!"`;
-        }
-
-        // Send the page context to the AI
-        if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
-          dataChannelRef.current.send(JSON.stringify({
-            type: 'conversation.item.create',
-            item: {
-              type: 'message',
-              role: 'user',
-              content: [{
-                type: 'input_text',
-                text: pageContext
-              }]
-            }
-          }));
-
-          dataChannelRef.current.send(JSON.stringify({
-            type: 'response.create'
-          }));
-        }
-
-        logger.info(`Navigated to previous page: ${previousPageNumber}`);
-      }
-    } else {
-      logger.warn('Cannot navigate to previous page. Already at page 1.');
-    }
-  }, [options, logger]);
-
-
-  // Return the connection interface
   return {
+    ...state,
     connect,
     disconnect,
-    isConnected,
-    error,
-    startRecording,
-    stopRecording,
-    mediaCapture,
-    lastCapturedFrame,
-    exitReadingSession,
-    navigateToNextPage,
-    navigateToPreviousPage
+    isAppuSpeaking,
+    isUserSpeaking,
+    // mediaCapture: mediaCaptureRef.current,
   };
 }
