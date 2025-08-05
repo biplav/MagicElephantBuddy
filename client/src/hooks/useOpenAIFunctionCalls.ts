@@ -1,4 +1,3 @@
-
 import { useRef, useCallback, useMemo } from 'react';
 import { createServiceLogger } from '@/lib/logger';
 
@@ -20,7 +19,7 @@ interface OpenAIFunctionCallsOptions {
 
 export function useOpenAIFunctionCalls(options: OpenAIFunctionCallsOptions = {}) {
   const logger = useMemo(() => createServiceLogger('openai-function-calls'), []);
-  
+
   // Book tracking refs
   const selectedBookRef = useRef<any>(null);
   const currentPageRef = useRef<number>(1);
@@ -45,7 +44,7 @@ export function useOpenAIFunctionCalls(options: OpenAIFunctionCallsOptions = {})
         output: result,
       },
     });
-    
+
     logger.info("Sending function call output", { callId, response });
     options.dataChannel.send(response);
   }, [options.dataChannel, logger]);
@@ -207,9 +206,78 @@ export function useOpenAIFunctionCalls(options: OpenAIFunctionCallsOptions = {})
       const targetPage = pages.find((p: any) => p.pageNumber === targetPageNumber);
 
       if (!targetPage) {
+        // If page data not found in stored book, try to fetch from API
+        logger.warn("Page not found in stored book, attempting API fetch", {
+          targetPageNumber,
+          bookId: selectedBookRef.current?.id,
+          availablePages: selectedBookRef.current?.pages?.length || 0
+        });
+
+        // Check if we have a valid book ID before making API call
+        if (!selectedBookRef.current?.id) {
+          logger.error("No book ID available for API fetch");
+          sendFunctionCallOutput(
+            callId,
+            "I need to search for a book first before I can display pages. What kind of story would you like to read?"
+          );
+
+          options.dataChannel?.send(JSON.stringify({
+            type: 'response.create'
+          }));
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/books/${selectedBookRef.current.id}/page/${targetPageNumber}`);
+          if (response.ok) {
+            const pageData = await response.json();
+            if (pageData.success && pageData.page) {
+              const apiPage = pageData.page;
+
+              // Update current page and display the page
+              currentPageRef.current = targetPageNumber;
+
+              if (options.onStorybookPageDisplay) {
+                options.onStorybookPageDisplay({
+                  pageImageUrl: apiPage.pageImageUrl,
+                  pageText: apiPage.pageText,
+                  pageNumber: apiPage.pageNumber,
+                  totalPages: apiPage.totalPages,
+                  bookTitle: apiPage.bookTitle,
+                });
+              }
+
+              // Send context to Appu with appropriate language instruction
+              const isFirstPage = targetPageNumber === 1;
+              const isLastPage = targetPageNumber === (apiPage.totalPages || selectedBookRef.current.totalPages);
+
+              let pageContext: string;
+              if (isFirstPage) {
+                pageContext = `Page 1 displayed. Read this story in Hinglish (mix of Hindi and English) to make it engaging for the child. Page text: "${apiPage.pageText}" - Use simple Hindi words mixed with English, add expressions like "dekho", "kya baat hai", "wah", and make it playful and interactive.`;
+              } else if (isLastPage) {
+                pageContext = `Final page displayed. Read in Hinglish: "${apiPage.pageText}" Then say "Bas! Kahani khatam! The End! Kya maza aaya na?"`;
+              } else {
+                pageContext = `Page ${targetPageNumber} displayed. Continue reading in Hinglish (Hindi-English mix): "${apiPage.pageText}" - Keep it engaging with expressions like "aur phir", "dekho kya hua", "kitna mazedaar hai na!"`;
+              }
+
+              sendFunctionCallOutput(callId, pageContext);
+
+              logger.info("Successfully fetched and displayed page from API", {
+                pageNumber: targetPageNumber,
+                bookTitle: apiPage.bookTitle
+              });
+              return;
+            }
+          } else {
+            logger.error("API response not ok", { status: response.status, statusText: response.statusText });
+          }
+        } catch (apiError) {
+          logger.error("Failed to fetch page from API", { error: apiError });
+        }
+
         sendFunctionCallOutput(
           callId,
-          `I couldn't find page ${targetPageNumber} in "${selectedBookRef.current.title}". This book has ${pages.length} pages. Would you like me to show you page 1 instead?`
+          `I'm having trouble finding page ${targetPageNumber} of the book. Let me try to continue with the story from where we left off.`
         );
 
         options.dataChannel?.send(JSON.stringify({
