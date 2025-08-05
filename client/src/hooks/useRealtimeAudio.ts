@@ -67,6 +67,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
   // Create stable connection options that don't change unless truly necessary
   const connectionOptions = useMemo(() => ({
     ...stableCallbacks,
+    childId: options.childId,
     enableVideo: options.enableVideo,
     // Pass media functions directly to avoid circular dependencies
     requestMediaPermissions: mediaCapture.requestPermissions,
@@ -75,6 +76,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     hasVideoPermission: mediaCapture.hasVideoPermission
   }), [
     stableCallbacks, 
+    options.childId,
     options.enableVideo,
     mediaCapture.requestPermissions,
     mediaCapture.captureFrame,

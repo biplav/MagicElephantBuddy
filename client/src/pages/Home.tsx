@@ -514,8 +514,9 @@ const Home = memo(() => {
   const [currentStorybookPage, setCurrentStorybookPage] = useState<any>(null);
   const [isStorybookVisible, setIsStorybookVisible] = useState(false);
 
+  // Auto-start recording when connected (only for realtime API)
   useEffect(() => {
-    if (useRealtimeAPI && isConnected && appState === "interaction") {
+    if (useRealtimeAPI && realtimeAudio.isConnected && appState === "interaction") {
       setTimeout(() => {
         setElephantState("speaking");
         setSpeechText("Hi there! I'm Appu. What would you like to talk about?");
@@ -539,7 +540,7 @@ const Home = memo(() => {
         }, 3000);
       }, 1000);
     }
-  }, [useRealtimeAPI, isConnected, appState]);
+  }, [useRealtimeAPI, realtimeAudio.isConnected, appState]);
 
   useEffect(() => {
     if (currentRecorder.isRecording) {
@@ -620,7 +621,7 @@ const Home = memo(() => {
   useEffect(() => {
     if (
       useRealtimeAPI &&
-      isConnected &&
+      realtimeAudio.isConnected &&
       appState === "interaction" &&
       !currentRecorder.isRecording &&
       !currentRecorder.isProcessing
@@ -632,7 +633,7 @@ const Home = memo(() => {
     }
   }, [
     useRealtimeAPI,
-    isConnected,
+    realtimeAudio.isConnected,
     appState,
     currentRecorder.isRecording,
     currentRecorder.isProcessing,

@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import { createServiceLogger } from '@/lib/logger';
 import { getSelectedChildId as getChildId } from '@/lib/childUtils';
@@ -15,7 +14,12 @@ interface OpenAISessionState {
   error: string | null;
 }
 
-export function useOpenAISession(options: OpenAISessionOptions = {}) {
+interface UseOpenAISessionOptions {
+  childId?: string;
+}
+
+export function useOpenAISession(options: UseOpenAISessionOptions = {}) {
+  const { childId } = options;
   const logger = createServiceLogger('openai-session');
 
   const [state, setState] = useState<OpenAISessionState>({
@@ -25,8 +29,8 @@ export function useOpenAISession(options: OpenAISessionOptions = {}) {
   });
 
   const getSelectedChildId = useCallback((): string => {
-    return getChildId(options.childId);
-  }, [options.childId]);
+    return getChildId(childId);
+  }, [childId]);
 
   const fetchEnhancedPrompt = useCallback(
     async (childId: string): Promise<string> => {

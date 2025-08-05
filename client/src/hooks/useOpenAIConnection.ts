@@ -3,6 +3,7 @@ import { createServiceLogger } from "@/lib/logger";
 import { useWebRTCConnection } from "./useWebRTCConnection";
 import { useOpenAISession } from "./useOpenAISession";
 interface OpenAIConnectionOptions {
+  childId?: string;
   onTranscriptionReceived?: (transcription: string) => void;
   onResponseReceived?: (text: string) => void;
   onAudioResponseReceived?: (audioData: string) => void;
