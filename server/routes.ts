@@ -222,37 +222,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log(`Audio downloaded: ${audioId}`);
   });
 
-  // Serve images from object storage
+  // Serve images and audio from object storage
   app.get("/api/object-storage/:fileName", async (req: Request, res: Response) => {
     try {
       const fileName = decodeURIComponent(req.params.fileName);
-      console.log(`Serving image from object storage: ${fileName}`);
+      console.log(`Serving file from object storage: ${fileName}`);
 
       const { Client } = await import('@replit/object-storage');
       const objectStorage = new Client();
 
-      // Download the base64 image data from object storage
+      // Download the base64 data from object storage
       const downloadResult = await objectStorage.downloadAsText(fileName);
 
       if (!downloadResult.ok) {
         console.error(`Failed to download ${fileName}:`, downloadResult.error);
-        return res.status(404).json({ error: "Image not found in object storage" });
+        return res.status(404).json({ error: "File not found in object storage" });
       }
 
       // Convert base64 back to buffer
-      const imageBuffer = Buffer.from(downloadResult.value, 'base64');
+      const fileBuffer = Buffer.from(downloadResult.value, 'base64');
+
+      // Determine content type based on file extension
+      let contentType = 'application/octet-stream';
+      if (fileName.endsWith('.png') || fileName.endsWith('.jpg') || fileName.endsWith('.jpeg')) {
+        contentType = fileName.endsWith('.png') ? 'image/png' : 'image/jpeg';
+      } else if (fileName.endsWith('.mp3')) {
+        contentType = 'audio/mpeg';
+      }
 
       res.set({
-        'Content-Type': 'image/png',
-        'Content-Length': imageBuffer.length.toString(),
+        'Content-Type': contentType,
+        'Content-Length': fileBuffer.length.toString(),
         'Cache-Control': 'public, max-age=86400' // Cache for 24 hours
       });
 
-      res.send(imageBuffer);
-      console.log(`Successfully served image: ${fileName}`);
+      res.send(fileBuffer);
+      console.log(`Successfully served file: ${fileName}`);
     } catch (error) {
-      console.error("Error serving image from object storage:", error);
-      res.status(500).json({ error: "Failed to serve image" });
+      console.error("Error serving file from object storage:", error);
+      res.status(500).json({ error: "Failed to serve file" });
     }
   });
 
@@ -1641,7 +1649,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Create pages
+      // Create pages with audio
       const createdPages = [];
       for (const pageData of processedBook.pages) {
         const page = await storage.createPage({
@@ -1650,6 +1658,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           imageUrl: pageData.imageUrl,
           pageText: pageData.text,
           imageDescription: pageData.imageDescription,
+          audioUrl: pageData.audioUrl,
         });
         createdPages.push(page);
       }

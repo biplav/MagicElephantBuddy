@@ -12,6 +12,7 @@ interface StorybookPage {
   pageNumber: number;
   totalPages: number;
   bookTitle: string;
+  audioUrl?: string; // Added audioUrl to the interface
 }
 
 interface StorybookDisplayProps {
@@ -28,11 +29,11 @@ interface StorybookDisplayProps {
   openaiConnection?: any;
 }
 
-export default function StorybookDisplay({ 
-  currentPage, 
-  onNextPage, 
-  onPreviousPage, 
-  onClose, 
+export default function StorybookDisplay({
+  currentPage,
+  onNextPage,
+  onPreviousPage,
+  onClose,
   isVisible,
   onPageNavigation,
   autoPageTurnEnabled = true,
@@ -162,17 +163,17 @@ export default function StorybookDisplay({
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={currentPage.pageNumber}
-                    initial={{ 
+                    initial={{
                       rotateY: flipDirection === 'next' ? 90 : -90,
                       opacity: 0,
                       scale: 0.8
                     }}
-                    animate={{ 
+                    animate={{
                       rotateY: 0,
                       opacity: 1,
                       scale: 1
                     }}
-                    exit={{ 
+                    exit={{
                       rotateY: flipDirection === 'next' ? -90 : 90,
                       opacity: 0,
                       scale: 0.8

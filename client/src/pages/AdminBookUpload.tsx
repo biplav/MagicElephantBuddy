@@ -333,8 +333,18 @@ export default function AdminBookUpload() {
                   
                   {page.imageDescription && (
                     <div className="mb-2">
-                      <Label className="text-xs text-gray-500">Image Description:</Label>
+                      <Label className="text-xs text-gray-500">Child-Friendly Narration:</Label>
                       <p className="text-sm text-gray-700">{page.imageDescription}</p>
+                    </div>
+                  )}
+
+                  {page.audioUrl && (
+                    <div className="mb-2">
+                      <Label className="text-xs text-gray-500">Audio Narration:</Label>
+                      <audio controls className="w-full h-8">
+                        <source src={page.audioUrl} type="audio/mpeg" />
+                        Your browser does not support the audio element.
+                      </audio>
                     </div>
                   )}
                   

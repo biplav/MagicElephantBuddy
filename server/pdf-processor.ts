@@ -12,6 +12,7 @@ export interface ProcessedPage {
   text: string;
   imageDescription: string;
   imageUrl: string;
+  audioUrl: string;
 }
 
 export interface ProcessedBook {
@@ -171,15 +172,20 @@ export class PDFProcessor {
     // Extract text and generate description in parallel for better performance
     const [pageText, imageDescription] = await Promise.allSettled([
       this.extractTextFromImage(imageBuffer),
-      this.generateImageDescription(imageBuffer),
+      this.generateChildFriendlyNarration(imageBuffer),
     ]);
+
+    // Generate audio narration for the page
+    const narrationText = imageDescription.status === 'fulfilled' ? imageDescription.value : '';
+    const audioUrl = await this.generatePageAudio(narrationText, fileName, pageNum);
 
     return {
       pageNumber: pageNum,
       imageBuffer,
       text: pageText.status === 'fulfilled' ? pageText.value : '',
-      imageDescription: imageDescription.status === 'fulfilled' ? imageDescription.value : '',
+      imageDescription: narrationText,
       imageUrl,
+      audioUrl,
     };
   }
 
@@ -223,9 +229,53 @@ export class PDFProcessor {
     return imageUrl;
   }
 
+  private async generatePageAudio(narrationText: string, fileName: string, pageNum: number): Promise<string> {
+    try {
+      if (!narrationText || narrationText.trim() === "") {
+        console.warn(`No narration text provided for page ${pageNum}`);
+        return "";
+      }
+
+      console.log(`Generating audio for page ${pageNum}...`);
+
+      const OpenAI = (await import("openai")).default;
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+      // Generate speech using OpenAI TTS
+      const mp3Response = await openai.audio.speech.create({
+        model: "tts-1",
+        voice: "nova", // Child-friendly voice
+        input: narrationText,
+        speed: 0.9, // Slightly slower for children
+      });
+
+      // Convert response to buffer
+      const buffer = Buffer.from(await mp3Response.arrayBuffer());
+
+      // Store audio in object storage
+      const audioFileName = `books/${fileName.replace(".pdf", "")}-page-${pageNum}-audio.mp3`;
+      const base64Audio = buffer.toString("base64");
+      
+      const uploadResult = await this.objectStorage.uploadFromText(audioFileName, base64Audio);
+
+      if (!uploadResult.ok) {
+        throw new Error(`Failed to upload audio to object storage: ${uploadResult.error}`);
+      }
+
+      const audioUrl = `/api/object-storage/${encodeURIComponent(audioFileName)}`;
+      console.log(`Generated and stored audio for page ${pageNum}: ${audioUrl}`);
+      
+      return audioUrl;
+
+    } catch (error) {
+      console.error(`Error generating audio for page ${pageNum}:`, error);
+      return "";
+    }
+  }
+
   private async addProcessingDelay(): Promise<void> {
-    // 100ms delay between pages to avoid rate limits
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    // 200ms delay between pages to avoid rate limits (increased for audio generation)
+    await new Promise((resolve) => setTimeout(resolve, 200));
   }
 
   private cleanupTempDirectory(tempDir: string): void {
@@ -286,10 +336,10 @@ export class PDFProcessor {
     }
   }
 
-  private async generateImageDescription(imageBuffer: Buffer): Promise<string> {
+  private async generateChildFriendlyNarration(imageBuffer: Buffer): Promise<string> {
     try {
       if (!this.isValidImageBuffer(imageBuffer)) {
-        console.warn("Invalid image buffer provided for description generation");
+        console.warn("Invalid image buffer provided for narration generation");
         return "";
       }
 
@@ -310,7 +360,18 @@ export class PDFProcessor {
             content: [
               {
                 type: "text",
-                text: "Provide a detailed description of this children's book page image. Focus on characters, objects, colors, actions, and scenes that would help a parent or child understand what's happening in the illustration. Keep it appropriate for young children.",
+                text: `Create a child-friendly narration for this storybook page that would be perfect for reading aloud to a 3-5 year old child. The narration should be:
+
+- Engaging and fun with simple, age-appropriate language
+- Include sound effects like "Whoosh!", "Splash!", "Roar!" where appropriate 
+- Use expressions that children love like "Oh my!", "Wow!", "Look at that!"
+- Mix Hindi and English words naturally (Hinglish) - use simple Hindi words like "dekho" (look), "kya baat hai" (how wonderful), "bada" (big), "chota" (small)
+- Be interactive and encouraging like "Can you see the...?", "What do you think happens next?"
+- Focus on colors, characters, actions, and emotions in the scene
+- Keep it conversational and storytelling style, not just descriptive
+- Make it exciting and magical for young listeners
+
+Write this as if Appu the magical elephant is telling the story directly to the child.`,
               },
               {
                 type: "image_url",
@@ -322,13 +383,13 @@ export class PDFProcessor {
             ],
           },
         ],
-        max_tokens: 300,
-        temperature: 0.7,
+        max_tokens: 400,
+        temperature: 0.8,
       });
 
       return response.choices[0].message.content || "";
     } catch (error) {
-      console.error("Error generating image description:", error);
+      console.error("Error generating child-friendly narration:", error);
       return "";
     }
   }

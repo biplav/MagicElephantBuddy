@@ -401,8 +401,8 @@ export const pages = pgTable("pages", {
   pageNumber: integer("page_number").notNull(),
   imageUrl: text("image_url").notNull(),
   pageText: text("page_text").notNull(),
-  imageDescription: text("image_description"), // AI-generated description of the image
-  audioUrl: text("audio_url"), // Optional audio narration
+  imageDescription: text("image_description"), // AI-generated child-friendly narration
+  audioUrl: text("audio_url"), // TTS audio narration for the page
   metadata: json("metadata"), // Additional page metadata
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
