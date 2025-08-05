@@ -3,6 +3,7 @@ import { createServiceLogger } from "@/lib/logger";
 import { useWebRTCConnection } from "./useWebRTCConnection";
 import { useOpenAISession } from "./useOpenAISession";
 import { useBookStateManager } from "./useBookStateManager";
+import { useMediaManager } from "./useMediaManager";
 interface OpenAIConnectionOptions {
   childId?: string;
   onTranscriptionReceived?: (transcription: string) => void;
@@ -17,11 +18,8 @@ interface OpenAIConnectionOptions {
     totalPages: number;
     bookTitle: string;
   }) => void;
-  // Media capture functions passed from parent
-  requestMediaPermissions?: () => Promise<MediaStream>;
-  captureFrame?: () => string | null;
-  cleanupMedia?: () => void;
-  hasVideoPermission?: boolean;
+  onAppuSpeakingChange?: (speaking: boolean) => void;
+  onUserSpeakingChange?: (speaking: boolean) => void;
 }
 
 interface OpenAIConnectionState {
@@ -63,6 +61,13 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
 
   const [isAppuSpeaking, setIsAppuSpeaking] = useState(false);
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
+
+  // Initialize media manager
+  const mediaManager = useMediaManager({
+    enableVideo: options.enableVideo,
+    childId: options.childId,
+    onError: options.onError,
+  });
 
   // Initialize modular hooks
   const webrtcConnection = useWebRTCConnection({
@@ -251,8 +256,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
           }
 
           // Check if we already have camera permission and can capture
-          // const mediaCapture = mediaCaptureRef.current;
-          if (options.hasVideoPermission && options.captureFrame) {
+          if (mediaManager.hasVideoPermission && mediaManager.isInitialized) {
             // Try capturing frame with retry mechanism
             let attempts = 0;
             const maxAttempts = 3;
@@ -261,7 +265,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
               attempts++;
               logger.info(`Frame capture attempt ${attempts}/${maxAttempts}`);
 
-              frameData = options.captureFrame();
+              frameData = mediaManager.captureFrame();
 
               if (!frameData && attempts < maxAttempts) {
                 // Wait a bit before retrying
@@ -283,26 +287,21 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
             // Request camera permission if not already granted
             logger.info("Requesting camera permission for frame capture");
             try {
-              // const mediaCapture = mediaCaptureRef.current;
-              if (options.requestMediaPermissions) {
-                await options.requestMediaPermissions();
-                // Wait a bit for video to initialize
-                await new Promise((resolve) => setTimeout(resolve, 1000));
-                // Try capturing after permission granted
-                if (options.captureFrame) {
-                  frameData = options.captureFrame();
-                  logger.info("Captured frame after permission request", {
-                    hasFrame: !!frameData,
-                  });
+              await mediaManager.initialize();
+              // Wait a bit for video to initialize
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+              // Try capturing after permission granted
+              frameData = mediaManager.captureFrame();
+              logger.info("Captured frame after permission request", {
+                hasFrame: !!frameData,
+              });
 
-                  // Store the captured frame for UI display
-                  if (frameData) {
-                    setState((prev) => ({
-                      ...prev,
-                      lastCapturedFrame: frameData,
-                    }));
-                  }
-                }
+              // Store the captured frame for UI display
+              if (frameData) {
+                setState((prev) => ({
+                  ...prev,
+                  lastCapturedFrame: frameData,
+                }));
               }
             } catch (permissionError) {
               logger.warn("Camera permission denied for getEyesTool", {
@@ -586,8 +585,9 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
       fetchEnhancedPrompt,
       sendFunctionCallOutput,
       webrtcConnection,
-      // Remove function dependencies that change on every render
-      // These will be accessed via options parameter
+      mediaManager,
+      bookStateManager,
+      logger,
     ],
   );
 
@@ -596,16 +596,13 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
       logger.info("Starting OpenAI WebRTC connection");
 
       // If video is enabled, ensure media capture is initialized first
-      // const mediaCapture = mediaCaptureRef.current;
       if (options.enableVideo) {
         logger.info("Video enabled, requesting media permissions first");
         try {
-          if (options.requestMediaPermissions) {
-            await options.requestMediaPermissions();
-            // Wait for video to be properly initialized
-            await new Promise((resolve) => setTimeout(resolve, 1500));
-            logger.info("Media permissions granted and video initialized");
-          }
+          await mediaManager.initialize();
+          // Wait for video to be properly initialized
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          logger.info("Media permissions granted and video initialized");
         } catch (mediaError) {
           logger.warn(
             "Video permission request failed, continuing without video",
@@ -756,7 +753,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     webrtcConnection,
     setupDataChannel,
     options.enableVideo,
-    // Remove function dependencies that are accessed via options
+    mediaManager,
   ]);
 
   const disconnect = useCallback(() => {
@@ -778,9 +775,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     }
 
     // Clean up media capture resources
-    if (options.cleanupMedia) {
-      options.cleanupMedia();
-    }
+    mediaManager.cleanup();
 
     setState((prev) => ({
       ...prev,
@@ -788,7 +783,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
       isRecording: false,
       lastCapturedFrame: null,
     }));
-  }, [options.cleanupMedia]);
+  }, [mediaManager]);
 
   return {
     ...state,

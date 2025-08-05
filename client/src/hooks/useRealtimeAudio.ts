@@ -123,19 +123,10 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     ...stableCallbacks,
     childId: options.childId,
     enableVideo: options.enableVideo,
-    // Pass media functions directly to avoid circular dependencies
-    requestMediaPermissions: mediaManager.requestPermissions, // Use mediaManager
-    captureFrame: mediaManager.captureFrame, // Use mediaManager
-    cleanupMedia: mediaManager.cleanup, // Use mediaManager
-    hasVideoPermission: mediaManager.hasVideoPermission // Use mediaManager
   }), [
     stableCallbacks, 
     options.childId,
     options.enableVideo,
-    mediaManager.requestPermissions,
-    mediaManager.captureFrame,
-    mediaManager.cleanup,
-    mediaManager.hasVideoPermission
   ]);
 
   // Initialize connection hooks with stable options
