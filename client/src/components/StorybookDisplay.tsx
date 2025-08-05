@@ -163,7 +163,7 @@ export default function StorybookDisplay({
           });
       }
     }
-  }, [currentPage?.audioUrl, onAppuSpeakingChangeRef]);
+  }, []); // Remove dependencies to avoid circular dependency
 
   // Auto-play audio when page loads (without triggering Appu)
   useEffect(() => {
@@ -174,7 +174,7 @@ export default function StorybookDisplay({
       }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [currentPage?.audioUrl, imageLoaded, isVisible, playPageAudio]);
+  }, [currentPage?.audioUrl, imageLoaded, isVisible]); // Remove playPageAudio from dependencies
 
   // Enable/disable silence detection based on visibility and settings
   useEffect(() => {
