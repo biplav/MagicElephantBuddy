@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -47,17 +47,22 @@ export default function StorybookDisplay({
   const [flipDirection, setFlipDirection] = useState<'next' | 'previous'>('next');
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const onAppuSpeakingChangeRef = useRef(onAppuSpeakingChange);
+
+  useEffect(() => {
+    onAppuSpeakingChangeRef.current = onAppuSpeakingChange;
+  }, [onAppuSpeakingChange]);
 
   // Auto page turning with silence detection
   const handleAutoPageAdvance = useCallback(() => {
     if (currentPage && currentPage.pageNumber < currentPage.totalPages && !isFlipping) {
       console.log('Auto-advancing to next page due to silence');
-      
+
       // Stop current audio
       if (audioElement) {
         audioElement.pause();
         setIsPlayingAudio(false);
-        onAppuSpeakingChange?.(false);
+        onAppuSpeakingChangeRef.current?.(false);
       }
 
       // Call onNextPage directly, not handleNextPage to avoid circular dependency
@@ -72,7 +77,7 @@ export default function StorybookDisplay({
       console.log('Reached end of book - auto page advance disabled');
       // Could trigger end-of-book celebration or suggestions here
     }
-  }, [currentPage, isFlipping, onNextPage, onPageNavigation, audioElement, onAppuSpeakingChange]);
+  }, [currentPage, isFlipping, onNextPage, onPageNavigation, audioElement]);
 
   const handleSilenceInterrupted = useCallback(() => {
     console.log('Auto page advance interrupted by speech');
@@ -90,13 +95,13 @@ export default function StorybookDisplay({
   const playPageAudio = useCallback(() => {
     if (currentPage?.audioUrl) {
       console.log('Playing page audio:', currentPage.audioUrl);
-      
+
       // Stop any existing audio
       if (audioElement) {
         audioElement.pause();
         audioElement.currentTime = 0;
         setIsPlayingAudio(false);
-        onAppuSpeakingChange?.(false);
+        onAppuSpeakingChangeRef.current?.(false);
       }
 
       const audio = new Audio(currentPage.audioUrl);
@@ -114,31 +119,31 @@ export default function StorybookDisplay({
       audio.onplay = () => {
         console.log('Audio started playing');
         setIsPlayingAudio(true);
-        onAppuSpeakingChange?.(true);
+        onAppuSpeakingChangeRef.current?.(true);
       };
 
       audio.onended = () => {
         console.log('Audio finished playing');
         setIsPlayingAudio(false);
-        onAppuSpeakingChange?.(false);
+        onAppuSpeakingChangeRef.current?.(false);
         setAudioElement(null);
       };
 
       audio.onerror = (error) => {
         console.error('Error playing audio:', error, audio.error);
         setIsPlayingAudio(false);
-        onAppuSpeakingChange?.(false);
+        onAppuSpeakingChangeRef.current?.(false);
         setAudioElement(null);
       };
 
       audio.onpause = () => {
         console.log('Audio paused');
         setIsPlayingAudio(false);
-        onAppuSpeakingChange?.(false);
+        onAppuSpeakingChangeRef.current?.(false);
       };
 
       setAudioElement(audio);
-      
+
       // Try to play with better error handling
       const playPromise = audio.play();
       if (playPromise !== undefined) {
@@ -149,8 +154,8 @@ export default function StorybookDisplay({
           .catch(error => {
             console.error('Failed to play audio:', error);
             setIsPlayingAudio(false);
-            onAppuSpeakingChange?.(false);
-            
+            onAppuSpeakingChangeRef.current?.(false);
+
             // Handle common autoplay restrictions
             if (error.name === 'NotAllowedError') {
               console.warn('Audio autoplay blocked by browser. User interaction required.');
@@ -158,7 +163,7 @@ export default function StorybookDisplay({
           });
       }
     }
-  }, [currentPage?.audioUrl, audioElement, onAppuSpeakingChange]);
+  }, [currentPage?.audioUrl, audioElement]);
 
   // Auto-play audio when page loads (without triggering Appu)
   useEffect(() => {
@@ -198,7 +203,7 @@ export default function StorybookDisplay({
       if (audioElement) {
         audioElement.pause();
         setIsPlayingAudio(false);
-        onAppuSpeakingChange?.(false);
+        onAppuSpeakingChangeRef.current?.(false);
       }
 
       // Interrupt silence detection when manually navigating
@@ -212,7 +217,7 @@ export default function StorybookDisplay({
         setIsFlipping(false);
       }, 500);
     }
-  }, [currentPage, onNextPage, onPageNavigation, silenceDetection, audioElement, onAppuSpeakingChange]);
+  }, [currentPage, onNextPage, onPageNavigation, silenceDetection, audioElement]);
 
   const handlePreviousPage = useCallback(() => {
     if (currentPage && currentPage.pageNumber > 1) {
@@ -220,7 +225,7 @@ export default function StorybookDisplay({
       if (audioElement) {
         audioElement.pause();
         setIsPlayingAudio(false);
-        onAppuSpeakingChange?.(false);
+        onAppuSpeakingChangeRef.current?.(false);
       }
 
       // Interrupt silence detection when manually navigating
@@ -234,7 +239,7 @@ export default function StorybookDisplay({
         setIsFlipping(false);
       }, 500);
     }
-  }, [currentPage, onPreviousPage, onPageNavigation, silenceDetection, audioElement, onAppuSpeakingChange]);
+  }, [currentPage, onPreviousPage, onPageNavigation, silenceDetection, audioElement]);
 
   if (!isVisible || !currentPage) {
     return null;
@@ -266,9 +271,9 @@ export default function StorybookDisplay({
               </Badge>
             )}
             {currentPage?.audioUrl && !isPlayingAudio && (
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={playPageAudio}
                 className="text-xs"
               >
