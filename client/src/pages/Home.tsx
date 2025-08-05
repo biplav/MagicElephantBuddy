@@ -235,6 +235,7 @@ const Home = memo(() => {
     pageNumber: number;
     totalPages: number;
     bookTitle: string;
+    audioUrl?: string;
   }) => {
     console.log("Storybook page display callback received:", pageData);
     setCurrentStorybookPage(pageData);

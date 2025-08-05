@@ -9,6 +9,7 @@ interface BookStateManagerOptions {
     pageNumber: number;
     totalPages: number;
     bookTitle: string;
+    audioUrl?: string;
   }) => void;
   onFunctionCallResult?: (callId: string, result: string) => void;
   onError?: (callId: string, error: string) => void;
@@ -134,6 +135,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
           pageNumber: pageData.pageNumber,
           totalPages: pageData.totalPages,
           bookTitle: pageData.bookTitle,
+          audioUrl: pageData.audioUrl,
         });
       }
 
