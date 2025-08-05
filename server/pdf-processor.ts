@@ -169,21 +169,17 @@ export class PDFProcessor {
     // Store image in object storage
     const imageUrl = await this.storeImageInObjectStorage(imageBuffer, fileName, pageNum);
     
-    // Extract text and generate description in parallel for better performance
-    const [pageText, imageDescription] = await Promise.allSettled([
-      this.extractTextFromImage(imageBuffer),
-      this.generateChildFriendlyNarration(imageBuffer),
-    ]);
+    // Extract text and generate narration in a single OpenAI call
+    const { extractedText, childFriendlyNarration } = await this.extractTextAndGenerateNarration(imageBuffer);
 
     // Generate audio narration for the page
-    const narrationText = imageDescription.status === 'fulfilled' ? imageDescription.value : '';
-    const audioUrl = await this.generatePageAudio(narrationText, fileName, pageNum);
+    const audioUrl = await this.generatePageAudio(childFriendlyNarration, fileName, pageNum);
 
     return {
       pageNumber: pageNum,
       imageBuffer,
-      text: pageText.status === 'fulfilled' ? pageText.value : '',
-      imageDescription: narrationText,
+      text: extractedText,
+      imageDescription: childFriendlyNarration,
       imageUrl,
       audioUrl,
     };
@@ -289,17 +285,17 @@ export class PDFProcessor {
     }
   }
 
-  private async extractTextFromImage(imageBuffer: Buffer): Promise<string> {
+  private async extractTextAndGenerateNarration(imageBuffer: Buffer): Promise<{extractedText: string, childFriendlyNarration: string}> {
     try {
       if (!this.isValidImageBuffer(imageBuffer)) {
-        console.warn("Invalid image buffer provided for text extraction");
-        return "";
+        console.warn("Invalid image buffer provided for text extraction and narration");
+        return { extractedText: "", childFriendlyNarration: "" };
       }
 
       const base64Image = imageBuffer.toString("base64");
       if (!base64Image || base64Image.length === 0) {
         console.warn("Failed to generate base64 from image buffer");
-        return "";
+        return { extractedText: "", childFriendlyNarration: "" };
       }
 
       const OpenAI = (await import("openai")).default;
@@ -313,55 +309,11 @@ export class PDFProcessor {
             content: [
               {
                 type: "text",
-                text: "Extract all text from this book page image. Return only the text content, no explanations.",
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:image/png;base64,${base64Image}`,
-                  detail: "high",
-                },
-              },
-            ],
-          },
-        ],
-        max_tokens: 1000,
-        temperature: 0.1,
-      });
+                text: `Please analyze this storybook page image and provide two outputs in JSON format:
 
-      return response.choices[0].message.content || "";
-    } catch (error) {
-      console.error("Error extracting text from image:", error);
-      return "";
-    }
-  }
+1. "extractedText": Extract all visible text from the page (if any). Return only the actual text content, no explanations.
 
-  private async generateChildFriendlyNarration(imageBuffer: Buffer): Promise<string> {
-    try {
-      if (!this.isValidImageBuffer(imageBuffer)) {
-        console.warn("Invalid image buffer provided for narration generation");
-        return "";
-      }
-
-      const base64Image = imageBuffer.toString("base64");
-      if (!base64Image || base64Image.length === 0) {
-        console.warn("Failed to generate base64 from image buffer");
-        return "";
-      }
-
-      const OpenAI = (await import("openai")).default;
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: `Create a child-friendly narration for this storybook page that would be perfect for reading aloud to a 3-5 year old child. The narration should be:
-
+2. "childFriendlyNarration": Create a child-friendly narration for this page that would be perfect for reading aloud to a 3-5 year old child. The narration should be:
 - Engaging and fun with simple, age-appropriate language
 - Include sound effects like "Whoosh!", "Splash!", "Roar!" where appropriate 
 - Use expressions that children love like "Oh my!", "Wow!", "Look at that!"
@@ -370,8 +322,13 @@ export class PDFProcessor {
 - Focus on colors, characters, actions, and emotions in the scene
 - Keep it conversational and storytelling style, not just descriptive
 - Make it exciting and magical for young listeners
+- Write this as if Appu the magical elephant is telling the story directly to the child
 
-Write this as if Appu the magical elephant is telling the story directly to the child.`,
+Return your response in this exact JSON format:
+{
+  "extractedText": "any text found on the page",
+  "childFriendlyNarration": "the child-friendly story narration"
+}`,
               },
               {
                 type: "image_url",
@@ -383,14 +340,57 @@ Write this as if Appu the magical elephant is telling the story directly to the 
             ],
           },
         ],
-        max_tokens: 400,
-        temperature: 0.8,
+        max_tokens: 600,
+        temperature: 0.6,
       });
 
-      return response.choices[0].message.content || "";
+      const responseContent = response.choices[0].message.content || "";
+      
+      try {
+        // Parse the JSON response
+        const parsedResponse = JSON.parse(responseContent);
+        return {
+          extractedText: parsedResponse.extractedText || "",
+          childFriendlyNarration: parsedResponse.childFriendlyNarration || ""
+        };
+      } catch (parseError) {
+        console.error("Error parsing OpenAI JSON response:", parseError);
+        console.log("Raw response:", responseContent);
+        
+        // Fallback: try to extract content manually if JSON parsing fails
+        return this.parseResponseFallback(responseContent);
+      }
+
     } catch (error) {
-      console.error("Error generating child-friendly narration:", error);
-      return "";
+      console.error("Error extracting text and generating narration:", error);
+      return { extractedText: "", childFriendlyNarration: "" };
+    }
+  }
+
+  private parseResponseFallback(responseContent: string): {extractedText: string, childFriendlyNarration: string} {
+    // Fallback method to extract content if JSON parsing fails
+    try {
+      // Look for JSON-like content in the response
+      const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsedContent = JSON.parse(jsonMatch[0]);
+        return {
+          extractedText: parsedContent.extractedText || "",
+          childFriendlyNarration: parsedContent.childFriendlyNarration || responseContent
+        };
+      }
+      
+      // If no JSON found, use the entire response as narration
+      return {
+        extractedText: "",
+        childFriendlyNarration: responseContent
+      };
+    } catch (error) {
+      console.error("Fallback parsing also failed:", error);
+      return {
+        extractedText: "",
+        childFriendlyNarration: responseContent || "Unable to process this page."
+      };
     }
   }
 
