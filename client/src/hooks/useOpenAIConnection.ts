@@ -195,7 +195,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         type: "child_input" | "appu_response",
       ) => {
         try {
-          const childId = options.childId || getSelectedChildId?.() || "1085268853542289410";
+          const childId = String(options.childId || getSelectedChildId?.() || "1085268853542289410");
 
           const requestBody =
             type === "child_input"

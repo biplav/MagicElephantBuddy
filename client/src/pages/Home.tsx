@@ -56,9 +56,9 @@ const Home = memo(() => {
     return !!currentParent;
   });
 
-  const [selectedChildId, setSelectedChildId] = useState<number | null>(() => {
+  const [selectedChildId, setSelectedChildId] = useState<string | null>(() => {
     const stored = localStorage.getItem("selectedChildId");
-    return stored ? parseInt(stored) : null;
+    return stored || null;
   });
 
   const [availableChildren, setAvailableChildren] = useState<any[]>([]);
@@ -70,7 +70,7 @@ const Home = memo(() => {
       const parentLoggedIn = !!currentParent;
 
       const selectedChild = localStorage.getItem("selectedChildId");
-      const childId = selectedChild ? parseInt(selectedChild) : null;
+      const childId = selectedChild || null;
 
       // Only update state if values actually changed
       setIsParentLoggedIn(prev => prev !== parentLoggedIn ? parentLoggedIn : prev);
@@ -117,9 +117,9 @@ const Home = memo(() => {
         // Auto-select first child if none selected - check localStorage directly
         const currentSelectedChildId = localStorage.getItem("selectedChildId");
         if (children.length > 0 && !currentSelectedChildId) {
-          const firstChildId = children[0].id;
+          const firstChildId = String(children[0].id);
           setSelectedChildId(firstChildId);
-          localStorage.setItem("selectedChildId", firstChildId.toString());
+          localStorage.setItem("selectedChildId", firstChildId);
           console.log("Auto-selected child:", firstChildId);
         }
       } else {
@@ -246,7 +246,7 @@ const Home = memo(() => {
   const [autoPageTurnEnabled, setAutoPageTurnEnabled] = useState<boolean>(true);
 
   const realtimeOptions = useMemo(() => ({
-    childId: selectedChildId ? String(selectedChildId) : undefined,
+    childId: selectedChildId || undefined,
     onTranscriptionReceived: handleTranscription,
     onResponseReceived: handleResponse,
     onAudioResponseReceived: handleAudioResponse,
@@ -1135,9 +1135,9 @@ const Home = memo(() => {
                       <select
                         value={selectedChildId || ""}
                         onChange={(e) => {
-                          const childId = parseInt(e.target.value);
+                          const childId = e.target.value;
                           setSelectedChildId(childId);
-                          localStorage.setItem("selectedChildId", childId.toString());
+                          localStorage.setItem("selectedChildId", childId);
                         }}
                         className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-neutral"
                       >
