@@ -5,6 +5,7 @@ import { useGeminiConnection } from './useGeminiConnection';
 import { useMediaCapture } from './useMediaCapture';
 
 interface UseRealtimeAudioOptions {
+  childId?: string;
   onTranscriptionReceived?: (transcription: string) => void;
   onResponseReceived?: (text: string) => void;
   onAudioResponseReceived?: (audioData: string) => void;

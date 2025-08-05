@@ -246,6 +246,7 @@ const Home = memo(() => {
   const [autoPageTurnEnabled, setAutoPageTurnEnabled] = useState<boolean>(true);
 
   const realtimeOptions = useMemo(() => ({
+    childId: selectedChildId?.toString(),
     onTranscriptionReceived: handleTranscription,
     onResponseReceived: handleResponse,
     onAudioResponseReceived: handleAudioResponse,
@@ -260,6 +261,7 @@ const Home = memo(() => {
     enableVideo: enableVideo,
     modelType: aiProvider,
   }), [
+    selectedChildId,
     handleTranscription,
     handleResponse, 
     handleAudioResponse,
