@@ -139,8 +139,9 @@ const Home = memo(() => {
       loadChildren();
     } else {
       setAvailableChildren([]);
+      setSelectedChildId(null);
     }
-  }, [isParentLoggedIn, loadChildren]);
+  }, [isParentLoggedIn]); // Remove loadChildren dependency to prevent circular updates
 
   // Fullscreen utility functions
   const enterFullscreen = async () => {

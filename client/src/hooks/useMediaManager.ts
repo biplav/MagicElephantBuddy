@@ -185,7 +185,7 @@ export function useMediaManager(options: MediaManagerOptions = {}) {
   }, [logger]);
 
   // Analyze current frame via backend with enhanced context
-  const analyzeCurrentFrame = useCallback(async (context?: {
+  const analyzeCurrentFrame = useCallback(async (analysisContext?: {
     reason?: string;
     lookingFor?: string;
     conversationId?: string;
@@ -213,7 +213,7 @@ export function useMediaManager(options: MediaManagerOptions = {}) {
         };
       }
 
-      logger.info("Sending frame for analysis", { childId: options.childId, context });
+      logger.info("Sending frame for analysis", { childId: options.childId, analysisContext });
 
       const response = await fetch('/api/analyze-frame', {
         method: 'POST',
@@ -222,10 +222,10 @@ export function useMediaManager(options: MediaManagerOptions = {}) {
           childId: options.childId,
           frameData,
           timestamp: Date.now(),
-          reason: context?.reason || "Child wants to show something",
-          lookingFor: context?.lookingFor || null,
-          context: context?.context || null,
-          conversationId: context?.conversationId || null,
+          reason: analysisContext?.reason || "Child wants to show something",
+          lookingFor: analysisContext?.lookingFor || null,
+          context: analysisContext?.context || null,
+          conversationId: analysisContext?.conversationId || null,
         }),
       });
 
@@ -262,7 +262,7 @@ export function useMediaManager(options: MediaManagerOptions = {}) {
   }, [captureFrame, options.childId, options.onFrameAnalyzed, options.onError, logger]);
 
   // Get current frame analysis with lazy camera initialization
-  const getFrameAnalysis = useCallback(async (context?: {
+  const getFrameAnalysis = useCallback(async (analysisContext?: {
     reason?: string;
     lookingFor?: string;
     conversationId?: string;
@@ -361,10 +361,10 @@ export function useMediaManager(options: MediaManagerOptions = {}) {
           childId: options.childId,
           frameData,
           timestamp: Date.now(),
-          reason: context?.reason || "Child wants to show something",
-          lookingFor: context?.lookingFor || null,
-          context: context?.context || null,
-          conversationId: context?.conversationId || null,
+          reason: analysisContext?.reason || "Child wants to show something",
+          lookingFor: analysisContext?.lookingFor || null,
+          context: analysisContext?.context || null,
+          conversationId: analysisContext?.conversationId || null,
         }),
       });
 
@@ -456,8 +456,8 @@ export function useMediaManager(options: MediaManagerOptions = {}) {
     }
   }, []);
 
-  // Cleanup resources
-  const cleanup = useCallback(() => {
+  // Internal cleanup that doesn't update state (for unmount)
+  const internalCleanup = useCallback(() => {
     logger.info("Cleaning up media manager");
 
     if (videoRef.current && document.body.contains(videoRef.current)) {
@@ -474,7 +474,13 @@ export function useMediaManager(options: MediaManagerOptions = {}) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
+    // NOTE: No setState here to avoid re-renders during unmount
+  }, [logger]);
 
+  // Public cleanup that updates state (for external calls)
+  const cleanup = useCallback(() => {
+    internalCleanup();
+    
     setState({
       isInitialized: false,
       hasVideoPermission: false,
@@ -483,14 +489,14 @@ export function useMediaManager(options: MediaManagerOptions = {}) {
       isCapturing: false,
       lastAnalysis: null,
     });
-  }, [logger]);
+  }, [internalCleanup]);
 
-  // Cleanup on unmount
+  // Cleanup on unmount - use internal cleanup to avoid state updates
   useEffect(() => {
     return () => {
-      cleanup();
+      internalCleanup();
     };
-  }, [cleanup]);
+  }, [internalCleanup]);
 
   return {
     // State
