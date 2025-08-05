@@ -1,4 +1,3 @@
-
 import { useRef, useCallback } from 'react';
 import { createServiceLogger } from '@/lib/logger';
 
@@ -86,10 +85,10 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
 
       // Emit structured JSON result instead of plain text
       options.onFunctionCallResult?.(callId, resultMessage);
-      
+
     } catch (error: any) {
       logger.error("Error in book search", { error: error.message });
-      
+
       // Emit error via callback
       options.onError?.(
         callId,
@@ -112,13 +111,20 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       }
       // Fetch page data from API
       const pageResponse = await fetch(`/api/books/${bookId}/page/${pageNumber}`);
-      
+
       if (!pageResponse.ok) {
         throw new Error(`Failed to fetch page: ${pageResponse.status}`);
       }
 
-      const pageData = await pageResponse.json();
-      logger.info("Fetched page data", { pageData });
+      const pageResponse_data = await pageResponse.json();
+      logger.info("Fetched page response", { pageResponse_data });
+
+      // Extract the page data from the response
+      const pageData = pageResponse_data.page;
+
+      if (!pageData) {
+        throw new Error("Page data not found in response");
+      }
 
       // Update book state
       selectedBookRef.current = { id: bookId };
@@ -129,7 +135,14 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
 
       // Call the storybook display callback
       if (options.onStorybookPageDisplay) {
-        options.onStorybookPageDisplay(pageData);
+        options.onStorybookPageDisplay({
+          pageImageUrl: pageData.pageImageUrl,
+          pageText: pageData.pageText,
+          pageNumber: pageData.pageNumber,
+          totalPages: pageData.totalPages,
+          bookTitle: pageData.bookTitle,
+          audioUrl: pageData.audioUrl,
+        });
       }
 
       // Emit success result
@@ -140,7 +153,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
 
     } catch (error: any) {
       logger.error("Error displaying book page", { error: error.message });
-      
+
       // Emit error
       options.onError?.(
         callId,
@@ -170,14 +183,14 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
     selectedBookRef,
     currentPageRef,
     isInReadingSessionRef,
-    
+
     // Methods
     handleBookSearchTool,
     handleDisplayBookPage,
     enterReadingSession,
     exitReadingSession,
     optimizeTokenUsage,
-    
+
     // Current state getters
     selectedBook: selectedBookRef.current,
     currentPage: currentPageRef.current,
