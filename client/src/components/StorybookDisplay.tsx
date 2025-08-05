@@ -48,6 +48,7 @@ export default function StorybookDisplay({
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const onAppuSpeakingChangeRef = useRef(onAppuSpeakingChange);
+  const silenceDetectionRef = useRef<any>(null);
 
   useEffect(() => {
     onAppuSpeakingChangeRef.current = onAppuSpeakingChange;
@@ -83,18 +84,7 @@ export default function StorybookDisplay({
     console.log('Auto page advance interrupted by speech');
   }, []);
 
-  const silenceDetection = useSilenceDetection({
-    silenceDuration: 3000, // 3 seconds for page turn
-    initialAudioDelay: 1000, // 1 second delay for initial audio after Appu stops
-    onSilenceDetected: handleAutoPageAdvance,
-    onSilenceInterrupted: handleSilenceInterrupted,
-    onInitialAudioTrigger: playPageAudio,
-    enabled: autoPageTurnEnabled && isVisible,
-    openaiConnection: openaiConnection,
-    isPlayingAudio: isPlayingAudio
-  });
-
-  // Play audio when page changes
+  // Play audio when page changes - defined before silence detection to avoid circular dependency
   const playPageAudio = useCallback(() => {
     if (currentPage?.audioUrl) {
       console.log('Playing page audio:', currentPage.audioUrl);
@@ -131,7 +121,7 @@ export default function StorybookDisplay({
         audioElementRef.current = null;
         
         // Start silence detection for page turn after audio ends
-        silenceDetection.startPageTurnTimer();
+        silenceDetectionRef.current?.startPageTurnTimer();
       };
 
       audio.onerror = (error) => {
@@ -168,6 +158,22 @@ export default function StorybookDisplay({
           });
       }
     }
+  }, []); // Remove silenceDetection dependency
+
+  const silenceDetection = useSilenceDetection({
+    silenceDuration: 3000, // 3 seconds for page turn
+    initialAudioDelay: 1000, // 1 second delay for initial audio after Appu stops
+    onSilenceDetected: handleAutoPageAdvance,
+    onSilenceInterrupted: handleSilenceInterrupted,
+    onInitialAudioTrigger: playPageAudio,
+    enabled: autoPageTurnEnabled && isVisible,
+    openaiConnection: openaiConnection,
+    isPlayingAudio: isPlayingAudio
+  });
+
+  // Update silence detection ref
+  useEffect(() => {
+    silenceDetectionRef.current = silenceDetection;
   }, [silenceDetection]);
 
   // Play audio based on different triggers
