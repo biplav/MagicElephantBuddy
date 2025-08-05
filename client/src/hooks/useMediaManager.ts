@@ -204,11 +204,20 @@ export function useMediaManager(options: MediaManagerOptions = {}) {
     }
   }, [logger]);
 
-  // Analyze current frame via backend
-  const analyzeCurrentFrame = useCallback(async () => {
+  // Analyze current frame via backend with enhanced context
+  const analyzeCurrentFrame = useCallback(async (context?: {
+    reason?: string;
+    lookingFor?: string;
+    conversationId?: string;
+    context?: string;
+  }) => {
     if (!options.childId) {
       logger.warn("Cannot analyze frame: childId not provided");
-      return null;
+      return {
+        success: false,
+        message: "I can't see anything because no child ID is available.",
+        analysis: null
+      };
     }
 
     setState(prev => ({ ...prev, isCapturing: true }));
@@ -217,10 +226,14 @@ export function useMediaManager(options: MediaManagerOptions = {}) {
       const frameData = captureFrame();
       if (!frameData) {
         logger.warn("No frame data captured for analysis");
-        return null;
+        return {
+          success: false,
+          message: "I can't see anything right now. Please make sure your camera is working and try showing me again!",
+          analysis: null
+        };
       }
 
-      logger.info("Sending frame for analysis", { childId: options.childId });
+      logger.info("Sending frame for analysis", { childId: options.childId, context });
 
       const response = await fetch('/api/analyze-frame', {
         method: 'POST',
@@ -229,6 +242,10 @@ export function useMediaManager(options: MediaManagerOptions = {}) {
           childId: options.childId,
           frameData,
           timestamp: Date.now(),
+          reason: context?.reason || "Child wants to show something",
+          lookingFor: context?.lookingFor || null,
+          context: context?.context || null,
+          conversationId: context?.conversationId || null,
         }),
       });
 
@@ -236,22 +253,108 @@ export function useMediaManager(options: MediaManagerOptions = {}) {
         throw new Error(`Frame analysis failed: ${response.status}`);
       }
 
-      const analysis = await response.json();
+      const analysisResult = await response.json();
       
-      setState(prev => ({ ...prev, lastAnalysis: analysis }));
-      options.onFrameAnalyzed?.(analysis);
+      setState(prev => ({ ...prev, lastAnalysis: analysisResult }));
+      options.onFrameAnalyzed?.(analysisResult);
 
-      logger.info("Frame analysis completed", { analysis });
-      return analysis;
+      logger.info("Frame analysis completed", { analysis: analysisResult.analysis });
+      
+      return {
+        success: true,
+        message: analysisResult.analysis,
+        analysis: analysisResult
+      };
 
     } catch (error) {
       logger.error("Frame analysis failed", { error });
-      options.onError?.('Failed to analyze video frame');
-      return null;
+      const errorMessage = 'I\'m having trouble seeing what you\'re showing me right now. Can you try again?';
+      options.onError?.(errorMessage);
+      
+      return {
+        success: false,
+        message: errorMessage,
+        analysis: null
+      };
     } finally {
       setState(prev => ({ ...prev, isCapturing: false }));
     }
   }, [captureFrame, options.childId, options.onFrameAnalyzed, options.onError, logger]);
+
+  // Get current frame analysis with video availability check
+  const getFrameAnalysis = useCallback(async (context?: {
+    reason?: string;
+    lookingFor?: string;
+    conversationId?: string;
+    context?: string;
+  }) => {
+    // Check if video is enabled
+    if (!options.enableVideo) {
+      logger.warn("Video not enabled, cannot analyze frame");
+      return {
+        success: false,
+        message: "I can't see anything because video is not enabled. Please enable video mode so I can see what you're showing me!",
+        analysis: null
+      };
+    }
+
+    // Check if we have permission and are initialized
+    if (!state.hasVideoPermission || !state.isInitialized) {
+      logger.info("Requesting camera permission for frame analysis");
+      try {
+        await initialize();
+        // Wait for video to be properly initialized
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        logger.info("Media initialized, proceeding with frame analysis");
+      } catch (permissionError) {
+        logger.warn("Camera permission denied for frame analysis", {
+          error: permissionError,
+        });
+        return {
+          success: false,
+          message: "I need camera permission to see what you're showing me. Please allow camera access and try again!",
+          analysis: null
+        };
+      }
+    }
+
+    // Try capturing frame with retry mechanism
+    let attempts = 0;
+    const maxAttempts = 3;
+    let frameData: string | null = null;
+
+    while (attempts < maxAttempts && !frameData) {
+      attempts++;
+      logger.info(`Frame capture attempt ${attempts}/${maxAttempts}`);
+
+      frameData = captureFrame();
+
+      if (!frameData && attempts < maxAttempts) {
+        // Wait a bit before retrying
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+
+    if (!frameData) {
+      logger.warn("Failed to capture frame after all attempts");
+      return {
+        success: false,
+        message: "I can't see anything right now. Please make sure your camera is working and try showing me again!",
+        analysis: null
+      };
+    }
+
+    // Analyze the captured frame
+    return await analyzeCurrentFrame(context);
+  }, [
+    options.enableVideo,
+    state.hasVideoPermission,
+    state.isInitialized,
+    initialize,
+    captureFrame,
+    analyzeCurrentFrame,
+    logger
+  ]);
 
   // Start continuous frame analysis
   const startContinuousAnalysis = useCallback((intervalMs: number = 5000) => {
@@ -329,6 +432,7 @@ export function useMediaManager(options: MediaManagerOptions = {}) {
     initialize,
     captureFrame,
     analyzeCurrentFrame,
+    getFrameAnalysis,
     startContinuousAnalysis,
     showLiveStream,
     hideLiveStream,

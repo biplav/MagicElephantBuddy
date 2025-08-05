@@ -243,113 +243,35 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         logger.info("getEyesTool was called!", { callId, args });
 
         try {
-          let frameData: string | null = null;
+          // Use MediaManager to handle all frame capture and analysis
+          const analysisResult = await mediaManager.getFrameAnalysis({
+            reason: args.reason || "Child wants to show something",
+            lookingFor: args.lookingFor || null,
+            context: args.context || null,
+            conversationId: conversationIdRef.current,
+          });
 
-          // First check if video is enabled in options
-          if (!options.enableVideo) {
-            logger.warn("Video not enabled, cannot capture frame");
-            sendFunctionCallOutput(
-              callId,
-              "I can't see anything because video is not enabled. Please enable video mode so I can see what you're showing me!",
-            );
-            return;
-          }
-
-          // Check if we already have camera permission and can capture
-          if (mediaManager.hasVideoPermission && mediaManager.isInitialized) {
-            // Try capturing frame with retry mechanism
-            let attempts = 0;
-            const maxAttempts = 3;
-
-            while (attempts < maxAttempts && !frameData) {
-              attempts++;
-              logger.info(`Frame capture attempt ${attempts}/${maxAttempts}`);
-
-              frameData = mediaManager.captureFrame();
-
-              if (!frameData && attempts < maxAttempts) {
-                // Wait a bit before retrying
-                await new Promise((resolve) => setTimeout(resolve, 500));
-              }
-            }
-
-            logger.info("Frame capture completed", {
-              hasFrame: !!frameData,
-              attempts,
-              frameLength: frameData?.length || 0,
-            });
-
-            // Store the captured frame for UI display
+          // Store the captured frame for UI display if successful
+          if (analysisResult.success && analysisResult.analysis) {
+            const frameData = mediaManager.captureFrame();
             if (frameData) {
               setState((prev) => ({ ...prev, lastCapturedFrame: frameData }));
             }
-          } else {
-            // Request camera permission if not already granted
-            logger.info("Requesting camera permission for frame capture");
-            try {
-              await mediaManager.initialize();
-              // Wait a bit for video to initialize
-              await new Promise((resolve) => setTimeout(resolve, 1000));
-              // Try capturing after permission granted
-              frameData = mediaManager.captureFrame();
-              logger.info("Captured frame after permission request", {
-                hasFrame: !!frameData,
-              });
-
-              // Store the captured frame for UI display
-              if (frameData) {
-                setState((prev) => ({
-                  ...prev,
-                  lastCapturedFrame: frameData,
-                }));
-              }
-            } catch (permissionError) {
-              logger.warn("Camera permission denied for getEyesTool", {
-                error: permissionError,
-              });
-            }
           }
 
-          if (!frameData) {
-            // No frame available - return appropriate response
-            sendFunctionCallOutput(
-              callId,
-              "I can't see anything right now. Please make sure your camera is working and try showing me again!",
-            );
-            return;
-          }
-
-          // Call the frame analysis API with enhanced context
-          const response = await fetch("/api/analyze-frame", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              frameData,
-              childId: getSelectedChildId(),
-              conversationId: conversationIdRef.current,
-              reason: args.reason || "Child wants to show something",
-              lookingFor: args.lookingFor || null,
-              context: args.context || null,
-            }),
-          });
-
-          if (!response.ok) {
-            throw new Error(`Analysis failed: ${response.status}`);
-          }
-
-          const analysisResult = await response.json();
-          logger.info("Frame analysis completed", {
-            analysis: analysisResult.analysis,
-          });
-
-          // Send the analysis result back to OpenAI
-          sendFunctionCallOutput(callId, analysisResult.analysis);
+          // Send the result back to OpenAI
+          sendFunctionCallOutput(callId, analysisResult.message);
 
           // Trigger model response after function call
           dataChannelRef.current?.send(JSON.stringify({
             type: 'response.create'
           }));
-          logger.info("Triggered response.create after successful function call");
+          
+          logger.info("Completed getEyesTool processing", {
+            success: analysisResult.success,
+            hasAnalysis: !!analysisResult.analysis
+          });
+
         } catch (error: any) {
           logger.error("Error handling getEyesTool", {
             error: error.message,
