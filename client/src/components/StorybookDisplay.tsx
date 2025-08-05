@@ -100,7 +100,7 @@ export default function StorybookDisplay({
       }
 
       const audio = new Audio(currentPage.audioUrl);
-      audio.volume = 0.8;
+      //audio.volume = 0.8;
       audio.preload = 'auto';
 
       audio.onloadstart = () => {
@@ -166,7 +166,7 @@ export default function StorybookDisplay({
       // Small delay to ensure smooth page transition
       const timer = setTimeout(() => {
         playPageAudio();
-      }, 500);
+      }, 3000);
       return () => clearTimeout(timer);
     }
   }, [currentPage?.audioUrl, imageLoaded, isVisible, playPageAudio]);
