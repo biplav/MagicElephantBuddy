@@ -12,7 +12,7 @@ interface StorybookPage {
   pageNumber: number;
   totalPages: number;
   bookTitle: string;
-  audioUrl?: string; // Added audioUrl to the interface
+  audioUrl?: string;
 }
 
 interface StorybookDisplayProps {
@@ -45,11 +45,21 @@ export default function StorybookDisplay({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isFlipping, setIsFlipping] = useState(false);
   const [flipDirection, setFlipDirection] = useState<'next' | 'previous'>('next');
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
   // Auto page turning with silence detection
   const handleAutoPageAdvance = useCallback(() => {
     if (currentPage && currentPage.pageNumber < currentPage.totalPages && !isFlipping) {
       console.log('Auto-advancing to next page due to silence');
+      
+      // Stop current audio
+      if (audioElement) {
+        audioElement.pause();
+        setIsPlayingAudio(false);
+        onAppuSpeakingChange?.(false);
+      }
+
       // Call onNextPage directly, not handleNextPage to avoid circular dependency
       setFlipDirection('next');
       setIsFlipping(true);
@@ -62,7 +72,7 @@ export default function StorybookDisplay({
       console.log('Reached end of book - auto page advance disabled');
       // Could trigger end-of-book celebration or suggestions here
     }
-  }, [currentPage, isFlipping, onNextPage, onPageNavigation]);
+  }, [currentPage, isFlipping, onNextPage, onPageNavigation, audioElement, onAppuSpeakingChange]);
 
   const handleSilenceInterrupted = useCallback(() => {
     console.log('Auto page advance interrupted by speech');
@@ -76,6 +86,58 @@ export default function StorybookDisplay({
     openaiConnection: openaiConnection
   });
 
+  // Play audio when page changes
+  const playPageAudio = useCallback(() => {
+    if (currentPage?.audioUrl && !isPlayingAudio) {
+      console.log('Playing page audio:', currentPage.audioUrl);
+      
+      // Stop any existing audio
+      if (audioElement) {
+        audioElement.pause();
+        audioElement.currentTime = 0;
+      }
+
+      const audio = new Audio(currentPage.audioUrl);
+      audio.volume = 0.8;
+
+      audio.onplay = () => {
+        setIsPlayingAudio(true);
+        onAppuSpeakingChange?.(true);
+      };
+
+      audio.onended = () => {
+        setIsPlayingAudio(false);
+        onAppuSpeakingChange?.(false);
+        setAudioElement(null);
+      };
+
+      audio.onerror = (error) => {
+        console.error('Error playing audio:', error);
+        setIsPlayingAudio(false);
+        onAppuSpeakingChange?.(false);
+        setAudioElement(null);
+      };
+
+      setAudioElement(audio);
+      audio.play().catch(error => {
+        console.error('Failed to play audio:', error);
+        setIsPlayingAudio(false);
+        onAppuSpeakingChange?.(false);
+      });
+    }
+  }, [currentPage?.audioUrl, isPlayingAudio, audioElement, onAppuSpeakingChange]);
+
+  // Auto-play audio when page loads
+  useEffect(() => {
+    if (currentPage?.audioUrl && imageLoaded && isVisible) {
+      // Small delay to ensure smooth page transition
+      const timer = setTimeout(() => {
+        playPageAudio();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [currentPage?.audioUrl, imageLoaded, isVisible, playPageAudio]);
+
   // Enable/disable silence detection based on visibility and settings
   useEffect(() => {
     silenceDetection.setEnabled(autoPageTurnEnabled && isVisible);
@@ -87,8 +149,25 @@ export default function StorybookDisplay({
     }
   }, [currentPage?.pageImageUrl]);
 
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioElement) {
+        audioElement.pause();
+        audioElement.currentTime = 0;
+      }
+    };
+  }, [audioElement]);
+
   const handleNextPage = useCallback(() => {
     if (currentPage && currentPage.pageNumber < currentPage.totalPages) {
+      // Stop current audio
+      if (audioElement) {
+        audioElement.pause();
+        setIsPlayingAudio(false);
+        onAppuSpeakingChange?.(false);
+      }
+
       // Interrupt silence detection when manually navigating
       silenceDetection.interruptSilence();
 
@@ -100,10 +179,17 @@ export default function StorybookDisplay({
         setIsFlipping(false);
       }, 500);
     }
-  }, [currentPage, onNextPage, onPageNavigation, silenceDetection]);
+  }, [currentPage, onNextPage, onPageNavigation, silenceDetection, audioElement, onAppuSpeakingChange]);
 
   const handlePreviousPage = useCallback(() => {
     if (currentPage && currentPage.pageNumber > 1) {
+      // Stop current audio
+      if (audioElement) {
+        audioElement.pause();
+        setIsPlayingAudio(false);
+        onAppuSpeakingChange?.(false);
+      }
+
       // Interrupt silence detection when manually navigating
       silenceDetection.interruptSilence();
 
@@ -115,7 +201,7 @@ export default function StorybookDisplay({
         setIsFlipping(false);
       }, 500);
     }
-  }, [currentPage, onPreviousPage, onPageNavigation, silenceDetection]);
+  }, [currentPage, onPreviousPage, onPageNavigation, silenceDetection, audioElement, onAppuSpeakingChange]);
 
   if (!isVisible || !currentPage) {
     return null;
@@ -141,7 +227,12 @@ export default function StorybookDisplay({
             <Badge variant="secondary" className="text-sm">
               Page {currentPage.pageNumber} of {currentPage.totalPages}
             </Badge>
-            {silenceDetection.isDetectingSilence && (
+            {isPlayingAudio && (
+              <Badge variant="default" className="text-xs animate-pulse bg-green-600">
+                🔊 Playing Audio
+              </Badge>
+            )}
+            {silenceDetection.isDetectingSilence && !isPlayingAudio && (
               <Badge variant="outline" className="text-xs animate-pulse">
                 <Clock className="h-3 w-3 mr-1" />
                 {Math.ceil(silenceDetection.silenceTimer / 1000)}s

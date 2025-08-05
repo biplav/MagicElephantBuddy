@@ -306,11 +306,11 @@ export function useOpenAIFunctionCalls(options: OpenAIFunctionCallsOptions = {})
 
       let pageContext: string;
       if (isFirstPage) {
-        pageContext = `Page 1 displayed. Read this story in Hinglish (mix of Hindi and English) to make it engaging for the child. Page text: "${targetPage.pageText}" - Use simple Hindi words mixed with English, add expressions like "dekho", "kya baat hai", "wah", and make it playful and interactive.`;
+        pageContext = `Page 1 of "${selectedBookRef.current.title}" is now displayed. The audio narration is playing automatically. You can interact with the child about what they see on the page or ask questions about the story.`;
       } else if (isLastPage) {
-        pageContext = `Final page displayed. Read in Hinglish: "${targetPage.pageText}" Then say "Bas! Kahani khatam! The End! Kya maza aaya na?"`;
+        pageContext = `Final page of the story is displayed and audio is playing. After the audio finishes, you can celebrate completing the book with the child - say "Bas! Kahani khatam! The End! Kya maza aaya na?"`;
       } else {
-        pageContext = `Page ${targetPage.pageNumber} displayed. Continue reading in Hinglish (Hindi-English mix): "${targetPage.pageText}" - Keep it engaging with expressions like "aur phir", "dekho kya hua", "kitna mazedaar hai na!"`;
+        pageContext = `Page ${targetPage.pageNumber} of "${selectedBookRef.current.title}" is displayed and audio narration is playing. You can engage with the child about what's happening in the story.`;
       }
 
       sendFunctionCallOutput(callId, pageContext);

@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createServiceLogger } from '@/lib/logger';
 
@@ -46,7 +45,7 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
 
   // Timer refs
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  
+
   // Stable callback refs - these won't change unless the actual functions change
   const callbacksRef = useRef({
     onSilenceDetected,
@@ -121,11 +120,11 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
         // Silence duration completed
         clearInterval(timerIntervalRef.current!);
         timerIntervalRef.current = null;
-        
+
         // Reset internal state
         internalState.current.isDetectingSilence = false;
         internalState.current.silenceStartTime = null;
-        
+
         // Update UI
         setUIState(prev => ({
           ...prev,
@@ -153,7 +152,7 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
 
   const setEnabled = useCallback((enabled: boolean) => {
     if (internalState.current.isEnabled === enabled) return;
-    
+
     internalState.current.isEnabled = enabled;
     setUIState(prev => ({ ...prev, isEnabled: enabled }));
 
@@ -201,7 +200,7 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
           logger.debug('Appu finished speaking (output_audio_buffer.stopped) - starting silence timer');
           startSilenceTimer();
           break;
-          
+
         case 'input_audio_buffer.speech_started':
           // User started speaking - reset/interrupt silence timer
           logger.debug('User speech started (input_audio_buffer.speech_started) - resetting silence timer');
