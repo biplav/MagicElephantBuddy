@@ -1969,7 +1969,7 @@ app.get('/api/books/:bookId/page/:pageNumber', async (req, res) => {
         imageDescription: page.imageDescription,
         totalPages: book.totalPages,
         bookTitle: book.title,
-        audioUrl: page.audio_url
+        audioUrl: page.audioUrl
       }
     });
 
