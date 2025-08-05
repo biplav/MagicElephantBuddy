@@ -184,84 +184,50 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
 
   // Listen to OpenAI Realtime API events for automatic speech detection
   useEffect(() => {
-    if (!openaiConnection || !enabled) {
-      logger.debug('OpenAI connection not available or disabled', { 
-        hasConnection: !!openaiConnection, 
-        enabled 
-      });
-      return;
-    }
-
-    logger.debug('Setting up OpenAI event listeners for silence detection');
+    if (!openaiConnection || !enabled) return;
 
     // Create event listeners for OpenAI events
     const handleOpenAIEvent = (event: any) => {
-      if (!internalState.current.isEnabled) {
-        logger.debug('Silence detection disabled, ignoring OpenAI event', { eventType: event.type });
-        return;
-      }
+      if (!internalState.current.isEnabled) return;
 
       logger.debug('OpenAI event received for silence detection', { 
         eventType: event.type,
-        hasData: !!event.data,
-        isDetectingSilence: internalState.current.isDetectingSilence
+        hasData: !!event.data 
       });
 
       switch (event.type) {
         case 'output_audio_buffer.stopped':
           // Appu finished speaking - start silence timer
-          logger.info('Appu finished speaking (output_audio_buffer.stopped) - starting silence timer');
+          logger.debug('Appu finished speaking (output_audio_buffer.stopped) - starting silence timer');
           startSilenceTimer();
           break;
           
         case 'input_audio_buffer.speech_started':
           // User started speaking - reset/interrupt silence timer
-          logger.info('User speech started (input_audio_buffer.speech_started) - resetting silence timer');
+          logger.debug('User speech started (input_audio_buffer.speech_started) - resetting silence timer');
           if (internalState.current.isDetectingSilence) {
             resetSilenceDetection();
             callbacksRef.current.onSilenceInterrupted?.();
           }
           break;
-
-        case 'response.done':
-          // Response completed - ensure we're ready to detect silence after Appu finishes
-          logger.debug('Response done - preparing for potential silence detection');
-          break;
       }
     };
 
-    // For the dataChannel approach, we need to listen to the dataChannel events
-    // Check if openaiConnection has a dataChannel or similar
-    if (openaiConnection.dataChannel && openaiConnection.dataChannel.addEventListener) {
-      const handleMessage = (event: MessageEvent) => {
-        try {
-          const message = JSON.parse(event.data);
-          handleOpenAIEvent(message);
-        } catch (error) {
-          logger.warn('Failed to parse OpenAI message for silence detection', { error });
-        }
-      };
-
-      openaiConnection.dataChannel.addEventListener('message', handleMessage);
-      
-      return () => {
-        openaiConnection.dataChannel.removeEventListener('message', handleMessage);
-      };
-    }
-    // Fallback for other event mechanisms
-    else if (openaiConnection.addEventListener) {
+    // If openaiConnection has an event emitter or similar mechanism
+    if (openaiConnection.addEventListener) {
       openaiConnection.addEventListener('message', handleOpenAIEvent);
-      return () => {
-        openaiConnection.removeEventListener('message', handleOpenAIEvent);
-      };
     } else if (openaiConnection.on) {
       openaiConnection.on('event', handleOpenAIEvent);
-      return () => {
-        openaiConnection.off('event', handleOpenAIEvent);
-      };
-    } else {
-      logger.warn('OpenAI connection does not support event listening for silence detection');
     }
+
+    // Cleanup function
+    return () => {
+      if (openaiConnection.removeEventListener) {
+        openaiConnection.removeEventListener('message', handleOpenAIEvent);
+      } else if (openaiConnection.off) {
+        openaiConnection.off('event', handleOpenAIEvent);
+      }
+    };
   }, [openaiConnection, enabled, startSilenceTimer, resetSilenceDetection, logger]);
 
   // Cleanup on unmount
