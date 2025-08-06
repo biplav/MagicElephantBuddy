@@ -428,6 +428,25 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
                 fullMessage: message,
               });
 
+              // Check for failed response and log error details
+              if (message.response?.status === "failed") {
+                logger.error("OpenAI Response Failed", {
+                  responseId: message.response.id,
+                  status: message.response.status,
+                  statusDetails: message.response.status_details,
+                  errorType: message.response.status_details?.error?.type,
+                  errorCode: message.response.status_details?.error?.code,
+                  errorMessage: message.response.status_details?.error?.message,
+                  sessionId: message.response.status_details?.error?.message?.match(/sess_\w+/)?.[0] || "unknown",
+                  fullMessage: message,
+                });
+                
+                // Also report to user error handler
+                const errorMsg = `OpenAI server error: ${message.response.status_details?.error?.message || "Unknown server error"}`;
+                setState((prev) => ({ ...prev, error: errorMsg }));
+                options.onError?.(errorMsg);
+              }
+
               // Mark Appu as no longer speaking when response is complete
               if (isAppuSpeaking) {
                 setIsAppuSpeaking(false);
