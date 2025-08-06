@@ -125,7 +125,7 @@ export default function StorybookDisplay({
   // Play audio when page changes - defined before silence detection to avoid circular dependency
   const playPageAudio = useCallback(() => {
     if (currentPage?.audioUrl) {
-      console.log('Playing page audio:', currentPage.audioUrl);
+      console.log('🔊 WORKFLOW: Playing page audio:', currentPage.audioUrl);
 
       // Stop any existing audio
       if (audioElementRef.current) {
@@ -147,18 +147,19 @@ export default function StorybookDisplay({
       };
 
       audio.onplay = () => {
-        console.log('Audio started playing');
+        console.log('🔊 WORKFLOW: Audio started playing');
         setIsPlayingAudio(true);
         onAppuSpeakingChangeRef.current?.(true);
       };
 
       audio.onended = () => {
-        console.log('Audio finished playing - starting silence detection for page turn');
+        console.log('🔊 WORKFLOW: Audio finished playing - starting silence detection for page turn');
         setIsPlayingAudio(false);
         onAppuSpeakingChangeRef.current?.(false);
         audioElementRef.current = null;
         
         // Start silence detection for page turn after audio ends
+        console.log('🔇 WORKFLOW: Starting page turn timer');
         silenceDetectionRef.current?.startPageTurnTimer();
       };
 

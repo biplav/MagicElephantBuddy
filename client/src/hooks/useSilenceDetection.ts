@@ -57,16 +57,19 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
   const startInitialAudioTimer = useCallback(() => {
     if (!enabled) return;
     
+    console.log('🔇 WORKFLOW: startInitialAudioTimer called, enabled:', enabled);
     clearTimers();
     setIsWaitingForInitialAudio(true);
     setInitialAudioTimer(initialAudioDelay);
     
     logger.debug('Starting initial audio timer', { delay: initialAudioDelay });
+    console.log('🔇 WORKFLOW: Initial audio timer started, delay:', initialAudioDelay);
 
     initialAudioTimerRef.current = setInterval(() => {
       setInitialAudioTimer(prev => {
         const newTimer = prev - 100;
         if (newTimer <= 0) {
+          console.log('🔇 WORKFLOW: Initial audio timer completed - triggering playPageAudio');
           clearInterval(initialAudioTimerRef.current!);
           initialAudioTimerRef.current = null;
           setIsWaitingForInitialAudio(false);
@@ -84,11 +87,13 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
   const startPageTurnTimer = useCallback(() => {
     if (!enabled) return;
     
+    console.log('🔇 WORKFLOW: startPageTurnTimer called, enabled:', enabled);
     clearTimers();
     setIsDetectingSilence(true);
     setSilenceTimer(silenceDuration);
     
     logger.debug('Starting silence timer', { duration: silenceDuration });
+    console.log('🔇 WORKFLOW: Page turn timer started, duration:', silenceDuration);
 
     silenceTimerRef.current = setInterval(() => {
       setSilenceTimer(prev => {
@@ -123,15 +128,22 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
     const handleOpenAIEvent = (event: any) => {
       if (!enabled) return;
 
+      console.log('🔇 WORKFLOW: Received OpenAI event:', event.type, { isPlayingAudio, enabled });
+
       switch (event.type) {
         case 'output_audio_buffer.stopped':
+          console.log('🔇 WORKFLOW: Appu stopped speaking, isPlayingAudio:', isPlayingAudio);
           if (!isPlayingAudio) {
-            logger.debug('Appu stopped speaking - starting initial audio timer');
+            logger.debug('🔇 WORKFLOW: Starting initial audio timer');
+            console.log('🔇 WORKFLOW: Starting initial audio timer');
             startInitialAudioTimer();
+          } else {
+            console.log('🔇 WORKFLOW: Audio is playing, not starting timer yet');
           }
           break;
 
         case 'input_audio_buffer.speech_started':
+          console.log('🔇 WORKFLOW: User started speaking - interrupting timers');
           logger.debug('User started speaking - interrupting timers');
           interruptSilence();
           break;
