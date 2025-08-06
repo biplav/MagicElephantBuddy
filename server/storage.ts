@@ -37,7 +37,7 @@ export interface IStorage {
   getConversation(conversationId: number): Promise<Conversation | undefined>;
   getConversationsByChild(childId: number, limit?: number): Promise<Conversation[]>;
   getChildConversations(childId: string | number): Promise<Conversation | undefined>;
-  getCurrentConversation(childId: string | number): Promise<Conversation | undefined>;
+  getCurrentConversation(childId: string | number): Promise<Conversation | null>;
 
   // Message management
   createMessage(message: InsertMessage): Promise<Message>;
@@ -89,7 +89,8 @@ export interface IStorage {
   updateBook(bookId: number, updates: Partial<InsertBook>): Promise<Book>;
   deleteBook(bookId: number): Promise<void>;
   createPage(page: InsertPage): Promise<Page>;
-  getPagesByBook(bookId: number): Promise<Page[]>;
+  getPagesByBook(bookId: string): Promise<Page[]>;
+  getPageByBookByPageNumber(bookId: string, pageNumber: string): Promise<Page | undefined>;
   deletePagesByBook(bookId: number): Promise<void>;
   getAllBooks(): Promise<Book[]>;
 
@@ -569,7 +570,7 @@ export class DatabaseStorage implements IStorage {
           eq(books.title, 'the baby tiger')
         ))
         .limit(1);
-      
+
       if (babyTigerBook.length > 0) {
         return babyTigerBook;
       }
@@ -681,7 +682,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(pages.pageNumber);
   }
 
-  
+
   async getPageByBookByPageNumber(bookId: string, pageNumber: string): Promise<Page | undefined> {
     const [page] = await db
       .select()

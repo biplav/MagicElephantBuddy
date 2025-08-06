@@ -246,16 +246,34 @@ export class PDFProcessor {
       const OpenAI = (await import("openai")).default;
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-      // Generate speech using OpenAI TTS with child-friendly settings
-      const mp3Response = await openai.audio.speech.create({
-        model: "gpt-4o-mini-tts", // Higher quality for better child experience
-        voice: "nova", // Warm, child-friendly voice
-        input: narrationText,
-        speed: 0.8, // Slower pace for children to follow along
+      // Enhanced prompt for child-friendly narration with personality
+      const childFriendlyPrompt = `Please narrate this story page with the following personality:
+
+## Personality
+- **Demeanor**: Warm, playful, and kind like a talking animal buddy
+- **Tone**: Simple, wonder-filled, age-appropriate (child-friendly)
+- **Enthusiasm**: Joyful and encouraging with natural enthusiasm
+- **Pacing**: Keep responses very short and engaging
+- **Rules**: Always maintain a gentle, soothing voice suitable for 3-5 year olds
+
+## Core Behaviors
+**Storytelling**: Use simple words, gentle pacing, and create wonder. Make the story come alive with soft expression and natural pauses.
+
+**Emotional Care**: Maintain a calm, soothing tone that feels safe and comforting for young children.
+
+Original text to narrate: ${narrationText}`;
+
+      const ttsResponse = await openai.audio.speech.create({
+        model: 'tts-1-hd', // Use higher quality model for better child-friendly voice
+        voice: 'nova', // Nova has a gentle, warm tone suitable for children
+        input: childFriendlyPrompt,
+        response_format: 'mp3',
+        speed: 0.9 // Slightly slower pace for young children
       });
 
+
       // Convert response to buffer
-      const buffer = Buffer.from(await mp3Response.arrayBuffer());
+      const buffer = Buffer.from(await ttsResponse.arrayBuffer());
 
       // Store audio in object storage
       const audioFileName = `books/${fileName.replace(".pdf", "")}-page-${pageNum}-audio.mp3`;
@@ -296,7 +314,7 @@ export class PDFProcessor {
     if (narrationText.length > 0) {
       const fillerWords = ["Hmm...", "Wow!", "Oh my!", "Look!"];
       const randomFiller = fillerWords[Math.floor(Math.random() * fillerWords.length)];
-      
+
       // Simple enhancement: add a playful intro if text is not too long
       if (narrationText.length < 100) {
         narrationText = `${randomFiller} ${narrationText}`;
@@ -416,9 +434,9 @@ Return your response in this exact JSON format:
         // Parse the JSON response
         const parsedResponse = JSON.parse(responseContent);
         const pageType = parsedResponse.pageType || "body";
-        
+
         console.log(`Page ${pageNumber} classified as: ${pageType}`);
-        
+
         return {
           extractedText: parsedResponse.extractedText || "",
           childFriendlyNarration: parsedResponse.childFriendlyNarration || ""

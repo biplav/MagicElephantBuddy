@@ -196,7 +196,7 @@ export default function StorybookDisplay({
           });
       }
     }
-  }, []); // Remove silenceDetection dependency
+  }, [currentPage?.audioUrl]); // Include currentPage.audioUrl dependency
 
   const silenceDetection = useSilenceDetection({
     silenceDuration: 3000, // 3 seconds for page turn
@@ -214,14 +214,19 @@ export default function StorybookDisplay({
     silenceDetectionRef.current = silenceDetection;
   }, [silenceDetection]);
 
-  // Play audio based on different triggers
+  // Play audio based on different triggers with conditional logic
   useEffect(() => {
     if (currentPage?.audioUrl && imageLoaded && isVisible) {
-      // On page load, play audio immediately
-      console.log('Page loaded - playing audio immediately');
-      playPageAudio();
+      if (isAppuSpeaking) {
+        // Let silence detection handle timing - no immediate play
+        console.log('Appu is speaking - silence detection will handle audio timing');
+      } else {
+        // Appu is not speaking, safe to play immediately
+        console.log('Page loaded - playing audio immediately');
+        playPageAudio();
+      }
     }
-  }, [currentPage?.pageNumber, imageLoaded, isVisible, playPageAudio]);
+  }, [currentPage?.pageNumber, imageLoaded, isVisible, isAppuSpeaking, playPageAudio]);
 
   // Enable/disable silence detection based on visibility and settings
   useEffect(() => {
