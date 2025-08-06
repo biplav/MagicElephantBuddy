@@ -201,14 +201,17 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       hasSelectedBook: !!selectedBookRef.current, 
       bookId: selectedBookRef.current?.id,
       currentPage: currentPageRef.current,
-      selectedBookRef: selectedBookRef.current
+      selectedBookRef: selectedBookRef.current,
+      isInReadingSession: isInReadingSessionRef.current
     });
 
+    // Enhanced validation with fallback recovery
     if (!selectedBookRef.current?.id) {
-      logger.error("No book selected for navigation", { 
+      logger.error("No book selected for navigation - this indicates a state sync issue", { 
         selectedBook: selectedBookRef.current,
         currentPage: currentPageRef.current,
-        isInReadingSession: isInReadingSessionRef.current
+        isInReadingSession: isInReadingSessionRef.current,
+        suggestedFix: "StorybookDisplay should sync book state with BookStateManager"
       });
       return false;
     }

@@ -13,6 +13,7 @@ interface StorybookPage {
   totalPages: number;
   bookTitle: string;
   audioUrl?: string;
+  bookId?: string; // Add book ID to page data
 }
 
 interface StorybookDisplayProps {
@@ -26,6 +27,7 @@ interface StorybookDisplayProps {
   isUserSpeaking?: boolean;
   openaiConnection?: any;
   bookStateManager: any; // Add book state manager as prop
+  bookId?: string; // Add explicit book ID prop
 }
 
 export default function StorybookDisplay({
@@ -38,7 +40,8 @@ export default function StorybookDisplay({
   isAppuSpeaking = false,
   isUserSpeaking = false,
   openaiConnection,
-  bookStateManager
+  bookStateManager,
+  bookId
 }: StorybookDisplayProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isFlipping, setIsFlipping] = useState(false);
@@ -107,13 +110,37 @@ export default function StorybookDisplay({
     }
   }, [currentPage, isFlipping, bookStateManager, onPageNavigation]);
 
+  // Sync current page data with book state manager
+  useEffect(() => {
+    if (currentPage && bookStateManager && bookId) {
+      // Ensure book state manager has the current book information
+      bookStateManager.selectedBookRef.current = {
+        id: bookId, // Use the explicit book ID prop
+        title: currentPage.bookTitle,
+        totalPages: currentPage.totalPages
+      };
+      bookStateManager.currentPageRef.current = currentPage.pageNumber;
+      bookStateManager.isInReadingSessionRef.current = true;
+      
+      console.log('📚 SYNC: Updated BookStateManager with current page:', {
+        bookId: bookId,
+        bookTitle: currentPage.bookTitle,
+        pageNumber: currentPage.pageNumber,
+        totalPages: currentPage.totalPages,
+        isInReadingSession: true
+      });
+    } else if (currentPage && bookStateManager && !bookId) {
+      console.warn('📚 SYNC: Missing bookId prop - this may cause navigation issues');
+    }
+  }, [currentPage, bookStateManager, bookId]);
+
   // Auto page turning with silence detection
   const handleAutoPageAdvance = useCallback(() => {
     if (currentPage && currentPage.pageNumber < currentPage.totalPages && !isFlipping) {
-      console.log('Auto-advancing to next page due to silence');
+      console.log('🔄 AUTO-ADVANCE: Auto-advancing to next page due to silence');
       handleInternalNextPage();
     } else if (currentPage && currentPage.pageNumber >= currentPage.totalPages) {
-      console.log('Reached end of book - auto page advance disabled');
+      console.log('📖 END-OF-BOOK: Reached end of book - auto page advance disabled');
       // Could trigger end-of-book celebration or suggestions here
     }
   }, [currentPage, isFlipping, handleInternalNextPage]);

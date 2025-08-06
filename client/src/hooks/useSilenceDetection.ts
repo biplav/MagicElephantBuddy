@@ -55,27 +55,46 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
 
   // Start initial audio timer (after Appu stops speaking)
   const startInitialAudioTimer = useCallback(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      console.log('🔇 WORKFLOW: startInitialAudioTimer called but disabled');
+      return;
+    }
     
-    console.log('🔇 WORKFLOW: startInitialAudioTimer called, enabled:', enabled);
+    if (!onInitialAudioTrigger) {
+      console.error('🔇 WORKFLOW: startInitialAudioTimer called but no onInitialAudioTrigger provided!');
+      return;
+    }
+    
+    console.log('🔇 WORKFLOW: startInitialAudioTimer called', { 
+      enabled, 
+      delay: initialAudioDelay,
+      hasAudioTrigger: !!onInitialAudioTrigger 
+    });
+    
     clearTimers();
     setIsWaitingForInitialAudio(true);
     setInitialAudioTimer(initialAudioDelay);
     
     logger.debug('Starting initial audio timer', { delay: initialAudioDelay });
-    console.log('🔇 WORKFLOW: Initial audio timer started, delay:', initialAudioDelay);
+    console.log('🔇 WORKFLOW: Initial audio timer started, will fire in:', initialAudioDelay, 'ms');
 
     initialAudioTimerRef.current = setInterval(() => {
       setInitialAudioTimer(prev => {
         const newTimer = prev - 100;
         if (newTimer <= 0) {
-          console.log('🔇 WORKFLOW: Initial audio timer completed - triggering playPageAudio');
+          console.log('🔇 WORKFLOW: Initial audio timer COMPLETED - calling onInitialAudioTrigger');
           clearInterval(initialAudioTimerRef.current!);
           initialAudioTimerRef.current = null;
           setIsWaitingForInitialAudio(false);
           setInitialAudioTimer(0);
-          onInitialAudioTrigger?.();
-          logger.info('Initial audio timer completed');
+          
+          try {
+            onInitialAudioTrigger();
+            logger.info('Initial audio timer completed and triggered audio');
+          } catch (error) {
+            console.error('🔇 WORKFLOW: Error calling onInitialAudioTrigger:', error);
+          }
+          
           return 0;
         }
         return newTimer;
@@ -128,22 +147,31 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
     const handleOpenAIEvent = (event: any) => {
       if (!enabled) return;
 
-      console.log('🔇 WORKFLOW: Received OpenAI event:', event.type, { isPlayingAudio, enabled });
+      console.log('🔇 WORKFLOW: Received OpenAI event:', event.type, { 
+        isPlayingAudio, 
+        enabled,
+        hasInitialAudioTrigger: !!onInitialAudioTrigger 
+      });
 
       switch (event.type) {
         case 'output_audio_buffer.stopped':
-          console.log('🔇 WORKFLOW: Appu stopped speaking, isPlayingAudio:', isPlayingAudio);
+          console.log('🔇 WORKFLOW: Appu stopped speaking', { 
+            isPlayingAudio,
+            willStartTimer: !isPlayingAudio,
+            hasAudioTrigger: !!onInitialAudioTrigger
+          });
+          
           if (!isPlayingAudio) {
             logger.debug('🔇 WORKFLOW: Starting initial audio timer');
-            console.log('🔇 WORKFLOW: Starting initial audio timer');
+            console.log('🔇 WORKFLOW: Starting initial audio timer with delay:', initialAudioDelay);
             startInitialAudioTimer();
           } else {
-            console.log('🔇 WORKFLOW: Audio is playing, not starting timer yet');
+            console.log('🔇 WORKFLOW: Audio is already playing, waiting for it to finish');
           }
           break;
 
         case 'input_audio_buffer.speech_started':
-          console.log('🔇 WORKFLOW: User started speaking - interrupting timers');
+          console.log('🔇 WORKFLOW: User started speaking - interrupting all timers');
           logger.debug('User started speaking - interrupting timers');
           interruptSilence();
           break;
