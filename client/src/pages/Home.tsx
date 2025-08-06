@@ -38,7 +38,7 @@ const Home = memo(() => {
   const [enableLocalPlayback, setEnableLocalPlayback] =
     useState<boolean>(false); // Default to false for server testing
   const [useRealtimeAPI, setUseRealtimeAPI] = useState<boolean>(true);
-  const [enableVideo, setEnableVideo] = useState<boolean>(true); // Toggle for video capture - enabled by default
+  const [enableVideo, setEnableVideo] = useState<boolean>(false); // Toggle for video capture - disabled by default
   const [aiSettings, setAiSettings] = useState({
     defaultProvider: "standard",
     voiceMode: "openai",
@@ -1518,8 +1518,7 @@ const Home = memo(() => {
                     <span className="text-xs">Recorder:</span>
                     <div
                       className={`px-2 py-0.5 rounded-full text-xs ${
-                        currentRecorder.recorderState === "recording"
-                          ? "bg-green-600"
+                        currentRecorder.recorderState === "recording"                          ? "bg-green-600"
                           : currentRecorder.recorderState === "paused"
                             ? "bg-yellow-600"
                             : currentRecorder.recorderState === "error"
