@@ -178,6 +178,107 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
     }
   }, [logger]);
 
+  // Manual navigation functions for silence detection auto-advance
+  const navigateToNextPage = useCallback(async () => {
+    if (!selectedBookRef.current?.id) {
+      logger.error("No book selected for navigation");
+      return false;
+    }
+
+    const nextPageNumber = currentPageRef.current + 1;
+    logger.info(`Navigating to next page: ${nextPageNumber}`);
+
+    try {
+      const pageResponse = await fetch(`/api/books/${selectedBookRef.current.id}/page/${nextPageNumber}`);
+
+      if (!pageResponse.ok) {
+        throw new Error(`Failed to fetch page: ${pageResponse.status}`);
+      }
+
+      const pageResponseData = await pageResponse.json();
+      const pageData = pageResponseData.page;
+
+      if (!pageData) {
+        throw new Error("Page data not found in response");
+      }
+
+      // Update current page
+      currentPageRef.current = nextPageNumber;
+
+      // Call the display callback
+      if (options.onStorybookPageDisplay) {
+        options.onStorybookPageDisplay({
+          pageImageUrl: pageData.pageImageUrl,
+          pageText: pageData.pageText,
+          pageNumber: pageData.pageNumber,
+          totalPages: pageData.totalPages,
+          bookTitle: pageData.bookTitle,
+          audioUrl: pageData.audioUrl,
+        });
+      }
+
+      logger.info(`Successfully navigated to page ${nextPageNumber}`);
+      return true;
+
+    } catch (error: any) {
+      logger.error("Error navigating to next page", { error: error.message });
+      return false;
+    }
+  }, [logger, options.onStorybookPageDisplay]);
+
+  const navigateToPreviousPage = useCallback(async () => {
+    if (!selectedBookRef.current?.id) {
+      logger.error("No book selected for navigation");
+      return false;
+    }
+
+    const previousPageNumber = currentPageRef.current - 1;
+    
+    if (previousPageNumber < 1) {
+      logger.info("Already at first page, cannot go back");
+      return false;
+    }
+
+    logger.info(`Navigating to previous page: ${previousPageNumber}`);
+
+    try {
+      const pageResponse = await fetch(`/api/books/${selectedBookRef.current.id}/page/${previousPageNumber}`);
+
+      if (!pageResponse.ok) {
+        throw new Error(`Failed to fetch page: ${pageResponse.status}`);
+      }
+
+      const pageResponseData = await pageResponse.json();
+      const pageData = pageResponseData.page;
+
+      if (!pageData) {
+        throw new Error("Page data not found in response");
+      }
+
+      // Update current page
+      currentPageRef.current = previousPageNumber;
+
+      // Call the display callback
+      if (options.onStorybookPageDisplay) {
+        options.onStorybookPageDisplay({
+          pageImageUrl: pageData.pageImageUrl,
+          pageText: pageData.pageText,
+          pageNumber: pageData.pageNumber,
+          totalPages: pageData.totalPages,
+          bookTitle: pageData.bookTitle,
+          audioUrl: pageData.audioUrl,
+        });
+      }
+
+      logger.info(`Successfully navigated to page ${previousPageNumber}`);
+      return true;
+
+    } catch (error: any) {
+      logger.error("Error navigating to previous page", { error: error.message });
+      return false;
+    }
+  }, [logger, options.onStorybookPageDisplay]);
+
   return {
     // State refs (for external access if needed)
     selectedBookRef,
@@ -190,6 +291,8 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
     enterReadingSession,
     exitReadingSession,
     optimizeTokenUsage,
+    navigateToNextPage,
+    navigateToPreviousPage,
 
     // Current state getters
     selectedBook: selectedBookRef.current,

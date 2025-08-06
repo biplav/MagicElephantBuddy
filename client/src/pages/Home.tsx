@@ -9,6 +9,7 @@ import { CapturedFrameDisplay } from "@/components/CapturedFrameDisplay";
 import { motion, AnimatePresence } from "framer-motion";
 import useAudioRecorder from "@/hooks/useAudioRecorder";
 import useRealtimeAudio from "@/hooks/useRealtimeAudio";
+import { useBookStateManager } from "@/hooks/useBookStateManager";
 import StorybookDisplay from "../components/StorybookDisplay";
 import { CheckCircle, Mic, MicOff, Video, VideoOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -241,6 +242,17 @@ const Home = memo(() => {
     setCurrentStorybookPage(pageData);
     setIsStorybookVisible(true);
   }, []);
+
+  // Initialize book state manager
+  const bookStateManager = useBookStateManager({
+    onStorybookPageDisplay: handleStorybookPageDisplay,
+    onFunctionCallResult: (callId: string, result: string) => {
+      console.log("Book function call result:", { callId, result });
+    },
+    onError: (callId: string, error: string) => {
+      console.error("Book function call error:", { callId, error });
+    },
+  });
 
   // Initialize realtime audio hook with stable options
   const [isAppuSpeaking, setIsAppuSpeaking] = useState<boolean>(false);
@@ -893,15 +905,21 @@ const Home = memo(() => {
 
   
 
-  const handleNextPage = () => {
+  const handleNextPage = useCallback(async () => {
     console.log("Next page requested");
-    // Implement logic to fetch the next page and update state
-  };
+    const success = await bookStateManager.navigateToNextPage();
+    if (!success) {
+      console.error("Failed to navigate to next page");
+    }
+  }, [bookStateManager]);
 
-  const handlePreviousPage = () => {
+  const handlePreviousPage = useCallback(async () => {
     console.log("Previous page requested");
-    // Implement logic to fetch the previous page and update state
-  };
+    const success = await bookStateManager.navigateToPreviousPage();
+    if (!success) {
+      console.error("Failed to navigate to previous page");
+    }
+  }, [bookStateManager]);
 
   const handleCloseStorybook = () => {
     console.log("Closing storybook");
