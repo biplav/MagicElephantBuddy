@@ -134,7 +134,8 @@ export function useOpenAISession(options: UseOpenAISessionOptions = {}) {
             silence_duration_ms: 200,
           },
           temperature: 0.8,
-          max_response_output_tokens: isInReadingSession ? 150 : 300,
+          // max_response_output_tokens: isInReadingSession ? 150 : 300,
+          max_response_output_tokens: 300,
         },
       };
     } catch (error: any) {

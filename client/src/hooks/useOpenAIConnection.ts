@@ -184,7 +184,8 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
               },
               temperature: 0.8,
               // Optimize context window for token efficiency
-              max_response_output_tokens: bookStateManager.isInReadingSession ? 150 : 300,
+              // max_response_output_tokens: bookStateManager.isInReadingSession ? 150 : 300,
+              max_response_output_tokens: 300,
             },
           };
 
@@ -434,7 +435,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
               }
 
               // Optimize token usage during reading sessions
-              bookStateManager.optimizeTokenUsage();
+              // bookStateManager.optimizeTokenUsage();
 
               break;
             case "error":

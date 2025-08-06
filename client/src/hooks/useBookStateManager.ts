@@ -175,21 +175,21 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
     }
   }, [enterReadingSession, options.onStorybookPageDisplay, options.onFunctionCallResult, options.onError, logger]);
 
-  const optimizeTokenUsage = useCallback(() => {
-    if (isInReadingSessionRef.current) {
-      // Archive older messages during reading sessions to save tokens
-      const maxMessages = 10;
-      if (readingSessionMessagesRef.current.length > maxMessages) {
-        const messagesToArchive = readingSessionMessagesRef.current.splice(0, 
-          readingSessionMessagesRef.current.length - maxMessages
-        );
-        logger.info("Archived reading session messages for token optimization", {
-          archivedCount: messagesToArchive.length,
-          remainingCount: readingSessionMessagesRef.current.length
-        });
-      }
-    }
-  }, [logger]);
+  // const optimizeTokenUsage = useCallback(() => {
+  //   if (isInReadingSessionRef.current) {
+  //     // Archive older messages during reading sessions to save tokens
+  //     const maxMessages = 10;
+  //     if (readingSessionMessagesRef.current.length > maxMessages) {
+  //       const messagesToArchive = readingSessionMessagesRef.current.splice(0, 
+  //         readingSessionMessagesRef.current.length - maxMessages
+  //       );
+  //       logger.info("Archived reading session messages for token optimization", {
+  //         archivedCount: messagesToArchive.length,
+  //         remainingCount: readingSessionMessagesRef.current.length
+  //       });
+  //     }
+  //   }
+  // }, [logger]);
 
   // Manual navigation functions for silence detection auto-advance
   const navigateToNextPage = useCallback(async () => {
