@@ -66,7 +66,14 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       let resultMessage: string;
       if (searchResults.books?.length > 0) {
         const selectedBook = searchResults.books[0];
-        selectedBookRef.current = selectedBook;
+        selectedBookRef.current = {
+          id: selectedBook.id,
+          title: selectedBook.title,
+          totalPages: selectedBook.totalPages,
+          summary: selectedBook.summary,
+          author: selectedBook.author,
+          genre: selectedBook.genre
+        };
         currentPageRef.current = 0;
         const responseData = {
           title: selectedBook.title,
@@ -126,8 +133,14 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
         throw new Error("Page data not found in response");
       }
 
-      // Update book state
-      selectedBookRef.current = { id: bookId };
+      // Update book state - preserve the full book object if it exists, otherwise create a minimal one
+      if (!selectedBookRef.current || selectedBookRef.current.id !== bookId) {
+        selectedBookRef.current = { 
+          id: bookId, 
+          title: pageData.bookTitle,
+          totalPages: pageData.totalPages 
+        };
+      }
       currentPageRef.current = pageNumber;
 
       // Enter reading session mode
@@ -180,13 +193,29 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
 
   // Manual navigation functions for silence detection auto-advance
   const navigateToNextPage = useCallback(async () => {
+    logger.info("navigateToNextPage called", { 
+      hasSelectedBook: !!selectedBookRef.current, 
+      bookId: selectedBookRef.current?.id,
+      currentPage: currentPageRef.current 
+    });
+
     if (!selectedBookRef.current?.id) {
-      logger.error("No book selected for navigation");
+      logger.error("No book selected for navigation", { 
+        selectedBook: selectedBookRef.current,
+        currentPage: currentPageRef.current 
+      });
       return false;
     }
 
     const nextPageNumber = currentPageRef.current + 1;
-    logger.info(`Navigating to next page: ${nextPageNumber}`);
+    
+    // Check if we're already at the last page
+    if (selectedBookRef.current.totalPages && nextPageNumber > selectedBookRef.current.totalPages) {
+      logger.info(`Already at last page (${currentPageRef.current}/${selectedBookRef.current.totalPages})`);
+      return false;
+    }
+
+    logger.info(`Navigating to next page: ${nextPageNumber}`, { bookId: selectedBookRef.current.id });
 
     try {
       const pageResponse = await fetch(`/api/books/${selectedBookRef.current.id}/page/${nextPageNumber}`);
@@ -227,8 +256,17 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
   }, [logger, options.onStorybookPageDisplay]);
 
   const navigateToPreviousPage = useCallback(async () => {
+    logger.info("navigateToPreviousPage called", { 
+      hasSelectedBook: !!selectedBookRef.current, 
+      bookId: selectedBookRef.current?.id,
+      currentPage: currentPageRef.current 
+    });
+
     if (!selectedBookRef.current?.id) {
-      logger.error("No book selected for navigation");
+      logger.error("No book selected for navigation", { 
+        selectedBook: selectedBookRef.current,
+        currentPage: currentPageRef.current 
+      });
       return false;
     }
 
@@ -239,7 +277,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       return false;
     }
 
-    logger.info(`Navigating to previous page: ${previousPageNumber}`);
+    logger.info(`Navigating to previous page: ${previousPageNumber}`, { bookId: selectedBookRef.current.id });
 
     try {
       const pageResponse = await fetch(`/api/books/${selectedBookRef.current.id}/page/${previousPageNumber}`);
