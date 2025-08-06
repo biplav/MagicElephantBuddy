@@ -328,7 +328,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
     handleDisplayBookPage,
     enterReadingSession,
     exitReadingSession,
-    optimizeTokenUsage,
+    // optimizeTokenUsage,
     navigateToNextPage,
     navigateToPreviousPage,
 
