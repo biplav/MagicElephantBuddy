@@ -28,7 +28,7 @@ const Elephant: FC<ElephantProps> = ({ state, speechText }) => {
       
       {/* Animated mouth - changes shape when speaking */}
       <motion.path 
-        d={isAnimated ? "M236 300C236 300 256 315 276 300" : "M236 300C236 300 256 320 276 300"}
+        d="M236 300C236 300 256 320 276 300"
         stroke="black" 
         strokeWidth="4" 
         strokeLinecap="round"
