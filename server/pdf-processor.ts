@@ -247,7 +247,7 @@ export class PDFProcessor {
 
       // Generate speech using OpenAI TTS with child-friendly settings
       const mp3Response = await openai.audio.speech.create({
-        model: "tts-1-hd", // Higher quality for better child experience
+        model: "gpt-4o-mini-tts", // Higher quality for better child experience
         voice: "nova", // Warm, child-friendly voice
         input: narrationText,
         speed: 0.8, // Slower pace for children to follow along
