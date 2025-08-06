@@ -60,7 +60,6 @@ interface UseRealtimeAudioOptions {
   onResponseReceived?: (text: string) => void;
   onAudioResponseReceived?: (audioData: string) => void;
   onError?: (error: string) => void;
-  enableVideo?: boolean;
   onVideoFrame?: (frameData: string) => void;
   onStorybookPageDisplay?: (pageData: {
     pageImageUrl: string;
@@ -94,10 +93,10 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
   const hasInitialized = useRef(false);
   useEffect(() => {
     if (!hasInitialized.current) {
-      logger.info('Initializing hook', { modelType, enableVideo: options.enableVideo });
+      logger.info('Initializing hook', { modelType, enableVideo: false });
       hasInitialized.current = true;
     }
-  }, [logger, modelType, options.enableVideo]);
+  }, [logger, modelType]);
 
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
 
@@ -112,21 +111,17 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     onAppuSpeakingChange: options.onAppuSpeakingChange
   }), [options.onTranscriptionReceived, options.onResponseReceived, options.onAudioResponseReceived, options.onError, options.onStorybookPageDisplay, options.onBookSelected, options.onAppuSpeakingChange]);
 
-  // Initialize media manager (this replaces useMediaCapture)
-  // For demonstration, we'll assume useMediaManager is available and works like useMediaCapture
-  // You would replace './useMediaCapture' with './useMediaManager' and import useMediaManager
-  // and remove the useMediaCapture import.
-  const mediaManager = useMediaCapture({ enableVideo: options.enableVideo || false }); // Keep useMediaCapture for now as per problem description, but conceptually it's the mediaManager
+  // Initialize media manager - camera will be activated on-demand via getFrameAnalysis
+  const mediaManager = useMediaCapture({ enableVideo: false });
 
   // Create stable connection options that don't change unless truly necessary
   const connectionOptions = useMemo(() => ({
     ...stableCallbacks,
     childId: options.childId,
-    enableVideo: options.enableVideo,
+    enableVideo: false, // Camera activated on-demand
   }), [
     stableCallbacks, 
     options.childId,
-    options.enableVideo,
   ]);
 
   // Initialize connection hooks with stable options

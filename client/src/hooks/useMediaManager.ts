@@ -268,15 +268,6 @@ export function useMediaManager(options: MediaManagerOptions = {}) {
     conversationId?: string;
     context?: string;
   }) => {
-    // Check if video is enabled
-    if (!options.enableVideo) {
-      logger.warn("Video not enabled, cannot analyze frame");
-      return {
-        success: false,
-        message: "I can't see anything because video is not enabled. Please enable video mode so I can see what you're showing me!",
-        analysis: null
-      };
-    }
 
     logger.info("Starting camera for frame analysis");
     let tempStream: MediaStream | null = null;
@@ -426,11 +417,6 @@ export function useMediaManager(options: MediaManagerOptions = {}) {
 
   // Start continuous frame analysis
   const startContinuousAnalysis = useCallback((intervalMs: number = 5000) => {
-    if (!options.enableVideo) {
-      logger.warn("Cannot start continuous analysis: video not enabled");
-      return null;
-    }
-
     logger.info("Starting continuous frame analysis", { intervalMs });
     
     const interval = setInterval(() => {
@@ -438,7 +424,7 @@ export function useMediaManager(options: MediaManagerOptions = {}) {
     }, intervalMs);
 
     return interval;
-  }, [analyzeCurrentFrame, options.enableVideo, logger]);
+  }, [analyzeCurrentFrame, logger]);
 
   // Show live video stream (for display components)
   const showLiveStream = useCallback(() => {
