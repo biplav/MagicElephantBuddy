@@ -127,7 +127,7 @@ export class PDFProcessor {
       console.log(`Processing page ${pageNum}/${totalPages}`);
 
       try {
-        const page = await this.processPage(convert, pageNum, fileName);
+        const page = await this.processPage(convert, pageNum, fileName, totalPages);
         pages.push(page);
 
         // Add delay between pages to avoid rate limits
@@ -160,7 +160,8 @@ export class PDFProcessor {
   private async processPage(
     convert: any,
     pageNum: number,
-    fileName: string
+    fileName: string,
+    totalPages: number
   ): Promise<ProcessedPage> {
     // Convert page to image
     const imageBuffer = await this.convertPageToImage(convert, pageNum);
@@ -168,8 +169,8 @@ export class PDFProcessor {
     // Store image in object storage
     const imageUrl = await this.storeImageInObjectStorage(imageBuffer, fileName, pageNum);
 
-    // Extract text and generate narration in a single OpenAI call
-    const { extractedText, childFriendlyNarration } = await this.extractTextAndGenerateNarration(imageBuffer);
+    // Extract text and generate narration in a single OpenAI call with page context
+    const { extractedText, childFriendlyNarration } = await this.extractTextAndGenerateNarration(imageBuffer, pageNum, totalPages);
 
     // Generate audio narration for the page
     const audioUrl = await this.generatePageAudio(childFriendlyNarration, pageNum, fileName);
@@ -330,7 +331,7 @@ export class PDFProcessor {
     }
   }
 
-  private async extractTextAndGenerateNarration(imageBuffer: Buffer): Promise<{extractedText: string, childFriendlyNarration: string}> {
+  private async extractTextAndGenerateNarration(imageBuffer: Buffer, pageNumber: number, totalPages: number): Promise<{extractedText: string, childFriendlyNarration: string}> {
     try {
       if (!this.isValidImageBuffer(imageBuffer)) {
         console.warn("Invalid image buffer provided for text extraction and narration");
@@ -354,25 +355,45 @@ export class PDFProcessor {
             content: [
               {
                 type: "text",
-                text: `Please analyze this storybook page image and provide two outputs in JSON format:
+                text: `Please analyze this storybook page image and provide three outputs in JSON format:
+
+This is page ${pageNumber} of ${totalPages} total pages.
 
 1. "extractedText": Extract all visible text from the page (if any). Return only the actual text content, no explanations.
 
-2. "childFriendlyNarration": Create a child-friendly narration for this page that would be perfect for reading aloud to a 3-5 year old child. The narration should be:
-- Engaging and fun with simple, age-appropriate language
+2. "pageType": Classify this page as one of: "cover", "front_matter" (title page, copyright, dedication, table of contents), "body" (main story content), "back_matter" (author info, publisher info, acknowledgments, other books)
+
+3. "childFriendlyNarration": Create appropriate narration based on the page type:
+
+FOR COVER PAGES:
+- Create exciting, welcoming narration that introduces the book
+- Build anticipation: "Wow! Look at this amazing book! What adventure awaits us?"
+- Mention the title and any interesting cover elements
+- Keep it enthusiastic and inviting
+
+FOR BODY PAGES (main story):
+- Create full, engaging narration perfect for 3-5 year olds
 - Include sound effects like "Whoosh!", "Splash!", "Roar!" where appropriate 
-- Use expressions that children love like "Oh my!", "Wow!", "Look at that!"
-- Mix Hindi and English words naturally (Hinglish) - use simple Hindi words like "dekho" (look), "kya baat hai" (how wonderful), "bada" (big), "chota" (small)
-- Be interactive and encouraging like "Can you see the...?", "What do you think happens next?"
-- Focus on colors, characters, actions, and emotions in the scene
-- Keep it conversational and storytelling style, not just descriptive
-- Make it exciting and magical for young listeners
-- Write this as if Appu the magical elephant is telling the story directly to the child
+- Use expressions children love: "Oh my!", "Wow!", "Look at that!"
+- Mix Hindi and English naturally (Hinglish) - use simple Hindi words like "dekho" (look), "kya baat hai" (how wonderful), "bada" (big), "chota" (small)
+- Be interactive: "Can you see the...?", "What do you think happens next?"
+- Focus on colors, characters, actions, and emotions
+- Make it conversational and storytelling style
+- Write as if Appu the magical elephant is telling the story
+
+FOR FRONT_MATTER AND BACK_MATTER:
+- Keep narration very brief and subtle
+- Only provide detailed narration if there's something genuinely interesting for a 3-5 year old
+- For copyright/publisher pages: Just say something like "This page tells us about the book"
+- For dedications: Only elaborate if it's sweet/meaningful for kids
+- For author info: Brief mention only if interesting to kids
+- Default to minimal narration like "Let's turn the page and continue our story!"
 
 Return your response in this exact JSON format:
 {
   "extractedText": "any text found on the page",
-  "childFriendlyNarration": "the child-friendly story narration"
+  "pageType": "cover|front_matter|body|back_matter",
+  "childFriendlyNarration": "the appropriate narration based on page type"
 }`,
               },
               {
@@ -385,7 +406,7 @@ Return your response in this exact JSON format:
             ],
           },
         ],
-        max_tokens: 600,
+        max_tokens: 700,
         temperature: 0.6,
       });
 
@@ -394,6 +415,10 @@ Return your response in this exact JSON format:
       try {
         // Parse the JSON response
         const parsedResponse = JSON.parse(responseContent);
+        const pageType = parsedResponse.pageType || "body";
+        
+        console.log(`Page ${pageNumber} classified as: ${pageType}`);
+        
         return {
           extractedText: parsedResponse.extractedText || "",
           childFriendlyNarration: parsedResponse.childFriendlyNarration || ""
