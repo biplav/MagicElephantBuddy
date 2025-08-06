@@ -1,4 +1,3 @@
-
 import fs from "fs";
 import path from "path";
 import pdf2pic from "pdf2pic";
@@ -44,13 +43,13 @@ export class PDFProcessor {
     try {
       // Save and validate PDF file
       const pdfPath = await this.savePDFFile(pdfBuffer, fileName, tempDir);
-      
+
       // Extract text and metadata from PDF
       const { fullText, totalPages } = await this.extractPDFData(pdfBuffer);
-      
+
       // Process each page
       const pages = await this.processPages(pdfPath, totalPages, fileName, tempDir);
-      
+
       // Generate enhanced book metadata using first 5 pages - let OpenAI extract title
       const first5Pages = pages.slice(0, 5);
       const metadata = await this.extractEnhancedMetadata(fullText, first5Pages, fileName);
@@ -101,24 +100,24 @@ export class PDFProcessor {
 
   private async extractPDFData(pdfBuffer: Buffer): Promise<{ fullText: string; totalPages: number }> {
     console.log(`Extracting text from PDF buffer of size: ${pdfBuffer.length} bytes`);
-    
+
     const pdfData = await pdfParse(pdfBuffer, {
       max: 0, // No page limit
     });
-    
+
     const fullText = pdfData.text;
     const totalPages = pdfData.numpages;
-    
+
     console.log(`Extracted ${fullText.length} characters of text`);
     console.log(`PDF has ${totalPages} pages`);
-    
+
     return { fullText, totalPages };
   }
 
   private async processPages(
-    pdfPath: string, 
-    totalPages: number, 
-    fileName: string, 
+    pdfPath: string,
+    totalPages: number,
+    fileName: string,
     tempDir: string
   ): Promise<ProcessedPage[]> {
     const convert = this.createPDFConverter(pdfPath, tempDir);
@@ -159,21 +158,21 @@ export class PDFProcessor {
   }
 
   private async processPage(
-    convert: any, 
-    pageNum: number, 
+    convert: any,
+    pageNum: number,
     fileName: string
   ): Promise<ProcessedPage> {
     // Convert page to image
     const imageBuffer = await this.convertPageToImage(convert, pageNum);
-    
+
     // Store image in object storage
     const imageUrl = await this.storeImageInObjectStorage(imageBuffer, fileName, pageNum);
-    
+
     // Extract text and generate narration in a single OpenAI call
     const { extractedText, childFriendlyNarration } = await this.extractTextAndGenerateNarration(imageBuffer);
 
     // Generate audio narration for the page
-    const audioUrl = await this.generatePageAudio(childFriendlyNarration, fileName, pageNum);
+    const audioUrl = await this.generatePageAudio(childFriendlyNarration, pageNum, fileName);
 
     return {
       pageNumber: pageNum,
@@ -187,7 +186,7 @@ export class PDFProcessor {
 
   private async convertPageToImage(convert: any, pageNum: number): Promise<Buffer> {
     console.log(`Converting page ${pageNum} to image...`);
-    
+
     const result: ConversionResult = await convert(pageNum, { responseType: "buffer" });
 
     console.log(`Conversion result for page ${pageNum}:`, {
@@ -206,13 +205,13 @@ export class PDFProcessor {
   }
 
   private async storeImageInObjectStorage(
-    imageBuffer: Buffer, 
-    fileName: string, 
+    imageBuffer: Buffer,
+    fileName: string,
     pageNum: number
   ): Promise<string> {
     const imageFileName = `books/${fileName.replace(".pdf", "")}-page-${pageNum}.png`;
     const base64Image = imageBuffer.toString("base64");
-    
+
     const uploadResult = await this.objectStorage.uploadFromText(imageFileName, base64Image);
 
     if (!uploadResult.ok) {
@@ -221,28 +220,37 @@ export class PDFProcessor {
 
     const imageUrl = `/api/object-storage/${encodeURIComponent(imageFileName)}`;
     console.log(`Stored image in object storage: ${imageUrl}`);
-    
+
     return imageUrl;
   }
 
-  private async generatePageAudio(narrationText: string, fileName: string, pageNum: number): Promise<string> {
+  private async generatePageAudio(
+    text: string,
+    pageNum: number,
+    fileName: string
+  ): Promise<string> {
     try {
-      if (!narrationText || narrationText.trim() === "") {
-        console.warn(`No narration text provided for page ${pageNum}`);
+      console.log(`Generating audio for page ${pageNum}...`);
+
+      // Process text with child-friendly narration approach
+      const narrationText = this.prepareChildFriendlyNarration(text, pageNum);
+
+      if (narrationText.length === 0) {
+        console.log(`No text content for page ${pageNum}, skipping audio generation`);
         return "";
       }
 
-      console.log(`Generating audio for page ${pageNum}...`);
+      console.log(`Generating child-friendly TTS for page ${pageNum}: "${narrationText.substring(0, 100)}..."`);
 
       const OpenAI = (await import("openai")).default;
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-      // Generate speech using OpenAI TTS
+      // Generate speech using OpenAI TTS with child-friendly settings
       const mp3Response = await openai.audio.speech.create({
-        model: "tts-1",
-        voice: "nova", // Child-friendly voice
+        model: "tts-1-hd", // Higher quality for better child experience
+        voice: "nova", // Warm, child-friendly voice
         input: narrationText,
-        speed: 0.9, // Slightly slower for children
+        speed: 0.8, // Slower pace for children to follow along
       });
 
       // Convert response to buffer
@@ -251,7 +259,7 @@ export class PDFProcessor {
       // Store audio in object storage
       const audioFileName = `books/${fileName.replace(".pdf", "")}-page-${pageNum}-audio.mp3`;
       const base64Audio = buffer.toString("base64");
-      
+
       const uploadResult = await this.objectStorage.uploadFromText(audioFileName, base64Audio);
 
       if (!uploadResult.ok) {
@@ -260,7 +268,7 @@ export class PDFProcessor {
 
       const audioUrl = `/api/object-storage/${encodeURIComponent(audioFileName)}`;
       console.log(`Generated and stored audio for page ${pageNum}: ${audioUrl}`);
-      
+
       return audioUrl;
 
     } catch (error) {
@@ -268,6 +276,43 @@ export class PDFProcessor {
       return "";
     }
   }
+
+  private prepareChildFriendlyNarration(text: string, pageNum: number): string {
+    // Basic text cleaning and enhancement for child-friendly narration
+    let narrationText = text
+      .replace(/\s+/g, " ") // Replace multiple spaces with single space
+      .replace(/([.!?])\s*([A-Z])/g, "$1 $2") // Ensure proper spacing after sentences
+      .trim();
+
+    // Apply personality guidelines:
+    // - Warm, playful, and kind demeanor
+    // - Simple, wonder-filled, age-appropriate tone (Hindi/Hinglish preferred)
+    // - Joyful and encouraging enthusiasm with emojis and sound effects
+    // - Use "hmm", "wow", "oh" naturally
+    // - Keep responses very short (1-2 sentences max)
+
+    // Example of adding some child-friendly elements:
+    if (narrationText.length > 0) {
+      const fillerWords = ["Hmm...", "Wow!", "Oh my!", "Look!"];
+      const randomFiller = fillerWords[Math.floor(Math.random() * fillerWords.length)];
+      
+      // Simple enhancement: add a playful intro if text is not too long
+      if (narrationText.length < 100) {
+        narrationText = `${randomFiller} ${narrationText}`;
+      }
+
+      // Further enhancements could include:
+      // - Randomly inserting Hindi/Hinglish phrases
+      // - Adding simple sound effect descriptions (e.g., "[Sound of a car zooming]")
+      // - Ensuring the text is broken down into very short segments (1-2 sentences)
+      // For now, we'll keep it to basic cleaning and a bit of personality injection.
+    } else {
+      console.log(`No narration text to prepare for page ${pageNum}`);
+    }
+
+    return narrationText;
+  }
+
 
   private async addProcessingDelay(): Promise<void> {
     // 200ms delay between pages to avoid rate limits (increased for audio generation)
@@ -345,7 +390,7 @@ Return your response in this exact JSON format:
       });
 
       const responseContent = response.choices[0].message.content || "";
-      
+
       try {
         // Parse the JSON response
         const parsedResponse = JSON.parse(responseContent);
@@ -356,7 +401,7 @@ Return your response in this exact JSON format:
       } catch (parseError) {
         console.error("Error parsing OpenAI JSON response:", parseError);
         console.log("Raw response:", responseContent);
-        
+
         // Fallback: try to extract content manually if JSON parsing fails
         return this.parseResponseFallback(responseContent);
       }
@@ -379,7 +424,7 @@ Return your response in this exact JSON format:
           childFriendlyNarration: parsedContent.childFriendlyNarration || responseContent
         };
       }
-      
+
       // If no JSON found, use the entire response as narration
       return {
         extractedText: "",
@@ -399,8 +444,8 @@ Return your response in this exact JSON format:
   }
 
   private async generateEnhancedBookSummary(
-    fullText: string, 
-    first5Pages: ProcessedPage[], 
+    fullText: string,
+    first5Pages: ProcessedPage[],
     bookTitle: string
   ): Promise<string> {
     try {
@@ -431,8 +476,8 @@ Focus on what makes this book special and what children can learn from it.`;
   }
 
   private async extractEnhancedMetadata(
-    fullText: string, 
-    first5Pages: ProcessedPage[], 
+    fullText: string,
+    first5Pages: ProcessedPage[],
     fileName: string
   ): Promise<any> {
     try {
@@ -497,7 +542,7 @@ Please analyze both the text content and image descriptions to provide comprehen
     };
   }
 
-  
+
 
   private extractAuthor(fullText: string): string | undefined {
     // Simple pattern matching for author
