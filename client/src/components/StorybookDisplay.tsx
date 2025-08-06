@@ -214,7 +214,7 @@ export default function StorybookDisplay({
     silenceDetectionRef.current = silenceDetection;
   }, [silenceDetection]);
 
-  // Play audio based on different triggers with conditional logic
+  /* Play audio based on different triggers with conditional logic
   useEffect(() => {
     if (currentPage?.audioUrl && imageLoaded && isVisible) {
       if (isAppuSpeaking) {
@@ -232,7 +232,8 @@ export default function StorybookDisplay({
   useEffect(() => {
     silenceDetection.setEnabled(autoPageTurnEnabled && isVisible);
   }, [autoPageTurnEnabled, isVisible, silenceDetection]);
-
+*/
+  
   useEffect(() => {
     if (currentPage?.pageImageUrl) {
       setImageLoaded(false);
