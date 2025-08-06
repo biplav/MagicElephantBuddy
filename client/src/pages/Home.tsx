@@ -905,21 +905,7 @@ const Home = memo(() => {
 
   
 
-  const handleNextPage = useCallback(async () => {
-    console.log("Next page requested");
-    const success = await bookStateManager.navigateToNextPage();
-    if (!success) {
-      console.error("Failed to navigate to next page");
-    }
-  }, [bookStateManager]);
-
-  const handlePreviousPage = useCallback(async () => {
-    console.log("Previous page requested");
-    const success = await bookStateManager.navigateToPreviousPage();
-    if (!success) {
-      console.error("Failed to navigate to previous page");
-    }
-  }, [bookStateManager]);
+  
 
   const handleCloseStorybook = () => {
     console.log("Closing storybook");
@@ -1574,8 +1560,6 @@ const Home = memo(() => {
       {isStorybookVisible && (
         <StorybookDisplay
           currentPage={currentStorybookPage}
-          onNextPage={handleNextPage}
-          onPreviousPage={handlePreviousPage}
           onClose={handleCloseStorybook}
           isVisible={isStorybookVisible}
           onPageNavigation={handlePageNavigation}
@@ -1583,6 +1567,7 @@ const Home = memo(() => {
           isAppuSpeaking={isAppuSpeaking}
           isUserSpeaking={isUserSpeaking}
           openaiConnection={realtimeAudio?.openaiConnection}
+          bookStateManager={bookStateManager}
         />
       )}
     </div>

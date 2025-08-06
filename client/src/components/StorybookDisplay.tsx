@@ -17,8 +17,6 @@ interface StorybookPage {
 
 interface StorybookDisplayProps {
   currentPage: StorybookPage | null;
-  onNextPage: () => void;
-  onPreviousPage: () => void;
   onClose: () => void;
   isVisible: boolean;
   onPageNavigation?: (direction: 'next' | 'previous') => void;
@@ -27,12 +25,11 @@ interface StorybookDisplayProps {
   isAppuSpeaking?: boolean;
   isUserSpeaking?: boolean;
   openaiConnection?: any;
+  bookStateManager: any; // Add book state manager as prop
 }
 
 export default function StorybookDisplay({
   currentPage,
-  onNextPage,
-  onPreviousPage,
   onClose,
   isVisible,
   onPageNavigation,
@@ -40,7 +37,8 @@ export default function StorybookDisplay({
   onAppuSpeakingChange,
   isAppuSpeaking = false,
   isUserSpeaking = false,
-  openaiConnection
+  openaiConnection,
+  bookStateManager
 }: StorybookDisplayProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isFlipping, setIsFlipping] = useState(false);
@@ -54,10 +52,10 @@ export default function StorybookDisplay({
     onAppuSpeakingChangeRef.current = onAppuSpeakingChange;
   }, [onAppuSpeakingChange]);
 
-  // Auto page turning with silence detection
-  const handleAutoPageAdvance = useCallback(() => {
+  // Internal navigation handlers
+  const handleInternalNextPage = useCallback(async () => {
     if (currentPage && currentPage.pageNumber < currentPage.totalPages && !isFlipping) {
-      console.log('Auto-advancing to next page due to silence');
+      console.log('Navigating to next page');
 
       // Stop current audio
       if (audioElementRef.current) {
@@ -66,19 +64,59 @@ export default function StorybookDisplay({
         onAppuSpeakingChangeRef.current?.(false);
       }
 
-      // Call onNextPage directly, not handleNextPage to avoid circular dependency
       setFlipDirection('next');
       setIsFlipping(true);
-      setTimeout(() => {
-        onNextPage();
-        onPageNavigation?.('next');
+      
+      try {
+        const success = await bookStateManager.navigateToNextPage();
+        if (success) {
+          onPageNavigation?.('next');
+        }
+      } catch (error) {
+        console.error('Failed to navigate to next page:', error);
+      } finally {
         setIsFlipping(false);
-      }, 500);
+      }
+    }
+  }, [currentPage, isFlipping, bookStateManager, onPageNavigation]);
+
+  const handleInternalPreviousPage = useCallback(async () => {
+    if (currentPage && currentPage.pageNumber > 1 && !isFlipping) {
+      console.log('Navigating to previous page');
+
+      // Stop current audio
+      if (audioElementRef.current) {
+        audioElementRef.current.pause();
+        setIsPlayingAudio(false);
+        onAppuSpeakingChangeRef.current?.(false);
+      }
+
+      setFlipDirection('previous');
+      setIsFlipping(true);
+      
+      try {
+        const success = await bookStateManager.navigateToPreviousPage();
+        if (success) {
+          onPageNavigation?.('previous');
+        }
+      } catch (error) {
+        console.error('Failed to navigate to previous page:', error);
+      } finally {
+        setIsFlipping(false);
+      }
+    }
+  }, [currentPage, isFlipping, bookStateManager, onPageNavigation]);
+
+  // Auto page turning with silence detection
+  const handleAutoPageAdvance = useCallback(() => {
+    if (currentPage && currentPage.pageNumber < currentPage.totalPages && !isFlipping) {
+      console.log('Auto-advancing to next page due to silence');
+      handleInternalNextPage();
     } else if (currentPage && currentPage.pageNumber >= currentPage.totalPages) {
       console.log('Reached end of book - auto page advance disabled');
       // Could trigger end-of-book celebration or suggestions here
     }
-  }, [currentPage, isFlipping, onNextPage, onPageNavigation]);
+  }, [currentPage, isFlipping, handleInternalNextPage]);
 
   const handleSilenceInterrupted = useCallback(() => {
     console.log('Auto page advance interrupted by speech');
@@ -208,47 +246,19 @@ export default function StorybookDisplay({
 
   const handleNextPage = useCallback(() => {
     if (currentPage && currentPage.pageNumber < currentPage.totalPages) {
-      // Stop current audio
-      if (audioElementRef.current) {
-        audioElementRef.current.pause();
-        setIsPlayingAudio(false);
-        onAppuSpeakingChangeRef.current?.(false);
-      }
-
       // Interrupt silence detection when manually navigating
       silenceDetection.interruptSilence();
-
-      setFlipDirection('next');
-      setIsFlipping(true);
-      setTimeout(() => {
-        onNextPage();
-        onPageNavigation?.('next');
-        setIsFlipping(false);
-      }, 500);
+      handleInternalNextPage();
     }
-  }, [currentPage, onNextPage, onPageNavigation, silenceDetection]);
+  }, [currentPage, silenceDetection, handleInternalNextPage]);
 
   const handlePreviousPage = useCallback(() => {
     if (currentPage && currentPage.pageNumber > 1) {
-      // Stop current audio
-      if (audioElementRef.current) {
-        audioElementRef.current.pause();
-        setIsPlayingAudio(false);
-        onAppuSpeakingChangeRef.current?.(false);
-      }
-
       // Interrupt silence detection when manually navigating
       silenceDetection.interruptSilence();
-
-      setFlipDirection('previous');
-      setIsFlipping(true);
-      setTimeout(() => {
-        onPreviousPage();
-        onPageNavigation?.('previous');
-        setIsFlipping(false);
-      }, 500);
+      handleInternalPreviousPage();
     }
-  }, [currentPage, onPreviousPage, onPageNavigation, silenceDetection]);
+  }, [currentPage, silenceDetection, handleInternalPreviousPage]);
 
   if (!isVisible || !currentPage) {
     return null;
