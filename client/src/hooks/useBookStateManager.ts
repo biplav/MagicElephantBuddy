@@ -133,15 +133,19 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
         throw new Error("Page data not found in response");
       }
 
-      // Update book state - preserve the full book object if it exists, otherwise create a minimal one
-      if (!selectedBookRef.current || selectedBookRef.current.id !== bookId) {
-        selectedBookRef.current = { 
-          id: bookId, 
-          title: pageData.bookTitle,
-          totalPages: pageData.totalPages 
-        };
-      }
+      // Update book state - always ensure we have the correct book data
+      selectedBookRef.current = { 
+        id: bookId, 
+        title: pageData.bookTitle,
+        totalPages: pageData.totalPages 
+      };
       currentPageRef.current = pageNumber;
+      
+      logger.info("Updated book state", { 
+        bookId: selectedBookRef.current.id,
+        currentPage: currentPageRef.current,
+        totalPages: selectedBookRef.current.totalPages
+      });
 
       // Enter reading session mode
       enterReadingSession();
@@ -196,13 +200,15 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
     logger.info("navigateToNextPage called", { 
       hasSelectedBook: !!selectedBookRef.current, 
       bookId: selectedBookRef.current?.id,
-      currentPage: currentPageRef.current 
+      currentPage: currentPageRef.current,
+      selectedBookRef: selectedBookRef.current
     });
 
     if (!selectedBookRef.current?.id) {
       logger.error("No book selected for navigation", { 
         selectedBook: selectedBookRef.current,
-        currentPage: currentPageRef.current 
+        currentPage: currentPageRef.current,
+        isInReadingSession: isInReadingSessionRef.current
       });
       return false;
     }
@@ -259,13 +265,15 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
     logger.info("navigateToPreviousPage called", { 
       hasSelectedBook: !!selectedBookRef.current, 
       bookId: selectedBookRef.current?.id,
-      currentPage: currentPageRef.current 
+      currentPage: currentPageRef.current,
+      selectedBookRef: selectedBookRef.current
     });
 
     if (!selectedBookRef.current?.id) {
       logger.error("No book selected for navigation", { 
         selectedBook: selectedBookRef.current,
-        currentPage: currentPageRef.current 
+        currentPage: currentPageRef.current,
+        isInReadingSession: isInReadingSessionRef.current
       });
       return false;
     }
