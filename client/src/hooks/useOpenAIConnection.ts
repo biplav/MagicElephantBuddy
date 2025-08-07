@@ -164,6 +164,9 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
           const childId = getSelectedChildId();
           const enhancedInstructions = await fetchEnhancedPrompt(childId);
 
+          // Generate cache key based on child ID for consistent caching
+          const cacheKey = `appu-child-${childId}-v1`;
+          
           // Send session configuration with enhanced prompt
           const sessionConfig = {
             type: "session.update",
@@ -186,6 +189,8 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
               // Optimize context window for token efficiency
               // max_response_output_tokens: bookStateManager.isInReadingSession ? 150 : 300,
               max_response_output_tokens: 300,
+              // Add prompt caching to reduce costs for consistent system instructions
+              prompt_cache_key: cacheKey,
             },
           };
 
