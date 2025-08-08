@@ -140,64 +140,8 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
     }
   }, [isDetectingSilence, clearTimers, onSilenceInterrupted, logger]);
 
-  // Listen to OpenAI events and report to workflow state machine
-  useEffect(() => {
-    if (!openaiConnection || !enabled) return;
-
-    const handleOpenAIEvent = (event: any) => {
-      if (!enabled) return;
-
-      console.log('🔇 TIMER: Received OpenAI event:', event.type);
-
-      switch (event.type) {
-        case 'output_audio_buffer.stopped':
-          console.log('🔇 TIMER: Appu stopped speaking');
-          // Report to workflow state machine instead of handling directly
-          if (workflowStateMachine?.handleAppuSpeakingStop) {
-            workflowStateMachine.handleAppuSpeakingStop();
-          }
-          break;
-
-        case 'output_audio_buffer.started':
-          console.log('🔇 TIMER: Appu started speaking');
-          // Report to workflow state machine
-          if (workflowStateMachine?.handleAppuSpeakingStart) {
-            workflowStateMachine.handleAppuSpeakingStart();
-          }
-          break;
-
-        case 'input_audio_buffer.speech_started':
-          console.log('🔇 TIMER: User started speaking');
-          // Report to workflow state machine
-          if (workflowStateMachine?.handleUserSpeechStart) {
-            workflowStateMachine.handleUserSpeechStart();
-          }
-          break;
-
-        case 'input_audio_buffer.speech_stopped':
-          console.log('🔇 TIMER: User stopped speaking');
-          // Report to workflow state machine
-          if (workflowStateMachine?.handleUserSpeechEnd) {
-            workflowStateMachine.handleUserSpeechEnd();
-          }
-          break;
-      }
-    };
-
-    if (openaiConnection.addEventListener) {
-      openaiConnection.addEventListener('message', handleOpenAIEvent);
-    } else if (openaiConnection.on) {
-      openaiConnection.on('event', handleOpenAIEvent);
-    }
-
-    return () => {
-      if (openaiConnection.removeEventListener) {
-        openaiConnection.removeEventListener('message', handleOpenAIEvent);
-      } else if (openaiConnection.off) {
-        openaiConnection.off('event', handleOpenAIEvent);
-      }
-    };
-  }, [openaiConnection, enabled, workflowStateMachine, logger]);
+  // Note: OpenAI event handling is now done by useOpenAIEventTranslator
+  // This hook focuses only on silence detection timers
 
   // Clear timers when disabled or unmounted
   useEffect(() => {

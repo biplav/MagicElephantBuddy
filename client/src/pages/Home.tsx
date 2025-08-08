@@ -16,6 +16,8 @@ import { Badge } from "@/components/ui/badge";
 import SilenceTestControls from "@/components/SilenceTestControls";
 import { useSilenceDetection } from '@/hooks/useSilenceDetection';
 import { useWorkflowStateMachine } from '@/hooks/useWorkflowStateMachine';
+import { useOpenAIEventTranslator } from '@/hooks/useOpenAIEventTranslator';
+
 
 type AppState = "welcome" | "interaction";
 
@@ -288,7 +290,7 @@ const Home = memo(() => {
   const [isUserSpeaking, setIsUserSpeaking] = useState<boolean>(false);
   const [autoPageTurnEnabled, setAutoPageTurnEnabled] = useState<boolean>(true);
 
-  // Workflow state machine for coordinating storybook reading
+  // Initialize workflow state machine
   const workflowStateMachine = useWorkflowStateMachine({
     enabled: autoPageTurnEnabled,
     onStateChange: (state) => {
@@ -297,6 +299,13 @@ const Home = memo(() => {
     onError: (error) => {
       console.error('🔄 WORKFLOW ERROR:', error);
     }
+  });
+
+  // Initialize OpenAI event translator
+  const eventTranslator = useOpenAIEventTranslator({
+    openaiConnection: openaiConnection,
+    workflowStateMachine: workflowStateMachine,
+    enabled: true
   });
 
   // Unified realtime audio service

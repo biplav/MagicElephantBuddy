@@ -8,7 +8,8 @@ export type WorkflowState =
   | 'CHILD_SPEAKING'
   | 'APPU_SPEAKING_STOPPED'
   | 'CHILD_SPEAKING_STOPPED'
-  | 'IDLE';
+  | 'IDLE'
+  | 'ERROR';
 
 interface WorkflowStateMachineOptions {
   onStateChange?: (state: WorkflowState) => void;
@@ -81,81 +82,13 @@ export function useWorkflowStateMachine(options: WorkflowStateMachineOptions = {
     handleStateTransition('IDLE');
   }, [isEnabled, handleStateTransition, logger]);
 
-  // Listen to OpenAI events
-  useEffect(() => {
-    if (!options.openaiConnection || !isEnabled) return;
+  const handleError = useCallback((errorMessage?: string) => {
+    if (!isEnabled) return;
+    logger.error('❌ Error state', { error: errorMessage });
+    handleStateTransition('ERROR');
+  }, [isEnabled, handleStateTransition, logger]);
 
-    const handleOpenAIEvent = (event: any) => {
-      if (!isEnabled) return;
-
-      logger.debug('📡 Received OpenAI event', { type: event.type });
-
-      switch (event.type) {
-        case 'output_audio_buffer.started':
-          handleAppuSpeakingStart();
-          break;
-
-        case 'output_audio_buffer.stopped':
-          handleAppuSpeakingStop();
-          break;
-
-        case 'input_audio_buffer.speech_started':
-          handleChildSpeechStart();
-          break;
-
-        case 'input_audio_buffer.speech_stopped':
-          handleChildSpeechStop();
-          break;
-
-        case 'response.created':
-          handleAppuThinking();
-          break;
-
-        case 'session.created':
-          handleLoading();
-          break;
-
-        case 'response.done':
-          // When response is done, transition to idle if not already speaking
-          if (currentState !== 'APPU_SPEAKING') {
-            handleIdle();
-          }
-          break;
-
-        default:
-          // Log unknown events for debugging
-          logger.debug('❓ Unknown OpenAI event', { type: event.type });
-          break;
-      }
-    };
-
-    // Add event listener based on the connection type
-    if (options.openaiConnection.addEventListener) {
-      options.openaiConnection.addEventListener('message', handleOpenAIEvent);
-    } else if (options.openaiConnection.on) {
-      options.openaiConnection.on('event', handleOpenAIEvent);
-    }
-
-    return () => {
-      if (options.openaiConnection.removeEventListener) {
-        options.openaiConnection.removeEventListener('message', handleOpenAIEvent);
-      } else if (options.openaiConnection.off) {
-        options.openaiConnection.off('event', handleOpenAIEvent);
-      }
-    };
-  }, [
-    options.openaiConnection, 
-    isEnabled, 
-    currentState,
-    handleAppuSpeakingStart,
-    handleAppuSpeakingStop,
-    handleAppuThinking,
-    handleChildSpeechStart,
-    handleChildSpeechStop,
-    handleLoading,
-    handleIdle,
-    logger
-  ]);
+  // Note: OpenAI event handling is now done by useOpenAIEventTranslator
 
   // Manual controls
   const resetWorkflow = useCallback(() => {
@@ -189,6 +122,7 @@ export function useWorkflowStateMachine(options: WorkflowStateMachineOptions = {
     handleChildSpeechStop,
     handleLoading,
     handleIdle,
+    handleError,
 
     // Manual controls
     resetWorkflow,
@@ -202,6 +136,7 @@ export function useWorkflowStateMachine(options: WorkflowStateMachineOptions = {
     isChildSpeakingStopped: currentState === 'CHILD_SPEAKING_STOPPED',
     isLoading: currentState === 'LOADING',
     isIdle: currentState === 'IDLE',
+    isError: currentState === 'ERROR',
 
     // Debug info
     getDebugInfo: () => ({
