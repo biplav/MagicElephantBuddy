@@ -23,69 +23,136 @@ export function useWorkflowStateMachine(options: WorkflowStateMachineOptions = {
   const [currentState, setCurrentState] = useState<WorkflowState>('IDLE');
   const [isEnabled, setIsEnabled] = useState(options.enabled ?? true);
 
-  // Internal state management
-  const handleStateTransition = useCallback((newState: WorkflowState) => {
+  // Internal state management with enhanced monitoring
+  const handleStateTransition = useCallback((newState: WorkflowState, context?: string) => {
     const oldState = currentState;
 
     if (oldState === newState) {
-      // Don't transition to the same state
-      return;
+      // Don't transition to the same state unless it's an error
+      if (newState !== 'ERROR') {
+        logger.debug(`🔄 STATE IGNORED: Already in ${newState} state`);
+        return;
+      }
     }
 
-    logger.info(`🔄 STATE TRANSITION: ${oldState} → ${newState}`);
-    console.log(`🔄 WORKFLOW STATE: ${oldState} → ${newState}`);
+    const timestamp = new Date().toISOString();
+    const transitionInfo = {
+      from: oldState,
+      to: newState,
+      timestamp,
+      context: context || 'unknown',
+      enabled: isEnabled
+    };
+
+    logger.info(`🔄 STATE TRANSITION: ${oldState} → ${newState}`, transitionInfo);
+    console.log(`🔄 WORKFLOW STATE: ${oldState} → ${newState}`, {
+      ...transitionInfo,
+      duration: `${Date.now()}ms`
+    });
 
     setCurrentState(newState);
     options.onStateChange?.(newState);
-  }, [currentState, logger, options.onStateChange]);
 
-  // Event handlers for OpenAI events
-  const handleAppuSpeakingStart = useCallback(() => {
-    if (!isEnabled) return;
-    logger.debug('🔊 Appu started speaking');
-    handleStateTransition('APPU_SPEAKING');
+    // Log state-specific information
+    switch (newState) {
+      case 'APPU_SPEAKING':
+        console.log(`🔊 APPU: Started speaking (was ${oldState})`);
+        break;
+      case 'APPU_SPEAKING_STOPPED':
+        console.log(`🔇 APPU: Stopped speaking (was ${oldState})`);
+        break;
+      case 'CHILD_SPEAKING':
+        console.log(`🎤 CHILD: Started speaking (was ${oldState})`);
+        break;
+      case 'CHILD_SPEAKING_STOPPED':
+        console.log(`🔇 CHILD: Stopped speaking (was ${oldState})`);
+        break;
+      case 'APPU_THINKING':
+        console.log(`🤔 APPU: Processing/thinking (was ${oldState})`);
+        break;
+      case 'LOADING':
+        console.log(`⏳ SYSTEM: Loading state (was ${oldState})`);
+        break;
+      case 'IDLE':
+        console.log(`😴 SYSTEM: Idle state (was ${oldState})`);
+        break;
+      case 'ERROR':
+        console.error(`❌ SYSTEM: Error state (was ${oldState})`);
+        break;
+    }
+  }, [currentState, logger, options.onStateChange, isEnabled]);
+
+  // Event handlers for OpenAI events with enhanced context
+  const handleAppuSpeakingStart = useCallback((context: string = 'openai-audio-start') => {
+    if (!isEnabled) {
+      logger.debug('🔊 Appu speaking start ignored (disabled)');
+      return;
+    }
+    logger.debug('🔊 Appu started speaking', { context });
+    handleStateTransition('APPU_SPEAKING', context);
   }, [isEnabled, handleStateTransition, logger]);
 
-  const handleAppuSpeakingStop = useCallback(() => {
-    if (!isEnabled) return;
-    logger.debug('🔇 Appu stopped speaking');
-    handleStateTransition('APPU_SPEAKING_STOPPED');
+  const handleAppuSpeakingStop = useCallback((context: string = 'openai-audio-stop') => {
+    if (!isEnabled) {
+      logger.debug('🔇 Appu speaking stop ignored (disabled)');
+      return;
+    }
+    logger.debug('🔇 Appu stopped speaking', { context });
+    handleStateTransition('APPU_SPEAKING_STOPPED', context);
   }, [isEnabled, handleStateTransition, logger]);
 
-  const handleAppuThinking = useCallback(() => {
-    if (!isEnabled) return;
-    logger.debug('🤔 Appu is thinking (processing)');
-    handleStateTransition('APPU_THINKING');
+  const handleAppuThinking = useCallback((context: string = 'openai-processing') => {
+    if (!isEnabled) {
+      logger.debug('🤔 Appu thinking ignored (disabled)');
+      return;
+    }
+    logger.debug('🤔 Appu is thinking (processing)', { context });
+    handleStateTransition('APPU_THINKING', context);
   }, [isEnabled, handleStateTransition, logger]);
 
-  const handleChildSpeechStart = useCallback(() => {
-    if (!isEnabled) return;
-    logger.debug('🎤 Child started speaking');
-    handleStateTransition('CHILD_SPEAKING');
+  const handleChildSpeechStart = useCallback((context: string = 'openai-user-speech') => {
+    if (!isEnabled) {
+      logger.debug('🎤 Child speech start ignored (disabled)');
+      return;
+    }
+    logger.debug('🎤 Child started speaking', { context });
+    handleStateTransition('CHILD_SPEAKING', context);
   }, [isEnabled, handleStateTransition, logger]);
 
-  const handleChildSpeechStop = useCallback(() => {
-    if (!isEnabled) return;
-    logger.debug('🔇 Child stopped speaking');
-    handleStateTransition('CHILD_SPEAKING_STOPPED');
+  const handleChildSpeechStop = useCallback((context: string = 'openai-user-speech-end') => {
+    if (!isEnabled) {
+      logger.debug('🔇 Child speech stop ignored (disabled)');
+      return;
+    }
+    logger.debug('🔇 Child stopped speaking', { context });
+    handleStateTransition('CHILD_SPEAKING_STOPPED', context);
   }, [isEnabled, handleStateTransition, logger]);
 
-  const handleLoading = useCallback(() => {
-    if (!isEnabled) return;
-    logger.debug('⏳ Loading state');
-    handleStateTransition('LOADING');
+  const handleLoading = useCallback((context: string = 'system-loading') => {
+    if (!isEnabled) {
+      logger.debug('⏳ Loading ignored (disabled)');
+      return;
+    }
+    logger.debug('⏳ Loading state', { context });
+    handleStateTransition('LOADING', context);
   }, [isEnabled, handleStateTransition, logger]);
 
-  const handleIdle = useCallback(() => {
-    if (!isEnabled) return;
-    logger.debug('😴 Idle state');
-    handleStateTransition('IDLE');
+  const handleIdle = useCallback((context: string = 'system-idle') => {
+    if (!isEnabled) {
+      logger.debug('😴 Idle ignored (disabled)');
+      return;
+    }
+    logger.debug('😴 Idle state', { context });
+    handleStateTransition('IDLE', context);
   }, [isEnabled, handleStateTransition, logger]);
 
-  const handleError = useCallback((errorMessage?: string) => {
-    if (!isEnabled) return;
-    logger.error('❌ Error state', { error: errorMessage });
-    handleStateTransition('ERROR');
+  const handleError = useCallback((errorMessage?: string, context: string = 'system-error') => {
+    if (!isEnabled) {
+      logger.debug('❌ Error ignored (disabled)');
+      return;
+    }
+    logger.error('❌ Error state', { error: errorMessage, context });
+    handleStateTransition('ERROR', `${context}: ${errorMessage || 'unknown error'}`);
   }, [isEnabled, handleStateTransition, logger]);
 
   // Note: OpenAI event handling is now done by useOpenAIEventTranslator
@@ -138,11 +205,34 @@ export function useWorkflowStateMachine(options: WorkflowStateMachineOptions = {
     isIdle: currentState === 'IDLE',
     isError: currentState === 'ERROR',
 
-    // Debug info
+    // Debug and monitoring info
     getDebugInfo: () => ({
       state: currentState,
       isEnabled,
-      hasOpenAIConnection: !!options.openaiConnection
-    })
+      hasOpenAIConnection: !!options.openaiConnection,
+      timestamp: new Date().toISOString(),
+      stateChecks: {
+        isAppuSpeaking: currentState === 'APPU_SPEAKING',
+        isAppuThinking: currentState === 'APPU_THINKING',
+        isChildSpeaking: currentState === 'CHILD_SPEAKING',
+        isAppuSpeakingStopped: currentState === 'APPU_SPEAKING_STOPPED',
+        isChildSpeakingStopped: currentState === 'CHILD_SPEAKING_STOPPED',
+        isLoading: currentState === 'LOADING',
+        isIdle: currentState === 'IDLE',
+        isError: currentState === 'ERROR'
+      }
+    }),
+
+    // Add state monitoring utility
+    logCurrentState: () => {
+      const debugInfo = {
+        state: currentState,
+        isEnabled,
+        timestamp: new Date().toISOString(),
+        uptime: Date.now()
+      };
+      logger.info('🔍 CURRENT WORKFLOW STATE', debugInfo);
+      console.log('🔍 WORKFLOW STATE MONITOR:', debugInfo);
+    }
   };
 }

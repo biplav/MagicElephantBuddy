@@ -13,12 +13,23 @@ export function useOpenAIEventTranslator(options: OpenAIEventTranslatorOptions =
   const { openaiConnection, workflowStateMachine, enabled = true } = options;
 
   const translateOpenAIEvent = useCallback((event: any) => {
-    if (!enabled || !workflowStateMachine) return;
+    if (!enabled || !workflowStateMachine) {
+      logger.debug('🔄 Event translation skipped', { 
+        enabled, 
+        hasWorkflowStateMachine: !!workflowStateMachine 
+      });
+      return;
+    }
 
-    logger.debug('🔄 Translating OpenAI event to workflow state', { 
+    const eventInfo = {
       eventType: event.type,
-      currentState: workflowStateMachine.currentState 
-    });
+      currentState: workflowStateMachine.currentState,
+      timestamp: new Date().toISOString(),
+      enabled
+    };
+
+    logger.debug('🔄 Translating OpenAI event to workflow state', eventInfo);
+    console.log('🔄 OPENAI EVENT:', eventInfo);
 
     switch (event.type) {
       // Session and connection events

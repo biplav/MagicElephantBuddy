@@ -271,14 +271,23 @@ export default function StorybookDisplay({
     workflowStateMachine: workflowStateMachine
   });
 
-  // Register components with workflow state machine
+  // Register components with workflow state machine and add monitoring
   useEffect(() => {
     if (workflowStateMachine) {
-      workflowStateMachine.registerSilenceDetection(silenceDetection);
-      workflowStateMachine.registerAudioManager(audioManager);
-      workflowStateMachine.registerBookStateManager(bookStateManager);
+      console.log('📚 STORYBOOK: Registering with workflow state machine');
+      workflowStateMachine.logCurrentState();
+      
+      // Note: Direct registration not implemented yet, but we can monitor states
+      console.log('📚 STORYBOOK: Workflow state machine status:', workflowStateMachine.getDebugInfo());
     }
-  }, [workflowStateMachine, silenceDetection, audioManager, bookStateManager]);
+  }, [workflowStateMachine]);
+
+  // Monitor workflow state changes
+  useEffect(() => {
+    if (workflowStateMachine) {
+      console.log(`📚 STORYBOOK: Workflow state changed to ${workflowStateMachine.currentState}`);
+    }
+  }, [workflowStateMachine?.currentState]);
 
   /* Play audio based on different triggers with conditional logic
   useEffect(() => {

@@ -290,19 +290,17 @@ const Home = memo(() => {
   const [isUserSpeaking, setIsUserSpeaking] = useState<boolean>(false);
   const [autoPageTurnEnabled, setAutoPageTurnEnabled] = useState<boolean>(true);
 
-  // Initialize workflow state machine
+  // Initialize workflow state machine first
   const workflowStateMachine = useWorkflowStateMachine({
-    enabled: autoPageTurnEnabled,
+    enabled: true,
     onStateChange: (state) => {
-      console.log('🔄 WORKFLOW STATE:', state);
-    },
-    onError: (error) => {
-      console.error('🔄 WORKFLOW ERROR:', error);
+      console.log(`🔄 MAIN: Workflow state changed to: ${state}`);
+      // Add any additional state-specific logic here
     }
   });
 
-  // Initialize OpenAI event translator
-  const eventTranslator = useOpenAIEventTranslator({
+  // Initialize OpenAI event translator with proper dependencies
+  const openaiEventTranslator = useOpenAIEventTranslator({
     openaiConnection: openaiConnection,
     workflowStateMachine: workflowStateMachine,
     enabled: true
