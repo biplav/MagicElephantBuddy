@@ -361,7 +361,7 @@ export default function StorybookDisplay({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={playPageAudio}
+                onClick={audioManager.playPageAudio}
                 className="text-xs"
               >
                 ▶️ Play Audio
