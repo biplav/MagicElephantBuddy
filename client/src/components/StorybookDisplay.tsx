@@ -56,8 +56,8 @@ export default function StorybookDisplay({
 
   // Sync audio playing state with parent component
   useEffect(() => {
-    onAppuSpeakingChangeRef.current?.(audioManager.isPlaying);
-  }, [audioManager.isPlaying]);
+    onAppuSpeakingChangeRef.current?.(bookStateManager.isPlayingAudio);
+  }, [bookStateManager.isPlayingAudio]);
 
   // Internal navigation handlers
   const handleInternalNextPage = useCallback(async () => {
@@ -69,7 +69,7 @@ export default function StorybookDisplay({
 
       setFlipDirection('next');
       setIsFlipping(true);
-      
+
       try {
         const success = await bookStateManager.navigateToNextPage();
         if (success) {
@@ -92,7 +92,7 @@ export default function StorybookDisplay({
 
       setFlipDirection('previous');
       setIsFlipping(true);
-      
+
       try {
         const success = await bookStateManager.navigateToPreviousPage();
         if (success) {
@@ -117,7 +117,7 @@ export default function StorybookDisplay({
       };
       bookStateManager.currentPageRef.current = currentPage.pageNumber;
       bookStateManager.isInReadingSessionRef.current = true;
-      
+
       console.log('📚 SYNC: Updated BookStateManager with current page:', {
         bookId: bookId,
         bookTitle: currentPage.bookTitle,
@@ -130,32 +130,17 @@ export default function StorybookDisplay({
     }
   }, [currentPage, bookStateManager, bookId]);
 
-  
 
-  // Simple audio control interface - delegates to BookStateManager
-  const audioManager = {
-    isPlaying: bookStateManager.isPlayingAudio,
-    playPageAudio: () => {
-      if (currentPage?.audioUrl) {
-        bookStateManager.playPageAudio(currentPage.audioUrl);
-      }
-    },
-    stopAudio: bookStateManager.stopAudio
-  };
-
-  
-
-  
 
   // Monitor page loading completion
   useEffect(() => {
     if (currentPage && imageLoaded && isVisible) {
       console.log('📖 PAGE-LOADED: Page fully loaded, transitioning book state');
-      
+
       // Transition from PAGE_LOADING to PAGE_LOADED when image is loaded
       if (bookStateManager.bookState === 'PAGE_LOADING') {
         bookStateManager.bookStateAPI.transitionToPageLoaded();
-        
+
         // If there's audio, transition to audio ready
         if (currentPage.audioUrl) {
           bookStateManager.bookStateAPI.transitionToAudioReadyToPlay();
@@ -163,14 +148,14 @@ export default function StorybookDisplay({
       }
     }
   }, [currentPage, imageLoaded, isVisible, bookStateManager]);
-  
+
   useEffect(() => {
     if (currentPage?.pageImageUrl) {
       setImageLoaded(false);
     }
   }, [currentPage?.pageImageUrl]);
 
-  
+
 
   const handleNextPage = useCallback(() => {
     if (currentPage && currentPage.pageNumber < currentPage.totalPages) {
@@ -212,30 +197,34 @@ export default function StorybookDisplay({
             <Badge variant="secondary" className="text-sm">
               Page {currentPage.pageNumber} of {currentPage.totalPages}
             </Badge>
-            {audioManager.isPlaying && (
+            {bookStateManager.isPlayingAudio && (
               <Badge variant="default" className="text-xs animate-pulse bg-green-600">
                 🔊 Playing Audio
               </Badge>
             )}
-            {currentPage?.audioUrl && !audioManager.isPlaying && (
+            {currentPage?.audioUrl && !bookStateManager.isPlayingAudio && (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={audioManager.playPageAudio}
+                onClick={() => {
+                  if (currentPage?.audioUrl) {
+                    bookStateManager.playPageAudio(currentPage.audioUrl);
+                  }
+                }}
                 className="text-xs"
               >
                 ▶️ Play Audio
               </Button>
             )}
             {bookStateManager.bookState !== 'IDLE' && (
-              <Badge 
-                variant={bookStateManager.bookState === 'ERROR' ? 'destructive' : 'outline'} 
+              <Badge
+                variant={bookStateManager.bookState === 'ERROR' ? 'destructive' : 'outline'}
                 className="text-xs"
               >
                 {bookStateManager.bookState.replace(/_/g, ' ')}
               </Badge>
             )}
-            
+
             <Button variant="ghost" size="sm" onClick={onClose}>
               ✕
             </Button>
