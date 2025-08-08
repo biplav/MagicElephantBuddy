@@ -319,7 +319,7 @@ const Home = memo(() => {
     error: realtimeError,
     isRecording: isRealtimeRecording,
     audioLevel,
-    requestPermission: realtimeRequestPermission,
+    requestMicrophonePermission,
     dataChannelState,
     openaiConnection,
     captureCurrentFrame,
@@ -738,7 +738,7 @@ const Home = memo(() => {
     
     try {
       // Request permissions first
-      await realtimeRequestPermission();
+      await requestMicrophonePermission();
       
       // Enter fullscreen if possible
       await enterFullscreen();
@@ -760,7 +760,7 @@ const Home = memo(() => {
         setSpeechText(undefined);
       }, 3000);
     }
-  }, [realtimeRequestPermission, enterFullscreen, connect]);
+  }, [requestMicrophonePermission, enterFullscreen, connect]);
 
   // Handle stop session
   const handleStopSession = useCallback(async () => {
