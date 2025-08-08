@@ -1,0 +1,54 @@
+Uncaught ReferenceError: playPageAudio is not defined
+    at StorybookDisplay (StorybookDisplay.tsx:364:26)
+    at renderWithHooks (chunk-RPCDYKBN.js?v=f78f0e71:11548:26)
+    at mountIndeterminateComponent (chunk-RPCDYKBN.js?v=f78f0e71:14926:21)
+    at beginWork (chunk-RPCDYKBN.js?v=f78f0e71:15914:22)
+    at HTMLUnknownElement.callCallback2 (chunk-RPCDYKBN.js?v=f78f0e71:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-RPCDYKBN.js?v=f78f0e71:3699:24)
+    at invokeGuardedCallback (chunk-RPCDYKBN.js?v=f78f0e71:3733:39)
+    at beginWork$1 (chunk-RPCDYKBN.js?v=f78f0e71:19765:15)
+    at performUnitOfWork (chunk-RPCDYKBN.js?v=f78f0e71:19201:20)
+    at workLoopSync (chunk-RPCDYKBN.js?v=f78f0e71:19137:13)
+StorybookDisplay @ StorybookDisplay.tsx:364
+renderWithHooks @ chunk-RPCDYKBN.js?v=f78f0e71:11548
+mountIndeterminateComponent @ chunk-RPCDYKBN.js?v=f78f0e71:14926
+beginWork @ chunk-RPCDYKBN.js?v=f78f0e71:15914
+callCallback2 @ chunk-RPCDYKBN.js?v=f78f0e71:3674
+invokeGuardedCallbackDev @ chunk-RPCDYKBN.js?v=f78f0e71:3699
+invokeGuardedCallback @ chunk-RPCDYKBN.js?v=f78f0e71:3733
+beginWork$1 @ chunk-RPCDYKBN.js?v=f78f0e71:19765
+performUnitOfWork @ chunk-RPCDYKBN.js?v=f78f0e71:19201
+workLoopSync @ chunk-RPCDYKBN.js?v=f78f0e71:19137
+renderRootSync @ chunk-RPCDYKBN.js?v=f78f0e71:19116
+performConcurrentWorkOnRoot @ chunk-RPCDYKBN.js?v=f78f0e71:18678
+workLoop @ chunk-RPCDYKBN.js?v=f78f0e71:197
+flushWork @ chunk-RPCDYKBN.js?v=f78f0e71:176
+performWorkUntilDeadline @ chunk-RPCDYKBN.js?v=f78f0e71:384Understand this error
+StorybookDisplay.tsx:364 Uncaught ReferenceError: playPageAudio is not defined
+    at StorybookDisplay (StorybookDisplay.tsx:364:26)
+    at renderWithHooks (chunk-RPCDYKBN.js?v=f78f0e71:11548:26)
+    at mountIndeterminateComponent (chunk-RPCDYKBN.js?v=f78f0e71:14926:21)
+    at beginWork (chunk-RPCDYKBN.js?v=f78f0e71:15914:22)
+    at HTMLUnknownElement.callCallback2 (chunk-RPCDYKBN.js?v=f78f0e71:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-RPCDYKBN.js?v=f78f0e71:3699:24)
+    at invokeGuardedCallback (chunk-RPCDYKBN.js?v=f78f0e71:3733:39)
+    at beginWork$1 (chunk-RPCDYKBN.js?v=f78f0e71:19765:15)
+    at performUnitOfWork (chunk-RPCDYKBN.js?v=f78f0e71:19201:20)
+    at workLoopSync (chunk-RPCDYKBN.js?v=f78f0e71:19137:13)
+StorybookDisplay @ StorybookDisplay.tsx:364
+renderWithHooks @ chunk-RPCDYKBN.js?v=f78f0e71:11548
+mountIndeterminateComponent @ chunk-RPCDYKBN.js?v=f78f0e71:14926
+beginWork @ chunk-RPCDYKBN.js?v=f78f0e71:15914
+callCallback2 @ chunk-RPCDYKBN.js?v=f78f0e71:3674
+invokeGuardedCallbackDev @ chunk-RPCDYKBN.js?v=f78f0e71:3699
+invokeGuardedCallback @ chunk-RPCDYKBN.js?v=f78f0e71:3733
+beginWork$1 @ chunk-RPCDYKBN.js?v=f78f0e71:19765
+performUnitOfWork @ chunk-RPCDYKBN.js?v=f78f0e71:19201
+workLoopSync @ chunk-RPCDYKBN.js?v=f78f0e71:19137
+renderRootSync @ chunk-RPCDYKBN.js?v=f78f0e71:19116
+recoverFromConcurrentError @ chunk-RPCDYKBN.js?v=f78f0e71:18736
+performConcurrentWorkOnRoot @ chunk-RPCDYKBN.js?v=f78f0e71:18684
+workLoop @ chunk-RPCDYKBN.js?v=f78f0e71:197
+flushWork @ chunk-RPCDYKBN.js?v=f78f0e71:176
+performWorkUntilDeadline @ chunk-RPCDYKBN.js?v=f78f0e71:384Understand this error
+chunk-RPCDYKBN.js?v=f78f0e71:14032 The above error occurred in the <StorybookDisplay> component:
