@@ -281,18 +281,7 @@ const Home = memo(() => {
     setIsStorybookVisible(true);
   }, []);
 
-  // Initialize book state manager
-  const bookStateManager = useBookStateManager({
-    onStorybookPageDisplay: handleStorybookPageDisplay,
-    onFunctionCallResult: (callId: string, result: string) => {
-      console.log("Book function call result:", { callId, result });
-    },
-    onError: (callId: string, error: string) => {
-      console.error("Book function call error:", { callId, error });
-    },
-  });
-
-  // Initialize realtime audio hook with stable options
+  // Initialize realtime audio hook with stable options FIRST
   const [isAppuSpeaking, setIsAppuSpeaking] = useState<boolean>(false);
   const [isUserSpeaking, setIsUserSpeaking] = useState<boolean>(false);
   const [autoPageTurnEnabled, setAutoPageTurnEnabled] = useState<boolean>(true);
@@ -326,7 +315,7 @@ const Home = memo(() => {
 
   const realtimeAudio = useRealtimeAudio(realtimeOptions);
 
-  // Destructure realtime audio properties first
+  // Destructure realtime audio properties immediately after hook call
   const {
     isConnected,
     isRecording: realtimeIsRecording,
@@ -351,78 +340,7 @@ const Home = memo(() => {
   const geminiConnection = (realtimeAudio as any).geminiConnection || {};
   const mediaManager = (realtimeAudio as any).mediaManager || { hasVideoPermission: false, videoElement: null };
 
-  // Define callback functions that depend on the realtime audio functions AFTER they're available
-  const handleStartButton = useCallback(async () => {
-    console.log("Start button clicked - transitioning to interaction");
-    
-    // Enter fullscreen for better experience
-    await enterFullscreen();
-    
-    // Set state to interaction mode
-    setAppState("interaction");
-    
-    // Connect to the appropriate AI service
-    if (useRealtimeAPI) {
-      if (aiProvider === 'gemini') {
-        console.log("Connecting to Gemini Live");
-        // The Gemini connection will be handled by realtimeAudio hook
-        await connect();
-      } else {
-        console.log("Connecting to OpenAI Realtime API");
-        await connect();
-      }
-    }
-  }, [useRealtimeAPI, aiProvider, connect]);
-
-  const handleStopSession = useCallback(async () => {
-    console.log("Stop session clicked");
-    
-    // Stop recording if active
-    if (currentRecorder?.isRecording) {
-      currentRecorder.stopRecording();
-    }
-    
-    // Disconnect from AI services
-    if (useRealtimeAPI) {
-      if (aiProvider === 'openai') {
-        disconnect();
-      } else {
-        disconnectRealtime();
-      }
-    }
-    
-    // Close any active conversation
-    await handleCloseConversation();
-    
-    // Exit fullscreen
-    await exitFullscreen();
-    
-    // Return to welcome state
-    setAppState("welcome");
-    
-    // Reset UI state
-    setElephantState("idle");
-    setSpeechText(undefined);
-    setTranscribedText("");
-  }, [useRealtimeAPI, aiProvider, disconnect, disconnectRealtime, handleCloseConversation, currentRecorder]);
-
-  const handleAllowPermission = useCallback(async () => {
-    console.log("Permission allowed by user");
-    
-    try {
-      // Request microphone permission using realtime permission function
-      await realtimeRequestPermission();
-      
-      // Close the permission modal
-      setPermissionModalOpen(false);
-      
-      console.log("Microphone permission granted successfully");
-    } catch (error) {
-      console.error("Failed to get microphone permission:", error);
-      handleError("Failed to get microphone permission");
-    }
-  }, [realtimeRequestPermission, handleError]);
-
+  // Initialize traditional recorder
   const traditionalRecorder = useAudioRecorder({
     enableLocalPlayback,
     onProcessingStart: () => {
@@ -515,6 +433,88 @@ const Home = memo(() => {
     traditionalRecorder.requestMicrophonePermission,
     traditionalRecorder.recorderState,
   ]);
+
+  // Now that currentRecorder is defined, define callbacks that depend on it
+  const handleStartButton = useCallback(async () => {
+    console.log("Start button clicked - transitioning to interaction");
+    
+    // Enter fullscreen for better experience
+    await enterFullscreen();
+    
+    // Set state to interaction mode
+    setAppState("interaction");
+    
+    // Connect to the appropriate AI service
+    if (useRealtimeAPI) {
+      if (aiProvider === 'gemini') {
+        console.log("Connecting to Gemini Live");
+        await connect();
+      } else {
+        console.log("Connecting to OpenAI Realtime API");
+        await connect();
+      }
+    }
+  }, [useRealtimeAPI, aiProvider, connect]);
+
+  const handleStopSession = useCallback(async () => {
+    console.log("Stop session clicked");
+    
+    // Stop recording if active
+    if (currentRecorder?.isRecording) {
+      currentRecorder.stopRecording();
+    }
+    
+    // Disconnect from AI services
+    if (useRealtimeAPI) {
+      if (aiProvider === 'openai') {
+        disconnect();
+      } else {
+        disconnectRealtime();
+      }
+    }
+    
+    // Close any active conversation
+    await handleCloseConversation();
+    
+    // Exit fullscreen
+    await exitFullscreen();
+    
+    // Return to welcome state
+    setAppState("welcome");
+    
+    // Reset UI state
+    setElephantState("idle");
+    setSpeechText(undefined);
+    setTranscribedText("");
+  }, [useRealtimeAPI, aiProvider, disconnect, disconnectRealtime, handleCloseConversation, currentRecorder]);
+
+  const handleAllowPermission = useCallback(async () => {
+    console.log("Permission allowed by user");
+    
+    try {
+      // Request microphone permission using realtime permission function
+      await realtimeRequestPermission();
+      
+      // Close the permission modal
+      setPermissionModalOpen(false);
+      
+      console.log("Microphone permission granted successfully");
+    } catch (error) {
+      console.error("Failed to get microphone permission:", error);
+      handleError("Failed to get microphone permission");
+    }
+  }, [realtimeRequestPermission, handleError]);
+
+  // Initialize book state manager AFTER all the callbacks are defined
+  const bookStateManager = useBookStateManager({
+    onStorybookPageDisplay: handleStorybookPageDisplay,
+    onFunctionCallResult: (callId: string, result: string) => {
+      console.log("Book function call result:", { callId, result });
+    },
+    onError: (callId: string, error: string) => {
+      console.error("Book function call error:", { callId, error });
+    },
+  });
 
   // Start recording automatically when ready (only for realtime API after connection is established)
   useEffect(() => {
