@@ -306,6 +306,11 @@ const Home = memo(() => {
   // Initialize workflow state machine FIRST (before other hooks that depend on it)
   const workflowStateMachine = useWorkflowStateMachine();
 
+  // Initialize BookStateManager
+  const bookStateManager = useBookStateManager({
+    workflowStateMachine: workflowStateMachine
+  });
+
   // Initialize realtime audio with the selected provider and error handling
   const {
     connect,
@@ -343,39 +348,6 @@ const Home = memo(() => {
     openaiConnection: openaiConnection,
     enabled: true
   });
-
-  // Initialize audio recorder
-  const currentRecorder = useMemo(() => {
-    if (useRealtimeAPI) {
-      // Return the realtime audio recorder interface from useRealtimeAudio
-      return {
-        startRecording: () => {
-          if (connectionState === 'connected') {
-            console.log("Starting realtime recording");
-            // The recording is managed internally by useRealtimeAudio
-          } else {
-            console.log("Cannot start recording - not connected");
-          }
-        },
-        stopRecording: realtimeStopRecording,
-        isRecording: isRealtimeRecording,
-        isReady: connectionState === 'connected',
-        isProcessing: isConnecting,
-      };
-    }
-    // This part seems to refer to a variable `audioRecorder` that is not defined in this scope.
-    // Assuming `useAudioRecorder` is intended here, but it needs to be called properly.
-    // For now, returning an empty object or a placeholder if `useAudioRecorder` is not used directly.
-    // If `audioRecorder` is meant to be the result of `useAudioRecorder`, it should be called like:
-    // const audioRecorder = useAudioRecorder(...)
-    // However, the original code snippet provided does not show `audioRecorder` being initialized.
-    // Based on the error, `audioManager` was the issue, and this refactor aims to fix hook order.
-    // If `audioRecorder` from `useAudioRecorder` is still needed, it should be initialized similarly to `useRealtimeAudio`.
-    // For the purpose of this fix, we'll assume the `traditionalRecorder` logic below is the correct fallback.
-    // If `useAudioRecorder` was intended to be the `audioRecorder` variable, it needs to be initialized.
-    // Let's assume the `traditionalRecorder` instance is what's needed if not using realtime.
-    return traditionalRecorder; // Assuming traditionalRecorder is the fallback if not useRealtimeAPI
-  }, [useRealtimeAPI, connectionState, isRealtimeRecording, isConnecting, realtimeStopRecording, /* audioRecorder - removed as it's not defined */ ]);
 
   // Traditional recorder initialization (kept for fallback logic if useRealtimeAPI is false)
   const traditionalRecorder = useAudioRecorder({
@@ -433,6 +405,27 @@ const Home = memo(() => {
     },
   });
 
+  // Initialize audio recorder
+  const currentRecorder = useMemo(() => {
+    if (useRealtimeAPI) {
+      // Return the realtime audio recorder interface from useRealtimeAudio
+      return {
+        startRecording: () => {
+          if (connectionState === 'connected') {
+            console.log("Starting realtime recording");
+            // The recording is managed internally by useRealtimeAudio
+          } else {
+            console.log("Cannot start recording - not connected");
+          }
+        },
+        stopRecording: realtimeStopRecording,
+        isRecording: isRealtimeRecording,
+        isReady: connectionState === 'connected',
+        isProcessing: isConnecting,
+      };
+    }
+    return traditionalRecorder;
+  }, [useRealtimeAPI, connectionState, isRealtimeRecording, isConnecting, realtimeStopRecording, traditionalRecorder]);
 
   // Start recording automatically when ready (only for realtime API after connection is established)
   useEffect(() => {
@@ -738,6 +731,87 @@ const Home = memo(() => {
       workflowStateMachine.goToPreviousPage();
     }
   };
+
+  // Handle start button click
+  const handleStartButton = useCallback(async () => {
+    console.log('Start button clicked');
+    
+    try {
+      // Request permissions first
+      await realtimeRequestPermission();
+      
+      // Enter fullscreen if possible
+      await enterFullscreen();
+      
+      // Connect to the service
+      await connect();
+      
+      // Change app state to interaction
+      setAppState('interaction');
+      
+    } catch (error) {
+      console.error('Error starting interaction:', error);
+      setElephantState('error');
+      setSpeechText('Sorry, I had trouble getting ready. Let me try again.');
+      
+      // Reset after showing error
+      setTimeout(() => {
+        setElephantState('idle');
+        setSpeechText(undefined);
+      }, 3000);
+    }
+  }, [realtimeRequestPermission, enterFullscreen, connect]);
+
+  // Handle stop session
+  const handleStopSession = useCallback(async () => {
+    console.log('Stop session clicked');
+    
+    try {
+      // Stop any current recording
+      if (currentRecorder.isRecording) {
+        currentRecorder.stopRecording();
+      }
+      
+      // Disconnect from service
+      disconnect();
+      
+      // Close any open conversations
+      await handleCloseConversation();
+      
+      // Exit fullscreen
+      await exitFullscreen();
+      
+      // Reset states
+      setAppState('welcome');
+      setElephantState('idle');
+      setSpeechText(undefined);
+      setTranscribedText('');
+      
+      // Close storybook if open
+      if (isStorybookVisible) {
+        setIsStorybookVisible(false);
+        setCurrentStorybookPage(null);
+      }
+      
+    } catch (error) {
+      console.error('Error stopping session:', error);
+    }
+  }, [currentRecorder, disconnect, handleCloseConversation, exitFullscreen, isStorybookVisible]);
+
+  // Handle permission allow
+  const handleAllowPermission = useCallback(async () => {
+    console.log('Permission allowed');
+    setPermissionModalOpen(false);
+    
+    try {
+      await connect();
+      setAppState('interaction');
+    } catch (error) {
+      console.error('Error connecting after permission:', error);
+      setElephantState('error');
+      setSpeechText('Sorry, I had trouble connecting. Please try again.');
+    }
+  }, [connect]);
 
   return (
     <div className="min-h-screen flex flex-col relative">
