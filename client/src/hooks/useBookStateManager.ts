@@ -341,7 +341,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
         reason: `Waiting for workflow to become IDLE (currently ${workflowState})`
       });
     }
-  }, [options.workflowStateMachine?.currentState, bookState, isPlayingAudio, playPageAudio, navigateToNextPage, transitionToState, logger]);
+  }, [options.workflowStateMachine?.currentState, bookState, isPlayingAudio, playPageAudio, transitionToState, logger, navigateToNextPage]);
 
   // Helper function to manage reading session state
   const enterReadingSession = useCallback(() => {
