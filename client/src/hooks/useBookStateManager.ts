@@ -51,13 +51,59 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
   // Book state transition handler
   const transitionToState = useCallback((newState: BookState) => {
     const previousState = bookState;
-    logger.info(`📖 BOOK STATE: ${previousState} -> ${newState}`, {
-      page: currentPageRef.current,
-      book: selectedBookRef.current?.title
+    const timestamp = new Date().toISOString();
+    
+    // Comprehensive logging for debugging
+    logger.info(`📖 BOOK STATE TRANSITION: ${previousState} -> ${newState}`, {
+      timestamp,
+      previousState,
+      newState,
+      currentPage: currentPageRef.current,
+      selectedBook: selectedBookRef.current ? {
+        id: selectedBookRef.current.id,
+        title: selectedBookRef.current.title,
+        totalPages: selectedBookRef.current.totalPages,
+        hasCurrentAudioUrl: !!selectedBookRef.current.currentAudioUrl
+      } : null,
+      isInReadingSession: isInReadingSessionRef.current,
+      isPlayingAudio,
+      workflowState: options.workflowStateMachine?.currentState || 'unknown'
     });
+
+    // Log state-specific context
+    switch (newState) {
+      case 'PAGE_LOADING':
+        logger.info('📖 STATE: Starting page load process');
+        break;
+      case 'PAGE_LOADED':
+        logger.info('📖 STATE: Page loaded, checking for audio');
+        break;
+      case 'AUDIO_READY_TO_PLAY':
+        logger.info('📖 STATE: Audio ready, waiting for workflow IDLE state', {
+          workflowState: options.workflowStateMachine?.currentState,
+          hasAudioUrl: !!selectedBookRef.current?.currentAudioUrl
+        });
+        break;
+      case 'AUDIO_PLAYING':
+        logger.info('📖 STATE: Audio playback started');
+        break;
+      case 'AUDIO_COMPLETED':
+        logger.info('📖 STATE: Audio playback completed, starting auto-advance timer');
+        break;
+      case 'ERROR':
+        logger.error('📖 STATE: Error state reached', {
+          previousState,
+          context: 'State transition error'
+        });
+        break;
+      case 'IDLE':
+        logger.info('📖 STATE: Returned to idle state');
+        break;
+    }
+
     setBookState(newState);
     options.onBookStateChange?.(newState);
-  }, [bookState, logger, options]);
+  }, [bookState, logger, options, isPlayingAudio]);
 
   // Public API for state transitions
   const bookStateAPI = {
@@ -76,12 +122,22 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
 
   // Audio management with workflow integration
   const playPageAudio = useCallback((audioUrl: string) => {
-    if (!audioUrl) return;
+    if (!audioUrl) {
+      logger.warn('🔊 BOOK-AUDIO: No audio URL provided');
+      return;
+    }
 
-    console.log('🔊 BOOK-AUDIO: Playing page audio:', audioUrl);
+    logger.info('🔊 BOOK-AUDIO: Starting audio playback', {
+      audioUrl,
+      currentState: bookState,
+      page: currentPageRef.current,
+      book: selectedBookRef.current?.title,
+      workflowState: options.workflowStateMachine?.currentState
+    });
 
     // Stop any existing audio
     if (audioElementRef.current) {
+      logger.info('🔊 BOOK-AUDIO: Stopping existing audio');
       audioElementRef.current.pause();
       audioElementRef.current.currentTime = 0;
       setIsPlayingAudio(false);
@@ -91,28 +147,41 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
     audio.preload = 'auto';
 
     audio.onplay = () => {
-      console.log('🔊 BOOK-AUDIO: Audio started playing');
+      logger.info('🔊 BOOK-AUDIO: Audio playback started successfully', {
+        audioUrl,
+        duration: audio.duration,
+        page: currentPageRef.current
+      });
       setIsPlayingAudio(true);
       transitionToState('AUDIO_PLAYING');
       options.workflowStateMachine?.handleAppuSpeakingStart('book-page-audio-start');
     };
 
     audio.onended = () => {
-      console.log('🔊 BOOK-AUDIO: Audio finished playing');
+      logger.info('🔊 BOOK-AUDIO: Audio playback completed', {
+        audioUrl,
+        page: currentPageRef.current,
+        totalPages: selectedBookRef.current?.totalPages
+      });
       setIsPlayingAudio(false);
       audioElementRef.current = null;
       transitionToState('AUDIO_COMPLETED');
       options.workflowStateMachine?.handleAppuSpeakingStop('book-page-audio-end');
       
       // Start auto page advance timer
-      console.log('🔄 BOOK-AUTO: Starting auto page advance timer');
+      logger.info('🔄 BOOK-AUTO: Starting auto page advance timer (3s delay)');
       autoAdvanceTimerRef.current = setTimeout(() => {
+        logger.info('🔄 BOOK-AUTO: Auto page advance timer triggered');
         options.onAutoPageAdvance?.();
       }, 3000); // 3 second delay after audio ends
     };
 
     audio.onerror = (error) => {
-      console.error('🔊 BOOK-AUDIO: Error playing audio:', error);
+      logger.error('🔊 BOOK-AUDIO: Audio playback error', {
+        error: error.toString(),
+        audioUrl,
+        page: currentPageRef.current
+      });
       setIsPlayingAudio(false);
       audioElementRef.current = null;
       transitionToState('ERROR');
@@ -123,13 +192,21 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
     const playPromise = audio.play();
     
     if (playPromise !== undefined) {
-      playPromise.catch(error => {
-        console.error('🔊 BOOK-AUDIO: Failed to play audio:', error);
-        setIsPlayingAudio(false);
-        options.workflowStateMachine?.handleError('Audio autoplay blocked');
-      });
+      playPromise
+        .then(() => {
+          logger.info('🔊 BOOK-AUDIO: Audio play promise resolved');
+        })
+        .catch(error => {
+          logger.error('🔊 BOOK-AUDIO: Audio play promise rejected', {
+            error: error.toString(),
+            audioUrl,
+            likely_cause: 'Autoplay blocked by browser'
+          });
+          setIsPlayingAudio(false);
+          options.workflowStateMachine?.handleError('Audio autoplay blocked');
+        });
     }
-  }, [transitionToState, options.workflowStateMachine, options.onAutoPageAdvance]);
+  }, [transitionToState, options.workflowStateMachine, options.onAutoPageAdvance, logger, bookState]);
 
   // Clear auto advance timer
   const clearAutoAdvanceTimer = useCallback(() => {
@@ -153,21 +230,57 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
 
   // Monitor workflow state and automatically play audio when appropriate
   useEffect(() => {
-    if (!options.workflowStateMachine) return;
+    if (!options.workflowStateMachine) {
+      logger.debug('🔄 WORKFLOW-MONITOR: No workflow state machine available');
+      return;
+    }
 
     const workflowState = options.workflowStateMachine.currentState;
     
+    logger.debug('🔄 WORKFLOW-MONITOR: State check', {
+      workflowState,
+      bookState,
+      isPlayingAudio,
+      hasSelectedBook: !!selectedBookRef.current,
+      hasAudioUrl: !!selectedBookRef.current?.currentAudioUrl,
+      currentPage: currentPageRef.current
+    });
+    
     // Only attempt audio playback when workflow is IDLE and book has audio ready
     if (workflowState === 'IDLE' && bookState === 'AUDIO_READY_TO_PLAY') {
-      // Check if we have current page data with audio URL
       const hasAudioUrl = selectedBookRef.current?.currentAudioUrl;
       
+      logger.info('🔄 WORKFLOW-MONITOR: Conditions met for auto-play', {
+        workflowState,
+        bookState,
+        hasAudioUrl: !!hasAudioUrl,
+        isPlayingAudio,
+        audioUrl: hasAudioUrl
+      });
+      
       if (hasAudioUrl && !isPlayingAudio) {
-        console.log('🔄 BOOK-WORKFLOW: Workflow is IDLE, auto-playing page audio');
+        logger.info('🔄 BOOK-WORKFLOW: Workflow is IDLE, auto-playing page audio', {
+          audioUrl: hasAudioUrl,
+          page: currentPageRef.current,
+          book: selectedBookRef.current?.title
+        });
         playPageAudio(hasAudioUrl);
+      } else {
+        logger.warn('🔄 WORKFLOW-MONITOR: Cannot auto-play audio', {
+          hasAudioUrl: !!hasAudioUrl,
+          isPlayingAudio,
+          reason: !hasAudioUrl ? 'No audio URL' : 'Already playing audio'
+        });
       }
+    } else {
+      logger.debug('🔄 WORKFLOW-MONITOR: Conditions not met for auto-play', {
+        workflowState,
+        bookState,
+        isIdleWorkflow: workflowState === 'IDLE',
+        isAudioReady: bookState === 'AUDIO_READY_TO_PLAY'
+      });
     }
-  }, [options.workflowStateMachine?.currentState, bookState, isPlayingAudio, playPageAudio]);
+  }, [options.workflowStateMachine?.currentState, bookState, isPlayingAudio, playPageAudio, logger]);
 
   // Helper function to manage reading session state
   const enterReadingSession = useCallback(() => {

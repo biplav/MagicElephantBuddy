@@ -306,9 +306,9 @@ const Home = memo(() => {
   // Initialize workflow state machine FIRST (before other hooks that depend on it)
   const workflowStateMachine = useWorkflowStateMachine();
 
-  // Initialize BookStateManager
+  // Initialize BookStateManager with enhanced logging
   const bookStateManager = useBookStateManager({
-    workflowStateMachine: workflowStateMachine
+    workflowStateMachine: workflowStateMachine,
   });
 
   // Initialize realtime audio with the selected provider and error handling
