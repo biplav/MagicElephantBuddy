@@ -733,10 +733,12 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     connect,
     disconnect,
     sendMessage,
-    isConnected,
-    connectionState,
-    conversationId,
-    error,
-    tokensUsed
+    tokensUsed,
+    isAppuSpeaking,
+    isUserSpeaking,
+    // Expose media manager methods
+    captureFrame: mediaManager.captureFrame,
+    hasVideoPermission: mediaManager.hasVideoPermission,
+    videoElement: mediaManager.videoElement
   };
 }
