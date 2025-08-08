@@ -47,6 +47,16 @@ const Home = memo(() => {
     voicePreference: "nova",
   });
   const [capturedFrame, setCapturedFrame] = useState<string | null>(null);
+  const [currentStorybookPage, setCurrentStorybookPage] = useState<{
+    pageImageUrl: string;
+    pageText: string;
+    pageNumber: number;
+    totalPages: number;
+    bookTitle: string;
+    audioUrl?: string;
+  } | null>(null);
+  const [isStorybookVisible, setIsStorybookVisible] = useState<boolean>(false);
+  const [enableVideo, setEnableVideo] = useState<boolean>(false);
 
   // Derive aiProvider from saved settings
   const aiProvider: 'openai' | 'gemini' = aiSettings.voiceMode === 'gemini' ? 'gemini' : 'openai';
@@ -270,6 +280,76 @@ const Home = memo(() => {
     setCurrentStorybookPage(pageData);
     setIsStorybookVisible(true);
   }, []);
+
+  const handleStartButton = useCallback(async () => {
+    console.log("Start button clicked - transitioning to interaction");
+    
+    // Enter fullscreen for better experience
+    await enterFullscreen();
+    
+    // Set state to interaction mode
+    setAppState("interaction");
+    
+    // Connect to the appropriate AI service
+    if (useRealtimeAPI) {
+      if (aiProvider === 'gemini') {
+        console.log("Connecting to Gemini Live");
+        // The Gemini connection will be handled by realtimeAudio hook
+      } else {
+        console.log("Connecting to OpenAI Realtime API");
+        await connect();
+      }
+    }
+  }, [useRealtimeAPI, aiProvider, connect, enterFullscreen]);
+
+  const handleStopSession = useCallback(async () => {
+    console.log("Stop session clicked");
+    
+    // Stop recording if active
+    if (currentRecorder.isRecording) {
+      currentRecorder.stopRecording();
+    }
+    
+    // Disconnect from AI services
+    if (useRealtimeAPI) {
+      if (aiProvider === 'openai') {
+        disconnect();
+      } else {
+        disconnectRealtime();
+      }
+    }
+    
+    // Close any active conversation
+    await handleCloseConversation();
+    
+    // Exit fullscreen
+    await exitFullscreen();
+    
+    // Return to welcome state
+    setAppState("welcome");
+    
+    // Reset UI state
+    setElephantState("idle");
+    setSpeechText(undefined);
+    setTranscribedText("");
+  }, [currentRecorder, useRealtimeAPI, aiProvider, disconnect, disconnectRealtime, handleCloseConversation, exitFullscreen]);
+
+  const handleAllowPermission = useCallback(async () => {
+    console.log("Permission allowed by user");
+    
+    try {
+      // Request microphone permission
+      await currentRecorder.requestMicrophonePermission();
+      
+      // Close the permission modal
+      setPermissionModalOpen(false);
+      
+      console.log("Microphone permission granted successfully");
+    } catch (error) {
+      console.error("Failed to get microphone permission:", error);
+      options.onError?.("Failed to get microphone permission");
+    }
+  }, [currentRecorder]);
 
   // Initialize book state manager
   const bookStateManager = useBookStateManager({
