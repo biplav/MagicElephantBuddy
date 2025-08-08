@@ -175,6 +175,7 @@ export default function StorybookDisplay({
           setIsPlayingAudio(true);
           onAppuSpeakingChangeRef.current?.(true);
           workflowStateMachine?.handleAudioPlaybackStart();
+          bookStateManager.bookStateAPI.transitionToAudioPlaying();
         };
 
         audio.onended = () => {
@@ -183,6 +184,7 @@ export default function StorybookDisplay({
           onAppuSpeakingChangeRef.current?.(false);
           audioElementRef.current = null;
           workflowStateMachine?.handleAudioPlaybackEnd();
+          bookStateManager.bookStateAPI.transitionToAudioCompleted();
         };
 
         audio.onerror = (error) => {
@@ -191,12 +193,14 @@ export default function StorybookDisplay({
           onAppuSpeakingChangeRef.current?.(false);
           audioElementRef.current = null;
           workflowStateMachine?.handleError('Audio playback failed');
+          bookStateManager.bookStateAPI.transitionToError();
         };
 
         audio.onpause = () => {
           console.log('Audio paused');
           setIsPlayingAudio(false);
           onAppuSpeakingChangeRef.current?.(false);
+          bookStateManager.bookStateAPI.transitionToAudioPaused();
         };
 
         audioElementRef.current = audio;
@@ -366,6 +370,14 @@ export default function StorybookDisplay({
               >
                 ▶️ Play Audio
               </Button>
+            )}
+            {bookStateManager.bookState !== 'IDLE' && (
+              <Badge 
+                variant={bookStateManager.bookState === 'ERROR' ? 'destructive' : 'outline'} 
+                className="text-xs"
+              >
+                {bookStateManager.bookState.replace(/_/g, ' ')}
+              </Badge>
             )}
             {silenceDetection.isDetectingSilence && !isPlayingAudio && (
               <Badge variant="outline" className="text-xs animate-pulse">

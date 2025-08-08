@@ -1,5 +1,17 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useState } from 'react';
 import { createServiceLogger } from '@/lib/logger';
+
+// Book State definitions
+export type BookState = 
+  | 'IDLE'
+  | 'PAGE_LOADING'
+  | 'PAGE_LOADED'
+  | 'AUDIO_READY_TO_PLAY'
+  | 'AUDIO_PLAYING'
+  | 'AUDIO_PAUSED'
+  | 'AUDIO_COMPLETED'
+  | 'PAGE_COMPLETED'
+  | 'ERROR';
 
 interface BookStateManagerOptions {
   onStorybookPageDisplay?: (pageData: {
@@ -12,10 +24,14 @@ interface BookStateManagerOptions {
   }) => void;
   onFunctionCallResult?: (callId: string, result: string) => void;
   onError?: (callId: string, error: string) => void;
+  onBookStateChange?: (state: BookState) => void;
 }
 
 export function useBookStateManager(options: BookStateManagerOptions = {}) {
   const logger = createServiceLogger('book-state-manager');
+
+  // Book State Management
+  const [bookState, setBookState] = useState<BookState>('IDLE');
 
   // Book tracking refs
   const selectedBookRef = useRef<any>(null);
@@ -24,6 +40,32 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
   // Reading session optimization refs
   const isInReadingSessionRef = useRef<boolean>(false);
   const readingSessionMessagesRef = useRef<any[]>([]);
+
+  // Book state transition handler
+  const transitionToState = useCallback((newState: BookState) => {
+    const previousState = bookState;
+    logger.info(`📖 BOOK STATE: ${previousState} -> ${newState}`, {
+      page: currentPageRef.current,
+      book: selectedBookRef.current?.title
+    });
+    setBookState(newState);
+    options.onBookStateChange?.(newState);
+  }, [bookState, logger, options]);
+
+  // Public API for state transitions
+  const bookStateAPI = {
+    transitionToPageLoading: () => transitionToState('PAGE_LOADING'),
+    transitionToPageLoaded: () => transitionToState('PAGE_LOADED'),
+    transitionToAudioReadyToPlay: () => transitionToState('AUDIO_READY_TO_PLAY'),
+    transitionToAudioPlaying: () => transitionToState('AUDIO_PLAYING'),
+    transitionToAudioPaused: () => transitionToState('AUDIO_PAUSED'),
+    transitionToAudioCompleted: () => transitionToState('AUDIO_COMPLETED'),
+    transitionToPageCompleted: () => transitionToState('PAGE_COMPLETED'),
+    transitionToError: () => transitionToState('ERROR'),
+    transitionToIdle: () => transitionToState('IDLE'),
+    getCurrentState: () => bookState,
+    isState: (state: BookState) => bookState === state
+  };
 
   // Helper function to manage reading session state
   const enterReadingSession = useCallback(() => {
@@ -111,6 +153,9 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
     logger.info("Parsed display book page arguments", { callId, argsJson });
 
     try {
+      // Transition to loading state
+      transitionToState('PAGE_LOADING');
+
       let { bookId, pageNumber } = argsJson;
       if (!bookId || !pageNumber) {
         bookId = selectedBookRef.current?.id;
@@ -120,6 +165,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       const pageResponse = await fetch(`/api/books/${bookId}/page/${pageNumber}`);
 
       if (!pageResponse.ok) {
+        transitionToState('ERROR');
         throw new Error(`Failed to fetch page: ${pageResponse.status}`);
       }
 
@@ -130,6 +176,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       const pageData = pageResponse_data.page;
 
       if (!pageData) {
+        transitionToState('ERROR');
         throw new Error("Page data not found in response");
       }
 
@@ -150,6 +197,9 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       // Enter reading session mode
       enterReadingSession();
 
+      // Transition to page loaded
+      transitionToState('PAGE_LOADED');
+
       // Call the storybook display callback
       if (options.onStorybookPageDisplay) {
         options.onStorybookPageDisplay({
@@ -162,6 +212,11 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
         });
       }
 
+      // If there's audio, transition to audio ready
+      if (pageData.audioUrl) {
+        transitionToState('AUDIO_READY_TO_PLAY');
+      }
+
       // Emit success result - silent mode for audio playback
       options.onFunctionCallResult?.(
         callId,
@@ -170,6 +225,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
 
     } catch (error: any) {
       logger.error("Error displaying book page", { error: error.message });
+      transitionToState('ERROR');
 
       // Emit error
       options.onError?.(
@@ -177,7 +233,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
         "I'm having trouble displaying that book page right now. Please try again."
       );
     }
-  }, [enterReadingSession, options.onStorybookPageDisplay, options.onFunctionCallResult, options.onError, logger]);
+  }, [transitionToState, enterReadingSession, options.onStorybookPageDisplay, options.onFunctionCallResult, options.onError, logger]);
 
   // const optimizeTokenUsage = useCallback(() => {
   //   if (isInReadingSessionRef.current) {
@@ -202,7 +258,8 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       bookId: selectedBookRef.current?.id,
       currentPage: currentPageRef.current,
       selectedBookRef: selectedBookRef.current,
-      isInReadingSession: isInReadingSessionRef.current
+      isInReadingSession: isInReadingSessionRef.current,
+      currentBookState: bookState
     });
 
     // Enhanced validation with fallback recovery
@@ -213,6 +270,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
         isInReadingSession: isInReadingSessionRef.current,
         suggestedFix: "StorybookDisplay should sync book state with BookStateManager"
       });
+      transitionToState('ERROR');
       return false;
     }
 
@@ -221,15 +279,20 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
     // Check if we're already at the last page
     if (selectedBookRef.current.totalPages && nextPageNumber > selectedBookRef.current.totalPages) {
       logger.info(`Already at last page (${currentPageRef.current}/${selectedBookRef.current.totalPages})`);
+      transitionToState('PAGE_COMPLETED');
       return false;
     }
 
     logger.info(`Navigating to next page: ${nextPageNumber}`, { bookId: selectedBookRef.current.id });
 
     try {
+      // Transition to loading state
+      transitionToState('PAGE_LOADING');
+
       const pageResponse = await fetch(`/api/books/${selectedBookRef.current.id}/page/${nextPageNumber}`);
 
       if (!pageResponse.ok) {
+        transitionToState('ERROR');
         throw new Error(`Failed to fetch page: ${pageResponse.status}`);
       }
 
@@ -237,11 +300,15 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       const pageData = pageResponseData.page;
 
       if (!pageData) {
+        transitionToState('ERROR');
         throw new Error("Page data not found in response");
       }
 
       // Update current page
       currentPageRef.current = nextPageNumber;
+
+      // Transition to page loaded
+      transitionToState('PAGE_LOADED');
 
       // Call the display callback
       if (options.onStorybookPageDisplay) {
@@ -255,21 +322,28 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
         });
       }
 
+      // If there's audio, transition to audio ready
+      if (pageData.audioUrl) {
+        transitionToState('AUDIO_READY_TO_PLAY');
+      }
+
       logger.info(`Successfully navigated to page ${nextPageNumber}`);
       return true;
 
     } catch (error: any) {
       logger.error("Error navigating to next page", { error: error.message });
+      transitionToState('ERROR');
       return false;
     }
-  }, [logger, options.onStorybookPageDisplay]);
+  }, [logger, options.onStorybookPageDisplay, bookState, transitionToState]);
 
   const navigateToPreviousPage = useCallback(async () => {
     logger.info("navigateToPreviousPage called", { 
       hasSelectedBook: !!selectedBookRef.current, 
       bookId: selectedBookRef.current?.id,
       currentPage: currentPageRef.current,
-      selectedBookRef: selectedBookRef.current
+      selectedBookRef: selectedBookRef.current,
+      currentBookState: bookState
     });
 
     if (!selectedBookRef.current?.id) {
@@ -278,6 +352,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
         currentPage: currentPageRef.current,
         isInReadingSession: isInReadingSessionRef.current
       });
+      transitionToState('ERROR');
       return false;
     }
 
@@ -291,9 +366,13 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
     logger.info(`Navigating to previous page: ${previousPageNumber}`, { bookId: selectedBookRef.current.id });
 
     try {
+      // Transition to loading state
+      transitionToState('PAGE_LOADING');
+
       const pageResponse = await fetch(`/api/books/${selectedBookRef.current.id}/page/${previousPageNumber}`);
 
       if (!pageResponse.ok) {
+        transitionToState('ERROR');
         throw new Error(`Failed to fetch page: ${pageResponse.status}`);
       }
 
@@ -301,11 +380,15 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       const pageData = pageResponseData.page;
 
       if (!pageData) {
+        transitionToState('ERROR');
         throw new Error("Page data not found in response");
       }
 
       // Update current page
       currentPageRef.current = previousPageNumber;
+
+      // Transition to page loaded
+      transitionToState('PAGE_LOADED');
 
       // Call the display callback
       if (options.onStorybookPageDisplay) {
@@ -319,20 +402,30 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
         });
       }
 
+      // If there's audio, transition to audio ready
+      if (pageData.audioUrl) {
+        transitionToState('AUDIO_READY_TO_PLAY');
+      }
+
       logger.info(`Successfully navigated to page ${previousPageNumber}`);
       return true;
 
     } catch (error: any) {
       logger.error("Error navigating to previous page", { error: error.message });
+      transitionToState('ERROR');
       return false;
     }
-  }, [logger, options.onStorybookPageDisplay]);
+  }, [logger, options.onStorybookPageDisplay, bookState, transitionToState]);
 
   return {
     // State refs (for external access if needed)
     selectedBookRef,
     currentPageRef,
     isInReadingSessionRef,
+
+    // Book State Management
+    bookState,
+    bookStateAPI,
 
     // Methods
     handleBookSearchTool,
