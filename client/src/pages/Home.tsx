@@ -295,6 +295,7 @@ const Home = memo(() => {
       if (aiProvider === 'gemini') {
         console.log("Connecting to Gemini Live");
         // The Gemini connection will be handled by realtimeAudio hook
+        await connect();
       } else {
         console.log("Connecting to OpenAI Realtime API");
         await connect();
@@ -347,9 +348,9 @@ const Home = memo(() => {
       console.log("Microphone permission granted successfully");
     } catch (error) {
       console.error("Failed to get microphone permission:", error);
-      options.onError?.("Failed to get microphone permission");
+      handleError("Failed to get microphone permission");
     }
-  }, [currentRecorder]);
+  }, [currentRecorder, handleError]);
 
   // Initialize book state manager
   const bookStateManager = useBookStateManager({
@@ -396,12 +397,7 @@ const Home = memo(() => {
 
   const realtimeAudio = useRealtimeAudio(realtimeOptions);
 
-  // Get individual connections for direct access
-  const openaiConnection = (realtimeAudio as any).openaiConnection || { mediaCapture: null, lastCapturedFrame: null, tokensUsed: 0 };
-  const geminiConnection = (realtimeAudio as any).geminiConnection || {};
-  const mediaManager = (realtimeAudio as any).mediaManager || { hasVideoPermission: false, videoElement: null };
-
-  // Destructure realtime audio properties
+  // Destructure realtime audio properties first
   const {
     isConnected,
     isRecording: realtimeIsRecording,
@@ -420,6 +416,11 @@ const Home = memo(() => {
     stopRecording,
     disconnect: disconnectRealtime
   } = realtimeAudio;
+
+  // Get individual connections for direct access
+  const openaiConnection = (realtimeAudio as any).openaiConnection || { mediaCapture: null, lastCapturedFrame: null, tokensUsed: 0 };
+  const geminiConnection = (realtimeAudio as any).geminiConnection || {};
+  const mediaManager = (realtimeAudio as any).mediaManager || { hasVideoPermission: false, videoElement: null };
 
   const traditionalRecorder = useAudioRecorder({
     enableLocalPlayback,
