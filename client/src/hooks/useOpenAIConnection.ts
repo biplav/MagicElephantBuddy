@@ -61,6 +61,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
 
   const [isAppuSpeaking, setIsAppuSpeaking] = useState(false);
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
+  const [tokensUsed, setTokensUsed] = useState<number>(0);
 
   // Initialize media manager
   const mediaManager = useMediaManager({
@@ -166,7 +167,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
 
           // Generate cache key based on child ID for consistent caching
           const cacheKey = `appu-child-${childId}-v1`;
-          
+
           // Send session configuration with enhanced prompt
           const sessionConfig = {
             type: "session.update",
@@ -272,7 +273,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
           dataChannelRef.current?.send(JSON.stringify({
             type: 'response.create'
           }));
-          
+
           logger.info("Completed getEyesTool processing", {
             success: analysisResult.success,
             hasAnalysis: !!analysisResult.analysis
@@ -388,8 +389,10 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
               break;
             case "output_audio_buffer.stopped":
               logger.info("Audio output buffer stopped", {
-                fullMessage: message,
+                "bufferLength": message.audio?.length || 0,
+                "outputIndex": message.output_index
               });
+              options.onAppuSpeakingChange?.(false);
               break;
             case "response.output_item.added":
               logger.info("Response output item added", {
@@ -430,37 +433,30 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
               logger.info("Response completed", {
                 responseId: message.response?.id,
                 status: message.response?.status,
-                fullMessage: message,
+                statusDetails: message.response?.status_details
               });
 
-              // Check for failed response and log error details
-              if (message.response?.status === "failed") {
-                logger.error("OpenAI Response Failed", {
-                  responseId: message.response.id,
-                  status: message.response.status,
-                  statusDetails: message.response.status_details,
-                  errorType: message.response.status_details?.error?.type,
-                  errorCode: message.response.status_details?.error?.code,
-                  errorMessage: message.response.status_details?.error?.message,
-                  sessionId: message.response.status_details?.error?.message?.match(/sess_\w+/)?.[0] || "unknown",
-                  fullMessage: message,
+              // Track token usage from the response
+              if (message.usage) {
+                const responseTokens = (message.usage.input_tokens || 0) + (message.usage.output_tokens || 0);
+                setTokensUsed(prev => prev + responseTokens);
+                logger.info("Token usage updated", {
+                  inputTokens: message.usage.input_tokens,
+                  outputTokens: message.usage.output_tokens,
+                  totalResponseTokens: responseTokens,
+                  cumulativeTokens: tokensUsed + responseTokens
                 });
-                
-                // Also report to user error handler
-                const errorMsg = `OpenAI server error: ${message.response.status_details?.error?.message || "Unknown server error"}`;
-                setState((prev) => ({ ...prev, error: errorMsg }));
-                options.onError?.(errorMsg);
               }
 
-              // Mark Appu as no longer speaking when response is complete
-              if (isAppuSpeaking) {
-                setIsAppuSpeaking(false);
-                options.onAppuSpeakingChange?.(false);
+              if (message.response?.status === "failed") {
+                const errorMessage = message.response.status_details?.error?.message || "Response failed";
+                logger.error("OpenAI response failed", {
+                  "object": message.response.object,
+                  "id": message.response.id,
+                  "status": message.response.status,
+                  "status_details": message.response.status_details
+                });
               }
-
-              // Optimize token usage during reading sessions
-              // bookStateManager.optimizeTokenUsage();
-
               break;
             case "error":
               logger.error("Error message received", {
@@ -535,6 +531,9 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
       mediaManager,
       bookStateManager,
       logger,
+      isAppuSpeaking,
+      tokensUsed,
+      options.onAppuSpeakingChange
     ],
   );
 
@@ -683,6 +682,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     setupDataChannel,
     options.enableVideo,
     mediaManager,
+    options.onError
   ]);
 
   const disconnect = useCallback(() => {
@@ -712,14 +712,31 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
       isRecording: false,
       lastCapturedFrame: null,
     }));
+    setTokensUsed(0); // Reset tokens when disconnecting
   }, [mediaManager]);
+
+  // Placeholder for sendMessage function if it's needed elsewhere,
+  // otherwise it can be removed or adjusted based on actual usage.
+  // For now, it's not directly used in the provided code snippet's logic.
+  const sendMessage = useCallback((message: string) => {
+    if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
+      dataChannelRef.current.send(JSON.stringify({ type: 'message', content: message }));
+      logger.info("Sent message via data channel", { message });
+    } else {
+      logger.warn("Cannot send message: Data channel is not open.");
+    }
+  }, []);
+
 
   return {
     ...state,
     connect,
     disconnect,
-    isAppuSpeaking,
-    isUserSpeaking,
-    // mediaCapture: mediaCaptureRef.current,
+    sendMessage,
+    isConnected,
+    connectionState,
+    conversationId,
+    error,
+    tokensUsed
   };
 }

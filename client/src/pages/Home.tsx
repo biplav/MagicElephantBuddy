@@ -39,7 +39,7 @@ const Home = memo(() => {
   const [enableLocalPlayback, setEnableLocalPlayback] =
     useState<boolean>(false); // Default to false for server testing
   const [useRealtimeAPI, setUseRealtimeAPI] = useState<boolean>(true);
-  
+
   const [aiSettings, setAiSettings] = useState({
     defaultProvider: "standard",
     voiceMode: "openai",
@@ -274,20 +274,23 @@ const Home = memo(() => {
     },
     enableVideo: false, // Camera will be initialized on-demand via getFrameAnalysis
     modelType: aiProvider,
+    onConversationEnd: (tokensUsed?: number) => handleCloseConversation(tokensUsed || openaiConnection.tokensUsed || 0),
   }), [
     selectedChildId,
     handleTranscription,
-    handleResponse, 
+    handleResponse,
     handleAudioResponse,
     handleError,
     handleStorybookPageDisplay,
-    aiProvider
+    aiProvider,
+    handleCloseConversation,
+    openaiConnection.tokensUsed
   ]);
 
   const realtimeAudio = useRealtimeAudio(realtimeOptions);
 
   // Get individual connections for direct access
-  const openaiConnection = (realtimeAudio as any).openaiConnection || { mediaCapture: null, lastCapturedFrame: null };
+  const openaiConnection = (realtimeAudio as any).openaiConnection || { mediaCapture: null, lastCapturedFrame: null, tokensUsed: 0 };
   const geminiConnection = (realtimeAudio as any).geminiConnection || {};
   const mediaManager = (realtimeAudio as any).mediaManager || { hasVideoPermission: false, videoElement: null };
 
@@ -404,6 +407,34 @@ const Home = memo(() => {
     traditionalRecorder.recorderState,
   ]);
 
+  // Helper to get selected child ID from state or localStorage
+  const getSelectedChildId = useCallback(() => {
+    return selectedChildId || localStorage.getItem("selectedChildId");
+  }, [selectedChildId]);
+
+  const handleCloseConversation = useCallback(async (tokensUsed: number = 0) => {
+    try {
+      const selectedChildId = getSelectedChildId();
+
+      console.log('Closing conversation for child:', selectedChildId, 'with tokens:', tokensUsed);
+
+      const response = await fetch('/api/close-conversation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ childId: selectedChildId, tokensUsed }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Conversation closed:', result);
+      } else {
+        console.error('Failed to close conversation');
+      }
+    } catch (error) {
+      console.error('Error closing conversation:', error);
+    }
+  }, [getSelectedChildId]);
+
   const handleStopSession = async () => {
     console.log("Stopping session and returning to welcome screen");
 
@@ -441,25 +472,10 @@ const Home = memo(() => {
       }
     }
 
-    // Close conversation in database
-    try {
-      console.log("Closing conversation in database");
-      const response = await fetch("/api/close-conversation", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log("Conversation closed:", result);
-      } else {
-        console.error("Failed to close conversation:", response.statusText);
-      }
-    } catch (error) {
-      console.error("Error closing conversation:", error);
-    }
+    // Close conversation in database by calling the updated handler
+    // Pass the token count from the OpenAI connection if available
+    const tokens = openaiConnection?.tokensUsed || 0;
+    handleCloseConversation(tokens);
 
     // Exit fullscreen mode
     await exitFullscreen();
@@ -903,9 +919,9 @@ const Home = memo(() => {
     }
   };
 
-  
 
-  
+
+
 
   const handleCloseStorybook = () => {
     console.log("Closing storybook");
@@ -1144,7 +1160,7 @@ const Home = memo(() => {
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.5 }}
             >
-              
+
 
               <div className="flex-1 flex items-center justify-center w-full min-h-0">
                 <Elephant state={elephantState} speechText={speechText} />
@@ -1163,10 +1179,10 @@ const Home = memo(() => {
                             : "Appu is getting ready to listen..."}
                     </p>
 
-                    
+
                   </div>
 
-                  
+
 
                   {currentRecorder.isProcessing ? (
                     <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full shadow-lg bg-yellow-400 flex items-center justify-center animate-pulse">

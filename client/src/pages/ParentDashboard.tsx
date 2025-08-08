@@ -58,6 +58,7 @@ interface Conversation {
   endTime?: string;
   duration?: number;
   totalMessages: number;
+  tokensUsed?: number;
   child: Child;
   messages: Message[];
   summary?: string;
@@ -326,6 +327,12 @@ const ParentDashboard = memo(() => {
                                   </>
                                 )}
                               </div>
+                              {conversation.tokensUsed !== undefined && conversation.tokensUsed > 0 && (
+                                <div className="flex items-center space-x-2">
+                                  <TrendingUp className="h-3 w-3" />
+                                  <span>{conversation.tokensUsed.toLocaleString()} tokens</span>
+                                </div>
+                              )}</div>
                               {conversation.summary && (
                                 <div className="mt-2 p-2 bg-white rounded border-l-2 border-blue-300">
                                   <p className="text-xs text-gray-700 italic">{conversation.summary}</p>
@@ -349,6 +356,9 @@ const ParentDashboard = memo(() => {
                       <CardDescription>
                         {format(new Date(selectedConversation.startTime), 'MMMM dd, yyyy at HH:mm')} • 
                         {formatDuration(selectedConversation.duration)}
+                        {selectedConversation.tokensUsed !== undefined && selectedConversation.tokensUsed > 0 && (
+                          <> • {selectedConversation.tokensUsed.toLocaleString()} tokens</>
+                        )}
                       </CardDescription>
                     )}
                   </CardHeader>

@@ -31,6 +31,7 @@ export const conversations = pgTable("conversations", {
   endTime: timestamp("end_time"),
   duration: integer("duration"), // in seconds
   totalMessages: integer("total_messages").default(0).notNull(),
+  tokensUsed: integer("tokens_used").default(0).notNull(),
 });
 
 // Individual messages within conversations
@@ -214,6 +215,7 @@ export const insertConversationSchema = createInsertSchema(conversations).pick({
   endTime: true,
   duration: true,
   totalMessages: true,
+  tokensUsed: true,
 });
 
 export const insertMessageSchema = createInsertSchema(messages).pick({

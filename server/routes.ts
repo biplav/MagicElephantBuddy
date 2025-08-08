@@ -688,7 +688,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Close current conversation
   app.post("/api/close-conversation", async (req: Request, res: Response) => {
     try {
-      const { childId } = req.body;
+      const { childId, tokensUsed = 0 } = req.body;
       const selectedChildId = childId || 1; // Use provided childId or default
 
       const conversation = await storage.getCurrentConversation(selectedChildId);
@@ -704,16 +704,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           endTime,
           duration,
           totalMessages: conversation.totalMessages,
+          tokensUsed: tokensUsed,
         });
 
         console.log(
-          `Closed conversation ${conversation.id} for child ${selectedChildId} - Duration: ${duration}s`,
+          `Closed conversation ${conversation.id} for child ${selectedChildId} - Duration: ${duration}s, Tokens: ${tokensUsed}`,
         );
         res.json({
           message: "Conversation closed successfully",
           conversationId: conversation.id,
           childId: selectedChildId,
           duration: duration,
+          tokensUsed: tokensUsed,
         });
       } else {
         res.json({ 

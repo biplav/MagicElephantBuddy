@@ -168,13 +168,19 @@ export class DatabaseStorage implements IStorage {
     return conversation;
   }
 
-  async updateConversation(id: number, updates: Partial<InsertConversation>): Promise<Conversation> {
-    const [conversation] = await db
+  async updateConversation(id: number, updates: {
+      endTime?: Date;
+      duration?: number;
+      totalMessages?: number;
+      tokensUsed?: number;
+    }): Promise<Conversation> {
+    const [updatedConversation] = await db
       .update(conversations)
       .set(updates)
       .where(eq(conversations.id, id))
       .returning();
-    return conversation;
+
+    return updatedConversation;
   }
 
   async getConversationsByChild(childId: number, limit: number = 10): Promise<Conversation[]> {

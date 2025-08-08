@@ -1,0 +1,2 @@
+
+ALTER TABLE conversations ADD COLUMN tokens_used INTEGER DEFAULT 0 NOT NULL;
