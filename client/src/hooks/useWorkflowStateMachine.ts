@@ -1,330 +1,213 @@
-
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { createServiceLogger } from '@/lib/logger';
 
 export type WorkflowState = 
   | 'LOADING'
   | 'APPU_SPEAKING' 
-  | 'WAITING_FOR_AUDIO'
-  | 'AUDIO_PLAYING'
-  | 'AUDIO_PAUSED'
-  | 'SILENCE_TIMING'
-  | 'TURNING_PAGE'
-  | 'ERROR'
+  | 'APPU_THINKING'
+  | 'CHILD_SPEAKING'
+  | 'APPU_SPEAKING_STOPPED'
+  | 'CHILD_SPEAKING_STOPPED'
   | 'IDLE';
 
 interface WorkflowStateMachineOptions {
   onStateChange?: (state: WorkflowState) => void;
-  onError?: (error: string) => void;
   enabled?: boolean;
-}
-
-interface WorkflowContext {
-  currentPage?: any;
-  isLastPage?: boolean;
-  pausePosition?: number;
-  errorMessage?: string;
+  openaiConnection?: any;
 }
 
 export function useWorkflowStateMachine(options: WorkflowStateMachineOptions = {}) {
   const logger = createServiceLogger('workflow-state-machine');
-  
+
   const [currentState, setCurrentState] = useState<WorkflowState>('IDLE');
-  const [context, setContext] = useState<WorkflowContext>({});
   const [isEnabled, setIsEnabled] = useState(options.enabled ?? true);
-  
-  // Component references for coordination
-  const silenceDetectionRef = useRef<any>(null);
-  const audioManagerRef = useRef<any>(null);
-  const bookStateManagerRef = useRef<any>(null);
-  
+
   // Internal state management
-  const handleStateTransition = useCallback((newState: WorkflowState, newContext?: Partial<WorkflowContext>) => {
+  const handleStateTransition = useCallback((newState: WorkflowState) => {
     const oldState = currentState;
-    
-    logger.info('State transition', { 
-      from: oldState, 
-      to: newState,
-      context: newContext 
-    });
-    
+
+    if (oldState === newState) {
+      // Don't transition to the same state
+      return;
+    }
+
+    logger.info(`🔄 STATE TRANSITION: ${oldState} → ${newState}`);
+    console.log(`🔄 WORKFLOW STATE: ${oldState} → ${newState}`);
+
     setCurrentState(newState);
-    
-    if (newContext) {
-      setContext(prev => ({ ...prev, ...newContext }));
-    }
-    
     options.onStateChange?.(newState);
-    
-    // Handle state-specific logic
-    switch (newState) {
-      case 'WAITING_FOR_AUDIO':
-        // Start initial audio timer
-        if (silenceDetectionRef.current) {
-          logger.debug('Starting initial audio timer');
-          silenceDetectionRef.current.startInitialAudioTimer();
-        }
-        break;
-        
-      case 'AUDIO_PLAYING':
-        // Audio is now playing, silence detection should be paused
-        break;
-        
-      case 'AUDIO_PAUSED':
-        // Audio paused due to speech interruption
-        break;
-        
-      case 'SILENCE_TIMING':
-        // Start page turn timer
-        if (silenceDetectionRef.current) {
-          logger.debug('Starting page turn timer');
-          silenceDetectionRef.current.startPageTurnTimer();
-        }
-        break;
-        
-      case 'TURNING_PAGE':
-        // Navigate to next page
-        if (bookStateManagerRef.current) {
-          logger.debug('Navigating to next page');
-          bookStateManagerRef.current.navigateToNextPage();
-        }
-        break;
-        
-      case 'ERROR':
-        options.onError?.(newContext?.errorMessage || 'Unknown error');
-        break;
-    }
-  }, [currentState, logger, options]);
-  
-  // Event handlers for different components
+  }, [currentState, logger, options.onStateChange]);
+
+  // Event handlers for OpenAI events
   const handleAppuSpeakingStart = useCallback(() => {
     if (!isEnabled) return;
-    logger.debug('Appu started speaking');
+    logger.debug('🔊 Appu started speaking');
     handleStateTransition('APPU_SPEAKING');
   }, [isEnabled, handleStateTransition, logger]);
-  
+
   const handleAppuSpeakingStop = useCallback(() => {
     if (!isEnabled) return;
-    logger.debug('Appu stopped speaking');
-    
-    // Check if audio is already playing
-    if (audioManagerRef.current?.isPlaying) {
-      logger.debug('Audio already playing, staying in AUDIO_PLAYING state');
-      handleStateTransition('AUDIO_PLAYING');
-    } else {
-      logger.debug('No audio playing, transitioning to WAITING_FOR_AUDIO');
-      handleStateTransition('WAITING_FOR_AUDIO');
-    }
+    logger.debug('🔇 Appu stopped speaking');
+    handleStateTransition('APPU_SPEAKING_STOPPED');
   }, [isEnabled, handleStateTransition, logger]);
-  
-  const handleInitialAudioTrigger = useCallback(() => {
+
+  const handleAppuThinking = useCallback(() => {
     if (!isEnabled) return;
-    logger.debug('Initial audio timer completed - triggering audio playback');
-    
-    // Command audio manager to play audio
-    if (audioManagerRef.current?.playPageAudio) {
-      audioManagerRef.current.playPageAudio();
-    }
-  }, [isEnabled, logger]);
-  
-  const handleAudioPlaybackStart = useCallback(() => {
-    if (!isEnabled) return;
-    logger.debug('Audio playback started');
-    handleStateTransition('AUDIO_PLAYING');
+    logger.debug('🤔 Appu is thinking (processing)');
+    handleStateTransition('APPU_THINKING');
   }, [isEnabled, handleStateTransition, logger]);
-  
-  const handleAudioPlaybackEnd = useCallback(() => {
+
+  const handleChildSpeechStart = useCallback(() => {
     if (!isEnabled) return;
-    logger.debug('Audio playback ended - starting silence timing');
-    handleStateTransition('SILENCE_TIMING');
+    logger.debug('🎤 Child started speaking');
+    handleStateTransition('CHILD_SPEAKING');
   }, [isEnabled, handleStateTransition, logger]);
-  
-  const handleUserSpeechStart = useCallback(() => {
+
+  const handleChildSpeechStop = useCallback(() => {
     if (!isEnabled) return;
-    logger.debug('User started speaking');
-    
-    switch (currentState) {
-      case 'AUDIO_PLAYING':
-        // Pause audio and remember position
-        if (audioManagerRef.current?.pauseAudio) {
-          const position = audioManagerRef.current.pauseAudio();
-          handleStateTransition('AUDIO_PAUSED', { pausePosition: position });
-        }
-        break;
-        
-      case 'WAITING_FOR_AUDIO':
-      case 'SILENCE_TIMING':
-        // Interrupt any running timers
-        if (silenceDetectionRef.current?.interruptSilence) {
-          silenceDetectionRef.current.interruptSilence();
-        }
-        handleStateTransition('IDLE');
-        break;
-    }
-  }, [isEnabled, currentState, handleStateTransition, logger]);
-  
-  const handleUserSpeechEnd = useCallback(() => {
+    logger.debug('🔇 Child stopped speaking');
+    handleStateTransition('CHILD_SPEAKING_STOPPED');
+  }, [isEnabled, handleStateTransition, logger]);
+
+  const handleLoading = useCallback(() => {
     if (!isEnabled) return;
-    logger.debug('User stopped speaking');
-    
-    switch (currentState) {
-      case 'AUDIO_PAUSED':
-        // Resume audio from where it was paused
-        if (audioManagerRef.current?.resumeAudio && context.pausePosition) {
-          audioManagerRef.current.resumeAudio(context.pausePosition);
-          handleStateTransition('AUDIO_PLAYING');
-        }
-        break;
-        
-      case 'IDLE':
-        // Return to appropriate state based on context
-        if (context.currentPage) {
-          handleStateTransition('WAITING_FOR_AUDIO');
-        }
-        break;
-    }
-  }, [isEnabled, currentState, context, handleStateTransition, logger]);
-  
-  const handleSilenceDetected = useCallback(() => {
-    if (!isEnabled) return;
-    logger.debug('Silence detected - triggering page turn');
-    
-    if (context.isLastPage) {
-      logger.info('Reached end of book');
-      handleStateTransition('IDLE');
-    } else {
-      handleStateTransition('TURNING_PAGE');
-    }
-  }, [isEnabled, context.isLastPage, handleStateTransition, logger]);
-  
-  const handlePageNavigationComplete = useCallback((newPage: any) => {
-    if (!isEnabled) return;
-    logger.debug('Page navigation completed', { pageNumber: newPage?.pageNumber });
-    
-    setContext(prev => ({ 
-      ...prev, 
-      currentPage: newPage,
-      isLastPage: newPage?.pageNumber >= newPage?.totalPages 
-    }));
-    
-    // Wait for Appu to speak about the new page
+    logger.debug('⏳ Loading state');
     handleStateTransition('LOADING');
-  }, [isEnabled, handleStateTransition]);
-  
-  const handleError = useCallback((error: string) => {
-    logger.error('Workflow error', { error });
-    handleStateTransition('ERROR', { errorMessage: error });
-  }, [handleStateTransition, logger]);
-  
+  }, [isEnabled, handleStateTransition, logger]);
+
+  const handleIdle = useCallback(() => {
+    if (!isEnabled) return;
+    logger.debug('😴 Idle state');
+    handleStateTransition('IDLE');
+  }, [isEnabled, handleStateTransition, logger]);
+
+  // Listen to OpenAI events
+  useEffect(() => {
+    if (!options.openaiConnection || !isEnabled) return;
+
+    const handleOpenAIEvent = (event: any) => {
+      if (!isEnabled) return;
+
+      logger.debug('📡 Received OpenAI event', { type: event.type });
+
+      switch (event.type) {
+        case 'output_audio_buffer.started':
+          handleAppuSpeakingStart();
+          break;
+
+        case 'output_audio_buffer.stopped':
+          handleAppuSpeakingStop();
+          break;
+
+        case 'input_audio_buffer.speech_started':
+          handleChildSpeechStart();
+          break;
+
+        case 'input_audio_buffer.speech_stopped':
+          handleChildSpeechStop();
+          break;
+
+        case 'response.created':
+          handleAppuThinking();
+          break;
+
+        case 'session.created':
+          handleLoading();
+          break;
+
+        case 'response.done':
+          // When response is done, transition to idle if not already speaking
+          if (currentState !== 'APPU_SPEAKING') {
+            handleIdle();
+          }
+          break;
+
+        default:
+          // Log unknown events for debugging
+          logger.debug('❓ Unknown OpenAI event', { type: event.type });
+          break;
+      }
+    };
+
+    // Add event listener based on the connection type
+    if (options.openaiConnection.addEventListener) {
+      options.openaiConnection.addEventListener('message', handleOpenAIEvent);
+    } else if (options.openaiConnection.on) {
+      options.openaiConnection.on('event', handleOpenAIEvent);
+    }
+
+    return () => {
+      if (options.openaiConnection.removeEventListener) {
+        options.openaiConnection.removeEventListener('message', handleOpenAIEvent);
+      } else if (options.openaiConnection.off) {
+        options.openaiConnection.off('event', handleOpenAIEvent);
+      }
+    };
+  }, [
+    options.openaiConnection, 
+    isEnabled, 
+    currentState,
+    handleAppuSpeakingStart,
+    handleAppuSpeakingStop,
+    handleAppuThinking,
+    handleChildSpeechStart,
+    handleChildSpeechStop,
+    handleLoading,
+    handleIdle,
+    logger
+  ]);
+
   // Manual controls
   const resetWorkflow = useCallback(() => {
-    logger.info('Resetting workflow to IDLE');
-    setContext({});
+    logger.info('🔄 Resetting workflow to IDLE');
     handleStateTransition('IDLE');
-    
-    // Reset all component states
-    if (silenceDetectionRef.current?.resetSilenceDetection) {
-      silenceDetectionRef.current.resetSilenceDetection();
-    }
-    if (audioManagerRef.current?.stopAudio) {
-      audioManagerRef.current.stopAudio();
+  }, [handleStateTransition, logger]);
+
+  const setEnabled = useCallback((enabled: boolean) => {
+    logger.info(`🔧 Setting workflow enabled: ${enabled}`);
+    setIsEnabled(enabled);
+    if (!enabled) {
+      handleStateTransition('IDLE');
     }
   }, [handleStateTransition, logger]);
-  
-  const pauseWorkflow = useCallback(() => {
-    logger.info('Pausing workflow');
-    setIsEnabled(false);
-    
-    // Pause all active timers and audio
-    if (silenceDetectionRef.current?.interruptSilence) {
-      silenceDetectionRef.current.interruptSilence();
-    }
-    if (audioManagerRef.current?.pauseAudio) {
-      audioManagerRef.current.pauseAudio();
-    }
-  }, [logger]);
-  
-  const resumeWorkflow = useCallback(() => {
-    logger.info('Resuming workflow');
-    setIsEnabled(true);
-    
-    // Resume based on current state
-    if (currentState === 'AUDIO_PAUSED' && context.pausePosition) {
-      if (audioManagerRef.current?.resumeAudio) {
-        audioManagerRef.current.resumeAudio(context.pausePosition);
-      }
-    }
-  }, [currentState, context.pausePosition, logger]);
-  
-  // Component registration
-  const registerSilenceDetection = useCallback((silenceDetection: any) => {
-    silenceDetectionRef.current = silenceDetection;
-    logger.debug('Registered silence detection component');
-  }, [logger]);
-  
-  const registerAudioManager = useCallback((audioManager: any) => {
-    audioManagerRef.current = audioManager;
-    logger.debug('Registered audio manager component');
-  }, [logger]);
-  
-  const registerBookStateManager = useCallback((bookStateManager: any) => {
-    bookStateManagerRef.current = bookStateManager;
-    logger.debug('Registered book state manager component');
-  }, [logger]);
-  
+
   // Enable/disable based on options
   useEffect(() => {
     setIsEnabled(options.enabled ?? true);
   }, [options.enabled]);
-  
+
   return {
     // Current state
     currentState,
-    context,
     isEnabled,
-    
-    // Event handlers for components
+
+    // Manual event triggers (for testing or external use)
     handleAppuSpeakingStart,
     handleAppuSpeakingStop,
-    handleInitialAudioTrigger,
-    handleAudioPlaybackStart,
-    handleAudioPlaybackEnd,
-    handleUserSpeechStart,
-    handleUserSpeechEnd,
-    handleSilenceDetected,
-    handlePageNavigationComplete,
-    handleError,
-    
+    handleAppuThinking,
+    handleChildSpeechStart,
+    handleChildSpeechStop,
+    handleLoading,
+    handleIdle,
+
     // Manual controls
     resetWorkflow,
-    pauseWorkflow,
-    resumeWorkflow,
-    setEnabled: setIsEnabled,
-    
-    // Component registration
-    registerSilenceDetection,
-    registerAudioManager,
-    registerBookStateManager,
-    
-    // State checks
+    setEnabled,
+
+    // State checks (computed properties)
     isAppuSpeaking: currentState === 'APPU_SPEAKING',
-    isAudioPlaying: currentState === 'AUDIO_PLAYING',
-    isAudioPaused: currentState === 'AUDIO_PAUSED',
-    isSilenceTiming: currentState === 'SILENCE_TIMING',
-    isTurningPage: currentState === 'TURNING_PAGE',
-    isWaitingForAudio: currentState === 'WAITING_FOR_AUDIO',
-    hasError: currentState === 'ERROR',
-    
+    isAppuThinking: currentState === 'APPU_THINKING',
+    isChildSpeaking: currentState === 'CHILD_SPEAKING',
+    isAppuSpeakingStopped: currentState === 'APPU_SPEAKING_STOPPED',
+    isChildSpeakingStopped: currentState === 'CHILD_SPEAKING_STOPPED',
+    isLoading: currentState === 'LOADING',
+    isIdle: currentState === 'IDLE',
+
     // Debug info
     getDebugInfo: () => ({
       state: currentState,
-      context,
       isEnabled,
-      hasComponents: {
-        silenceDetection: !!silenceDetectionRef.current,
-        audioManager: !!audioManagerRef.current,
-        bookStateManager: !!bookStateManagerRef.current
-      }
+      hasOpenAIConnection: !!options.openaiConnection
     })
   };
 }
