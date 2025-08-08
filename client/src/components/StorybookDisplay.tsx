@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, ChevronRight, Book, Clock } from 'lucide-react';
-import { useSilenceDetection } from '@/hooks/useSilenceDetection';
+
 
 interface StorybookPage {
   pageImageUrl: string;
@@ -48,26 +48,24 @@ export default function StorybookDisplay({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isFlipping, setIsFlipping] = useState(false);
   const [flipDirection, setFlipDirection] = useState<'next' | 'previous'>('next');
-  const audioElementRef = useRef<HTMLAudioElement | null>(null);
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const onAppuSpeakingChangeRef = useRef(onAppuSpeakingChange);
-  const silenceDetectionRef = useRef<any>(null);
 
   useEffect(() => {
     onAppuSpeakingChangeRef.current = onAppuSpeakingChange;
   }, [onAppuSpeakingChange]);
+
+  // Sync audio playing state with parent component
+  useEffect(() => {
+    onAppuSpeakingChangeRef.current?.(audioManager.isPlaying);
+  }, [audioManager.isPlaying]);
 
   // Internal navigation handlers
   const handleInternalNextPage = useCallback(async () => {
     if (currentPage && currentPage.pageNumber < currentPage.totalPages && !isFlipping) {
       console.log('Navigating to next page');
 
-      // Stop current audio
-      if (audioElementRef.current) {
-        audioElementRef.current.pause();
-        setIsPlayingAudio(false);
-        onAppuSpeakingChangeRef.current?.(false);
-      }
+      // Stop audio via BookStateManager
+      bookStateManager.stopAudio();
 
       setFlipDirection('next');
       setIsFlipping(true);
@@ -89,12 +87,8 @@ export default function StorybookDisplay({
     if (currentPage && currentPage.pageNumber > 1 && !isFlipping) {
       console.log('Navigating to previous page');
 
-      // Stop current audio
-      if (audioElementRef.current) {
-        audioElementRef.current.pause();
-        setIsPlayingAudio(false);
-        onAppuSpeakingChangeRef.current?.(false);
-      }
+      // Stop audio via BookStateManager
+      bookStateManager.stopAudio();
 
       setFlipDirection('previous');
       setIsFlipping(true);
@@ -136,196 +130,22 @@ export default function StorybookDisplay({
     }
   }, [currentPage, bookStateManager, bookId]);
 
-  // Auto page turning with silence detection
-  const handleAutoPageAdvance = useCallback(() => {
-    if (currentPage && currentPage.pageNumber < currentPage.totalPages && !isFlipping) {
-      console.log('🔄 AUTO-ADVANCE: Auto-advancing to next page due to silence');
-      handleInternalNextPage();
-    } else if (currentPage && currentPage.pageNumber >= currentPage.totalPages) {
-      console.log('📖 END-OF-BOOK: Reached end of book - auto page advance disabled');
-      // Could trigger end-of-book celebration or suggestions here
-    }
-  }, [currentPage, isFlipping, handleInternalNextPage]);
+  
 
-  const handleSilenceInterrupted = useCallback(() => {
-    console.log('Auto page advance interrupted by speech');
-  }, []);
-
-  // Audio management with workflow integration
+  // Simple audio control interface - delegates to BookStateManager
   const audioManager = {
-    isPlaying: isPlayingAudio,
-    
-    playPageAudio: useCallback(() => {
+    isPlaying: bookStateManager.isPlayingAudio,
+    playPageAudio: () => {
       if (currentPage?.audioUrl) {
-        console.log('🔊 AUDIO: Playing page audio:', currentPage.audioUrl);
-
-        // Stop any existing audio
-        if (audioElementRef.current) {
-          audioElementRef.current.pause();
-          audioElementRef.current.currentTime = 0;
-          setIsPlayingAudio(false);
-          onAppuSpeakingChangeRef.current?.(false);
-        }
-
-        const audio = new Audio(currentPage.audioUrl);
-        audio.preload = 'auto';
-
-        audio.onplay = () => {
-          console.log('🔊 AUDIO: Audio started playing');
-          setIsPlayingAudio(true);
-          onAppuSpeakingChangeRef.current?.(true);
-          workflowStateMachine?.handleAppuSpeakingStart('page-audio-start');
-          bookStateManager.bookStateAPI.transitionToAudioPlaying();
-        };
-
-        audio.onended = () => {
-          console.log('🔊 AUDIO: Audio finished playing');
-          setIsPlayingAudio(false);
-          onAppuSpeakingChangeRef.current?.(false);
-          audioElementRef.current = null;
-          workflowStateMachine?.handleAppuSpeakingStop('page-audio-end');
-          bookStateManager.bookStateAPI.transitionToAudioCompleted();
-        };
-
-        audio.onerror = (error) => {
-          console.error('Error playing audio:', error);
-          setIsPlayingAudio(false);
-          onAppuSpeakingChangeRef.current?.(false);
-          audioElementRef.current = null;
-          workflowStateMachine?.handleError('Audio playback failed');
-          bookStateManager.bookStateAPI.transitionToError();
-        };
-
-        audio.onpause = () => {
-          console.log('Audio paused');
-          setIsPlayingAudio(false);
-          onAppuSpeakingChangeRef.current?.(false);
-          bookStateManager.bookStateAPI.transitionToAudioPaused();
-        };
-
-        audioElementRef.current = audio;
-
-        const playPromise = audio.play();
-        if (playPromise !== undefined) {
-          playPromise
-            .then(() => {
-              console.log('Audio play promise resolved successfully');
-            })
-            .catch(error => {
-              console.error('Failed to play audio:', error);
-              setIsPlayingAudio(false);
-              onAppuSpeakingChangeRef.current?.(false);
-              workflowStateMachine?.handleError('Audio autoplay blocked');
-            });
-        }
+        bookStateManager.playPageAudio(currentPage.audioUrl);
       }
-    }, [currentPage?.audioUrl, workflowStateMachine, bookStateManager]),
-
-    // New method to check if audio should play based on workflow state
-    attemptAudioPlayback: useCallback(() => {
-      if (!currentPage?.audioUrl) {
-        console.log('🔊 AUDIO: No audio URL available for playback');
-        return;
-      }
-
-      if (bookStateManager.bookState !== 'AUDIO_READY_TO_PLAY') {
-        console.log('🔊 AUDIO: Book state not ready for audio playback:', bookStateManager.bookState);
-        return;
-      }
-
-      // Check workflow state - only play if idle or if we just stopped speaking
-      const workflowState = workflowStateMachine?.currentState;
-      console.log('🔊 AUDIO: Checking workflow state for audio playback:', workflowState);
-
-      if (workflowState === 'IDLE' || workflowState === 'APPU_SPEAKING_STOPPED') {
-        console.log('🔊 AUDIO: Workflow state allows audio playback - starting audio');
-        audioManager.playPageAudio();
-      } else {
-        console.log('🔊 AUDIO: Workflow state prevents audio playback - waiting for IDLE state');
-        console.log('🔊 AUDIO: Current workflow state:', workflowState);
-      }
-    }, [currentPage?.audioUrl, bookStateManager.bookState, workflowStateMachine?.currentState]),
-    
-    pauseAudio: useCallback(() => {
-      if (audioElementRef.current && !audioElementRef.current.paused) {
-        const currentTime = audioElementRef.current.currentTime;
-        audioElementRef.current.pause();
-        console.log('🔊 AUDIO: Audio paused at position', currentTime);
-        return currentTime;
-      }
-      return 0;
-    }, []),
-    
-    resumeAudio: useCallback((position: number) => {
-      if (audioElementRef.current) {
-        audioElementRef.current.currentTime = position;
-        const playPromise = audioElementRef.current.play();
-        if (playPromise !== undefined) {
-          playPromise
-            .then(() => {
-              console.log('🔊 AUDIO: Audio resumed from position', position);
-            })
-            .catch(error => {
-              console.error('Failed to resume audio:', error);
-              workflowStateMachine?.handleError('Audio resume failed');
-            });
-        }
-      }
-    }, [workflowStateMachine]),
-    
-    stopAudio: useCallback(() => {
-      if (audioElementRef.current) {
-        audioElementRef.current.pause();
-        audioElementRef.current.currentTime = 0;
-        setIsPlayingAudio(false);
-        onAppuSpeakingChangeRef.current?.(false);
-        audioElementRef.current = null;
-        console.log('🔊 AUDIO: Audio stopped');
-      }
-    }, [])
+    },
+    stopAudio: bookStateManager.stopAudio
   };
 
-  const silenceDetection = useSilenceDetection({
-    silenceDuration: 3000,
-    initialAudioDelay: 1000,
-    onSilenceDetected: handleAutoPageAdvance,
-    onSilenceInterrupted: handleSilenceInterrupted,
-    onInitialAudioTrigger: audioManager.attemptAudioPlayback,
-    enabled: autoPageTurnEnabled && isVisible,
-    openaiConnection: openaiConnection,
-    workflowStateMachine: workflowStateMachine
-  });
+  
 
-  // Monitor workflow state changes and trigger audio when appropriate
-  useEffect(() => {
-    if (!workflowStateMachine) return;
-
-    const workflowState = workflowStateMachine.currentState;
-    console.log('🔄 WORKFLOW-BOOK: Workflow state changed to:', workflowState);
-
-    // If workflow becomes idle and we have audio ready to play, attempt playback
-    if (workflowState === 'IDLE' && bookStateManager.bookState === 'AUDIO_READY_TO_PLAY') {
-      console.log('🔄 WORKFLOW-BOOK: Workflow is now idle, attempting audio playback');
-      audioManager.attemptAudioPlayback();
-    }
-
-    // If workflow becomes appu speaking stopped, also attempt playback
-    if (workflowState === 'APPU_SPEAKING_STOPPED' && bookStateManager.bookState === 'AUDIO_READY_TO_PLAY') {
-      console.log('🔄 WORKFLOW-BOOK: Appu stopped speaking, attempting audio playback');
-      audioManager.attemptAudioPlayback();
-    }
-  }, [workflowStateMachine?.currentState, bookStateManager.bookState, audioManager]);
-
-  // Monitor book state changes and trigger audio when page is ready
-  useEffect(() => {
-    console.log('📖 BOOK-WORKFLOW: Book state changed to:', bookStateManager.bookState);
-
-    // When page loads and audio is ready, check workflow state
-    if (bookStateManager.bookState === 'AUDIO_READY_TO_PLAY' && currentPage?.audioUrl && imageLoaded && isVisible) {
-      console.log('📖 BOOK-WORKFLOW: Audio ready to play - checking workflow state');
-      audioManager.attemptAudioPlayback();
-    }
-  }, [bookStateManager.bookState, currentPage?.audioUrl, imageLoaded, isVisible, audioManager]);
+  
 
   // Monitor page loading completion
   useEffect(() => {
@@ -350,31 +170,23 @@ export default function StorybookDisplay({
     }
   }, [currentPage?.pageImageUrl]);
 
-  // Cleanup audio on unmount
-  useEffect(() => {
-    return () => {
-      if (audioElementRef.current) {
-        audioElementRef.current.pause();
-        audioElementRef.current.currentTime = 0;
-      }
-    };
-  }, []);
+  
 
   const handleNextPage = useCallback(() => {
     if (currentPage && currentPage.pageNumber < currentPage.totalPages) {
-      // Interrupt silence detection when manually navigating
-      silenceDetection.interruptSilence();
+      // Clear auto advance timer when manually navigating
+      bookStateManager.clearAutoAdvanceTimer();
       handleInternalNextPage();
     }
-  }, [currentPage, silenceDetection, handleInternalNextPage]);
+  }, [currentPage, bookStateManager, handleInternalNextPage]);
 
   const handlePreviousPage = useCallback(() => {
     if (currentPage && currentPage.pageNumber > 1) {
-      // Interrupt silence detection when manually navigating
-      silenceDetection.interruptSilence();
+      // Clear auto advance timer when manually navigating
+      bookStateManager.clearAutoAdvanceTimer();
       handleInternalPreviousPage();
     }
-  }, [currentPage, silenceDetection, handleInternalPreviousPage]);
+  }, [currentPage, bookStateManager, handleInternalPreviousPage]);
 
   if (!isVisible || !currentPage) {
     return null;
@@ -400,12 +212,12 @@ export default function StorybookDisplay({
             <Badge variant="secondary" className="text-sm">
               Page {currentPage.pageNumber} of {currentPage.totalPages}
             </Badge>
-            {isPlayingAudio && (
+            {audioManager.isPlaying && (
               <Badge variant="default" className="text-xs animate-pulse bg-green-600">
                 🔊 Playing Audio
               </Badge>
             )}
-            {currentPage?.audioUrl && !isPlayingAudio && (
+            {currentPage?.audioUrl && !audioManager.isPlaying && (
               <Button
                 variant="outline"
                 size="sm"
@@ -423,12 +235,7 @@ export default function StorybookDisplay({
                 {bookStateManager.bookState.replace(/_/g, ' ')}
               </Badge>
             )}
-            {silenceDetection.isDetectingSilence && !isPlayingAudio && (
-              <Badge variant="outline" className="text-xs animate-pulse">
-                <Clock className="h-3 w-3 mr-1" />
-                {Math.ceil(silenceDetection.silenceTimer / 1000)}s
-              </Badge>
-            )}
+            
             <Button variant="ghost" size="sm" onClick={onClose}>
               ✕
             </Button>

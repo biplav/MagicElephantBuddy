@@ -515,6 +515,18 @@ const Home = memo(() => {
     }
   }, [realtimeRequestPermission, handleError]);
 
+  // Handle auto page advance from BookStateManager
+  const handleAutoPageAdvance = useCallback(() => {
+    if (currentStorybookPage && currentStorybookPage.pageNumber < currentStorybookPage.totalPages) {
+      console.log('🔄 AUTO-ADVANCE: Auto-advancing to next page from BookStateManager');
+      // Use BookStateManager's navigation instead of StorybookDisplay's
+      bookStateManager?.navigateToNextPage();
+    } else if (currentStorybookPage && currentStorybookPage.pageNumber >= currentStorybookPage.totalPages) {
+      console.log('📖 END-OF-BOOK: Reached end of book');
+      // Could trigger end-of-book celebration here
+    }
+  }, [currentStorybookPage]);
+
   // Initialize book state manager AFTER all the callbacks are defined
   const bookStateManager = useBookStateManager({
     onStorybookPageDisplay: handleStorybookPageDisplay,
@@ -524,6 +536,8 @@ const Home = memo(() => {
     onError: (callId: string, error: string) => {
       console.error("Book function call error:", { callId, error });
     },
+    workflowStateMachine: workflowStateMachine,
+    onAutoPageAdvance: handleAutoPageAdvance,
   });
 
   // Start recording automatically when ready (only for realtime API after connection is established)

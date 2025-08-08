@@ -25,6 +25,8 @@ interface BookStateManagerOptions {
   onFunctionCallResult?: (callId: string, result: string) => void;
   onError?: (callId: string, error: string) => void;
   onBookStateChange?: (state: BookState) => void;
+  workflowStateMachine?: any;
+  onAutoPageAdvance?: () => void;
 }
 
 export function useBookStateManager(options: BookStateManagerOptions = {}) {
@@ -40,6 +42,11 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
   // Reading session optimization refs
   const isInReadingSessionRef = useRef<boolean>(false);
   const readingSessionMessagesRef = useRef<any[]>([]);
+
+  // Audio management refs
+  const audioElementRef = useRef<HTMLAudioElement | null>(null);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const autoAdvanceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Book state transition handler
   const transitionToState = useCallback((newState: BookState) => {
@@ -67,6 +74,101 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
     isState: (state: BookState) => bookState === state
   };
 
+  // Audio management with workflow integration
+  const playPageAudio = useCallback((audioUrl: string) => {
+    if (!audioUrl) return;
+
+    console.log('🔊 BOOK-AUDIO: Playing page audio:', audioUrl);
+
+    // Stop any existing audio
+    if (audioElementRef.current) {
+      audioElementRef.current.pause();
+      audioElementRef.current.currentTime = 0;
+      setIsPlayingAudio(false);
+    }
+
+    const audio = new Audio(audioUrl);
+    audio.preload = 'auto';
+
+    audio.onplay = () => {
+      console.log('🔊 BOOK-AUDIO: Audio started playing');
+      setIsPlayingAudio(true);
+      transitionToState('AUDIO_PLAYING');
+      options.workflowStateMachine?.handleAppuSpeakingStart('book-page-audio-start');
+    };
+
+    audio.onended = () => {
+      console.log('🔊 BOOK-AUDIO: Audio finished playing');
+      setIsPlayingAudio(false);
+      audioElementRef.current = null;
+      transitionToState('AUDIO_COMPLETED');
+      options.workflowStateMachine?.handleAppuSpeakingStop('book-page-audio-end');
+      
+      // Start auto page advance timer
+      console.log('🔄 BOOK-AUTO: Starting auto page advance timer');
+      autoAdvanceTimerRef.current = setTimeout(() => {
+        options.onAutoPageAdvance?.();
+      }, 3000); // 3 second delay after audio ends
+    };
+
+    audio.onerror = (error) => {
+      console.error('🔊 BOOK-AUDIO: Error playing audio:', error);
+      setIsPlayingAudio(false);
+      audioElementRef.current = null;
+      transitionToState('ERROR');
+      options.workflowStateMachine?.handleError('Audio playback failed');
+    };
+
+    audioElementRef.current = audio;
+    const playPromise = audio.play();
+    
+    if (playPromise !== undefined) {
+      playPromise.catch(error => {
+        console.error('🔊 BOOK-AUDIO: Failed to play audio:', error);
+        setIsPlayingAudio(false);
+        options.workflowStateMachine?.handleError('Audio autoplay blocked');
+      });
+    }
+  }, [transitionToState, options.workflowStateMachine, options.onAutoPageAdvance]);
+
+  // Clear auto advance timer
+  const clearAutoAdvanceTimer = useCallback(() => {
+    if (autoAdvanceTimerRef.current) {
+      clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+    }
+  }, []);
+
+  // Audio control methods
+  const stopAudio = useCallback(() => {
+    if (audioElementRef.current) {
+      audioElementRef.current.pause();
+      audioElementRef.current.currentTime = 0;
+      setIsPlayingAudio(false);
+      audioElementRef.current = null;
+      clearAutoAdvanceTimer();
+      console.log('🔊 BOOK-AUDIO: Audio stopped');
+    }
+  }, [clearAutoAdvanceTimer]);
+
+  // Monitor workflow state and automatically play audio when appropriate
+  useEffect(() => {
+    if (!options.workflowStateMachine) return;
+
+    const workflowState = options.workflowStateMachine.currentState;
+    
+    // Only attempt audio playback when workflow is IDLE and book has audio ready
+    if (workflowState === 'IDLE' && bookState === 'AUDIO_READY_TO_PLAY') {
+      // Check if we have current page data with audio URL
+      const hasAudioUrl = selectedBookRef.current?.currentAudioUrl;
+      
+      if (hasAudioUrl && !isPlayingAudio) {
+        console.log('🔄 BOOK-WORKFLOW: Workflow is IDLE, auto-playing page audio');
+        playPageAudio(hasAudioUrl);
+      }
+    }
+  }, [options.workflowStateMachine?.currentState, bookState, isPlayingAudio, playPageAudio]);
+
   // Helper function to manage reading session state
   const enterReadingSession = useCallback(() => {
     if (!isInReadingSessionRef.current) {
@@ -81,8 +183,10 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       isInReadingSessionRef.current = false;
       selectedBookRef.current = null;
       currentPageRef.current = 1;
+      stopAudio();
+      clearAutoAdvanceTimer();
     }
-  }, [logger]);
+  }, [logger, stopAudio, clearAutoAdvanceTimer]);
 
   const handleBookSearchTool = useCallback(async (callId: string, args: any) => {
     logger.info("bookSearchTool was called!", { callId, args });
@@ -184,15 +288,20 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       selectedBookRef.current = { 
         id: bookId, 
         title: pageData.bookTitle,
-        totalPages: pageData.totalPages 
+        totalPages: pageData.totalPages,
+        currentAudioUrl: pageData.audioUrl
       };
       currentPageRef.current = pageNumber;
       
       logger.info("Updated book state", { 
         bookId: selectedBookRef.current.id,
         currentPage: currentPageRef.current,
-        totalPages: selectedBookRef.current.totalPages
+        totalPages: selectedBookRef.current.totalPages,
+        hasAudio: !!pageData.audioUrl
       });
+
+      // Clear any existing auto advance timer
+      clearAutoAdvanceTimer();
 
       // Enter reading session mode
       enterReadingSession();
@@ -212,7 +321,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
         });
       }
 
-      // If there's audio, transition to audio ready
+      // If there's audio, transition to audio ready and let workflow monitoring handle playback
       if (pageData.audioUrl) {
         transitionToState('AUDIO_READY_TO_PLAY');
       }
@@ -304,8 +413,12 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
         throw new Error("Page data not found in response");
       }
 
-      // Update current page
+      // Update current page and audio URL
       currentPageRef.current = nextPageNumber;
+      selectedBookRef.current.currentAudioUrl = pageData.audioUrl;
+
+      // Clear any existing auto advance timer
+      clearAutoAdvanceTimer();
 
       // Transition to page loaded
       transitionToState('PAGE_LOADED');
@@ -322,7 +435,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
         });
       }
 
-      // If there's audio, transition to audio ready
+      // If there's audio, transition to audio ready and let workflow monitoring handle playback
       if (pageData.audioUrl) {
         transitionToState('AUDIO_READY_TO_PLAY');
       }
@@ -384,8 +497,12 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
         throw new Error("Page data not found in response");
       }
 
-      // Update current page
+      // Update current page and audio URL
       currentPageRef.current = previousPageNumber;
+      selectedBookRef.current.currentAudioUrl = pageData.audioUrl;
+
+      // Clear any existing auto advance timer
+      clearAutoAdvanceTimer();
 
       // Transition to page loaded
       transitionToState('PAGE_LOADED');
@@ -402,7 +519,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
         });
       }
 
-      // If there's audio, transition to audio ready
+      // If there's audio, transition to audio ready and let workflow monitoring handle playback
       if (pageData.audioUrl) {
         transitionToState('AUDIO_READY_TO_PLAY');
       }
@@ -426,6 +543,12 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
     // Book State Management
     bookState,
     bookStateAPI,
+
+    // Audio Management
+    isPlayingAudio,
+    playPageAudio,
+    stopAudio,
+    clearAutoAdvanceTimer,
 
     // Methods
     handleBookSearchTool,
