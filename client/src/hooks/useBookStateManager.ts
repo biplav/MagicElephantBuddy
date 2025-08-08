@@ -246,6 +246,28 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       currentPage: currentPageRef.current
     });
 
+    // Pause book audio when someone starts speaking
+    if (workflowState === 'APPU_SPEAKING' || workflowState === 'CHILD_SPEAKING') {
+      if (isPlayingAudio && bookState === 'AUDIO_PLAYING') {
+        logger.info('🔄 BOOK-WORKFLOW: Pausing book audio due to speech activity', {
+          workflowState,
+          bookState,
+          speaker: workflowState === 'APPU_SPEAKING' ? 'Appu' : 'Child'
+        });
+        
+        // Pause the audio
+        if (audioElementRef.current) {
+          audioElementRef.current.pause();
+          setIsPlayingAudio(false);
+          logger.info('🔊 BOOK-AUDIO: Audio paused due to speech activity');
+        }
+        
+        // Transition to paused state
+        transitionToState('AUDIO_PAUSED');
+      }
+      return; // Don't process other states when someone is speaking
+    }
+
     // Handle different book states when workflow goes to IDLE
     if (workflowState === 'IDLE') {
       const hasAudioUrl = selectedBookRef.current?.currentAudioUrl;
