@@ -52,7 +52,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
   const transitionToState = useCallback((newState: BookState) => {
     const previousState = bookState;
     const timestamp = new Date().toISOString();
-    
+
     // Comprehensive logging for debugging
     logger.info(`📖 BOOK STATE TRANSITION: ${previousState} -> ${newState}`, {
       timestamp,
@@ -167,7 +167,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       audioElementRef.current = null;
       transitionToState('AUDIO_COMPLETED');
       options.workflowStateMachine?.handleAppuSpeakingStop('book-page-audio-end');
-      
+
       // Start auto page advance timer
       logger.info('🔄 BOOK-AUTO: Starting auto page advance timer (3s delay)');
       autoAdvanceTimerRef.current = setTimeout(() => {
@@ -190,7 +190,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
 
     audioElementRef.current = audio;
     const playPromise = audio.play();
-    
+
     if (playPromise !== undefined) {
       playPromise
         .then(() => {
@@ -236,7 +236,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
     }
 
     const workflowState = options.workflowStateMachine.currentState;
-    
+
     logger.debug('🔄 WORKFLOW-MONITOR: State check', {
       workflowState,
       bookState,
@@ -245,11 +245,11 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       hasAudioUrl: !!selectedBookRef.current?.currentAudioUrl,
       currentPage: currentPageRef.current
     });
-    
+
     // Only attempt audio playback when workflow is IDLE and book has audio ready
     if (workflowState === 'IDLE' && bookState === 'AUDIO_READY_TO_PLAY') {
       const hasAudioUrl = selectedBookRef.current?.currentAudioUrl;
-      
+
       logger.info('🔄 WORKFLOW-MONITOR: Conditions met for auto-play', {
         workflowState,
         bookState,
@@ -257,7 +257,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
         isPlayingAudio,
         audioUrl: hasAudioUrl
       });
-      
+
       if (hasAudioUrl && !isPlayingAudio) {
         logger.info('🔄 BOOK-WORKFLOW: Workflow is IDLE, auto-playing page audio', {
           audioUrl: hasAudioUrl,
@@ -405,7 +405,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
         currentAudioUrl: pageData.audioUrl
       };
       currentPageRef.current = pageNumber;
-      
+
       logger.info("Updated book state", { 
         bookId: selectedBookRef.current.id,
         currentPage: currentPageRef.current,
@@ -437,12 +437,24 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       // If there's audio, transition to audio ready and let workflow monitoring handle playback
       if (pageData.audioUrl) {
         transitionToState('AUDIO_READY_TO_PLAY');
+        logger.info('📖 BOOK-AUDIO: Page has audio URL, staying in AUDIO_READY_TO_PLAY state', {
+          audioUrl: pageData.audioUrl,
+          page: pageNumber,
+          book: pageData.bookTitle
+        });
+      } else {
+        // Only transition to IDLE if there's no audio to play
+        transitionToState('IDLE');
+        logger.info('📖 BOOK-AUDIO: No audio URL available, transitioning to IDLE', {
+          page: pageNumber,
+          book: pageData.bookTitle
+        });
       }
 
       // Emit success result - silent mode for audio playback
       options.onFunctionCallResult?.(
         callId,
-        `Page ${pageNumber} ready. Audio will play automatically.`
+        `Page ${pageNumber} ready. ${pageData.audioUrl ? 'Audio will play automatically.' : 'No audio available for this page.'}`
       );
 
     } catch (error: any) {
@@ -497,7 +509,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
     }
 
     const nextPageNumber = currentPageRef.current + 1;
-    
+
     // Check if we're already at the last page
     if (selectedBookRef.current.totalPages && nextPageNumber > selectedBookRef.current.totalPages) {
       logger.info(`Already at last page (${currentPageRef.current}/${selectedBookRef.current.totalPages})`);
@@ -551,6 +563,18 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       // If there's audio, transition to audio ready and let workflow monitoring handle playback
       if (pageData.audioUrl) {
         transitionToState('AUDIO_READY_TO_PLAY');
+        logger.info('📖 BOOK-AUDIO: Next page has audio URL, staying in AUDIO_READY_TO_PLAY state', {
+          audioUrl: pageData.audioUrl,
+          page: nextPageNumber,
+          book: pageData.bookTitle
+        });
+      } else {
+        // Only transition to IDLE if there's no audio to play
+        transitionToState('IDLE');
+        logger.info('📖 BOOK-AUDIO: Next page has no audio URL, transitioning to IDLE', {
+          page: nextPageNumber,
+          book: pageData.bookTitle
+        });
       }
 
       logger.info(`Successfully navigated to page ${nextPageNumber}`);
@@ -583,7 +607,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
     }
 
     const previousPageNumber = currentPageRef.current - 1;
-    
+
     if (previousPageNumber < 1) {
       logger.info("Already at first page, cannot go back");
       return false;
@@ -635,6 +659,18 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       // If there's audio, transition to audio ready and let workflow monitoring handle playback
       if (pageData.audioUrl) {
         transitionToState('AUDIO_READY_TO_PLAY');
+        logger.info('📖 BOOK-AUDIO: Previous page has audio URL, staying in AUDIO_READY_TO_PLAY state', {
+          audioUrl: pageData.audioUrl,
+          page: previousPageNumber,
+          book: pageData.bookTitle
+        });
+      } else {
+        // Only transition to IDLE if there's no audio to play
+        transitionToState('IDLE');
+        logger.info('📖 BOOK-AUDIO: Previous page has no audio URL, transitioning to IDLE', {
+          page: previousPageNumber,
+          book: pageData.bookTitle
+        });
       }
 
       logger.info(`Successfully navigated to page ${previousPageNumber}`);
