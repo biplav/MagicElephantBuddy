@@ -401,7 +401,7 @@ Emotional Care: Prioritize the child's feeling of safety. If the story has a mom
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-5-nano",
         messages: [
           {
             role: "user",
