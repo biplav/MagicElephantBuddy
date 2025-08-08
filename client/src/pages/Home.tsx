@@ -308,19 +308,13 @@ const Home = memo(() => {
     }
   }, [enableLocalPlayback]);
 
-  // Initialize audio recorder
-  const currentRecorder = useAudioRecorder({
-    onTranscription: handleTranscription,
-    onError: handleError,
-  });
-
   // Initialize realtime audio with the selected provider and error handling
   const {
     connect,
     disconnect,
     connectionState,
     error: realtimeError,
-    isRecording: realtimeIsRecording,
+    isRecording: isRealtimeRecording,
     audioLevel,
     requestPermission: realtimeRequestPermission,
     dataChannelState,
@@ -331,7 +325,8 @@ const Home = memo(() => {
     isConnecting,
     modelType,
     stopRecording: realtimeStopRecording,
-    disconnect: disconnectRealtime
+    disconnect: disconnectRealtime,
+    isConnected
   } = useRealtimeAudio({
     provider: aiProvider,
     voice: aiSettings.voicePreference,
@@ -354,22 +349,6 @@ const Home = memo(() => {
     workflowStateMachine: workflowStateMachine,
     openaiConnection: openaiConnection,
     enabled: true
-  });
-
-  // Destructure other realtime audio properties immediately after hook call
-  const {
-    isConnected,
-    isRecording: isRealtimeRecording,
-    stopRecording: stopRealtimeRecording,
-  } = useRealtimeAudio({
-    provider: aiProvider,
-    voice: aiSettings.voicePreference,
-    onError: handleError,
-    onConversationStart: handleConversationStart,
-    onStorybookPageDisplay: handleStorybookPageDisplay,
-    onAudioPlayback: handleAudioPlayback,
-    onCapturedFrame: setCapturedFrame,
-    selectedChildId: selectedChildId || undefined
   });
 
   const mediaManager = (useRealtimeAudio as any).mediaManager || { hasVideoPermission: false, videoElement: null };
@@ -463,10 +442,6 @@ const Home = memo(() => {
     traditionalRecorder.isReady,
     traditionalRecorder.isRecording,
     traditionalRecorder.isProcessing,
-    traditionalRecorder.startRecording,
-    traditionalRecorder.stopRecording,
-    traditionalRecorder.requestMicrophonePermission,
-    traditionalRecorder.recorderState,
   ]);
 
   // Now that currentRecorder is defined, define callbacks that depend on it
@@ -571,8 +546,7 @@ const Home = memo(() => {
     appState,
     currentRecorder.isRecording,
     currentRecorder.isProcessing,
-    currentRecorder.startRecording
-  ]);
+    ]);
 
   // Restart recording after processing is complete
   useEffect(() => {
