@@ -230,6 +230,34 @@ const Home = memo(() => {
     }, 3000);
   }, []);
 
+  // Helper to get selected child ID from state or localStorage
+  const getSelectedChildId = useCallback(() => {
+    return selectedChildId || localStorage.getItem("selectedChildId");
+  }, [selectedChildId]);
+
+  const handleCloseConversation = useCallback(async (tokensUsed: number = 0) => {
+    try {
+      const selectedChildId = getSelectedChildId();
+
+      console.log('Closing conversation for child:', selectedChildId, 'with tokens:', tokensUsed);
+
+      const response = await fetch('/api/close-conversation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ childId: selectedChildId, tokensUsed }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Conversation closed:', result);
+      } else {
+        console.error('Failed to close conversation');
+      }
+    } catch (error) {
+      console.error('Error closing conversation:', error);
+    }
+  }, [getSelectedChildId]);
+
   const handleStorybookPageDisplay = useCallback((pageData: {
     pageImageUrl: string;
     pageText: string;
@@ -274,7 +302,7 @@ const Home = memo(() => {
     },
     enableVideo: false, // Camera will be initialized on-demand via getFrameAnalysis
     modelType: aiProvider,
-    onConversationEnd: (tokensUsed?: number) => handleCloseConversation(tokensUsed || openaiConnection.tokensUsed || 0),
+    onConversationEnd: (tokensUsed?: number) => handleCloseConversation(tokensUsed || 0),
   }), [
     selectedChildId,
     handleTranscription,
@@ -283,8 +311,7 @@ const Home = memo(() => {
     handleError,
     handleStorybookPageDisplay,
     aiProvider,
-    handleCloseConversation,
-    openaiConnection.tokensUsed
+    handleCloseConversation
   ]);
 
   const realtimeAudio = useRealtimeAudio(realtimeOptions);
@@ -407,247 +434,6 @@ const Home = memo(() => {
     traditionalRecorder.recorderState,
   ]);
 
-  // Helper to get selected child ID from state or localStorage
-  const getSelectedChildId = useCallback(() => {
-    return selectedChildId || localStorage.getItem("selectedChildId");
-  }, [selectedChildId]);
-
-  const handleCloseConversation = useCallback(async (tokensUsed: number = 0) => {
-    try {
-      const selectedChildId = getSelectedChildId();
-
-      console.log('Closing conversation for child:', selectedChildId, 'with tokens:', tokensUsed);
-
-      const response = await fetch('/api/close-conversation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ childId: selectedChildId, tokensUsed }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log('Conversation closed:', result);
-      } else {
-        console.error('Failed to close conversation');
-      }
-    } catch (error) {
-      console.error('Error closing conversation:', error);
-    }
-  }, [getSelectedChildId]);
-
-  const handleStopSession = async () => {
-    console.log("Stopping session and returning to welcome screen");
-
-    // Stop any ongoing recording
-    if (currentRecorder.isRecording) {
-      currentRecorder.stopRecording();
-    }
-
-    // Disconnect from realtime API if connected
-    if (useRealtimeAPI && isConnected) {
-      console.log("Disconnecting from realtime API");
-      disconnect();
-    }
-
-    // Clean up camera/video resources
-    if (realtimeAudio) {
-      // For OpenAI connection
-      if (modelType === 'openai' && realtimeAudio.openaiConnection?.mediaCapture) {
-        try {
-          await realtimeAudio.openaiConnection.mediaCapture.cleanup();
-          console.log("✅ OpenAI media capture cleaned up");
-        } catch (error) {
-          console.error("❌ Error cleaning up OpenAI media capture:", error);
-        }
-      }
-
-      // For Gemini connection
-      if (modelType === 'gemini' && realtimeAudio.mediaManager) {
-        try {
-          await realtimeAudio.mediaManager.cleanup();
-          console.log("✅ Gemini media capture cleaned up");
-        } catch (error) {
-          console.error("❌ Error cleaning up Gemini media capture:", error);
-        }
-      }
-    }
-
-    // Close conversation in database by calling the updated handler
-    // Pass the token count from the OpenAI connection if available
-    const tokens = openaiConnection?.tokensUsed || 0;
-    handleCloseConversation(tokens);
-
-    // Exit fullscreen mode
-    await exitFullscreen();
-
-    // Reset all states
-    setElephantState("idle");
-    setSpeechText(undefined);
-    setAppState("welcome");
-    setCapturedFrame(null);
-  };
-
-  // Load AI settings from localStorage
-  useEffect(() => {
-    const savedSettings = localStorage.getItem("appuAISettings");
-    if (savedSettings) {
-      try {
-        const parsed = JSON.parse(savedSettings);
-        setAiSettings(parsed);
-        console.log("Loaded AI settings:", parsed);
-        console.log("AI Provider will be:", parsed.voiceMode === 'gemini' ? 'gemini' : 'openai');
-      } catch (error) {
-        console.error("Error loading AI settings:", error);
-      }
-    }
-  }, []);
-
-  // Handle fullscreen exit via ESC key
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      // If user exits fullscreen manually (e.g., ESC key) while in interaction mode
-      if (!document.fullscreenElement && appState === "interaction") {
-        console.log("Fullscreen exited manually, stopping session");
-        handleStopSession();
-      }
-    };
-
-    document.addEventListener("fullscreenchange", handleFullscreenChange);
-    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
-    document.addEventListener("mozfullscreenchange", handleFullscreenChange);
-    document.addEventListener("MSFullscreenChange", handleFullscreenChange);
-
-    return () => {
-      document.removeEventListener("fullscreenchange", handleFullscreenChange);
-      document.removeEventListener(
-        "webkitfullscreenchange",
-        handleFullscreenChange,
-      );
-      document.removeEventListener(
-        "mozfullscreenchange",
-        handleFullscreenChange,
-      );
-      document.removeEventListener(
-        "MSFullscreenChange",
-        handleFullscreenChange,
-      );
-    };
-  }, [appState, handleStopSession]);
-
-  // Camera initialization will happen when conversation starts
-  // No automatic camera initialization on page load
-  // Add debug info to see what's happening
-  const [debugMode, setDebugMode] = useState(false);
-  const [capturedFrames, setCapturedFrames] = useState<any[]>([]);
-
-  // Storybook state
-  const [currentBook, setCurrentBook] = useState<any>(null);
-  const [currentStorybookPage, setCurrentStorybookPage] = useState<any>(null);
-  const [isStorybookVisible, setIsStorybookVisible] = useState(false);
-
-  // Auto-start recording when connected (only for realtime API)
-  useEffect(() => {
-    if (useRealtimeAPI && realtimeAudio.isConnected && appState === "interaction") {
-      setTimeout(() => {
-        setElephantState("speaking");
-        setSpeechText("Hi there! I'm Appu. What would you like to talk about?");
-
-        setTimeout(() => {
-          setElephantState("idle");
-          setTimeout(() => {
-            setSpeechText(undefined);
-
-            // Auto-restart recording after initial greeting
-            if (
-              realtimeAudio.isConnected &&
-              appState === "interaction" &&
-              !currentRecorder.isRecording &&
-              !currentRecorder.isProcessing
-            ) {
-              console.log("Auto-restarting recording after initial greeting");
-              currentRecorder.startRecording();
-            }
-          }, 1000);
-        }, 3000);
-      }, 1000);
-    }
-  }, [useRealtimeAPI, realtimeAudio.isConnected, appState]);
-
-  useEffect(() => {
-    if (currentRecorder.isRecording) {
-      setElephantState("listening");
-    }
-  }, [currentRecorder.isRecording]);
-
-  const handleStartButton = async () => {
-    // Check if microphone permission is already granted
-    try {
-      const permission = await navigator.permissions.query({
-        name: "microphone" as PermissionName,
-      });
-      if (permission.state === "granted") {
-        // Permission already granted, proceed directly
-        console.log("Microphone permission already granted");
-        //await enterFullscreen();
-        setAppState("interaction");
-
-        if (useRealtimeAPI && !isConnected) {
-          console.log("Connecting to realtime API");
-          connect();
-        }
-      } else {
-        // Need to request permission
-        setPermissionModalOpen(true);
-      }
-    } catch (error) {
-      // Fallback if permissions API is not supported
-      console.log("Permissions API not supported, showing permission modal");
-      setPermissionModalOpen(true);
-    }
-  };
-
-  const handleAllowPermission = async () => {
-    setPermissionModalOpen(false);
-    const granted = await currentRecorder.requestMicrophonePermission();
-
-    if (granted) {
-      console.log("Microphone permission granted, starting interaction");
-
-      // Enter fullscreen mode
-      await enterFullscreen();
-
-      setAppState("interaction");
-
-      // Connect to realtime API only after permission is granted
-      if (useRealtimeAPI && !isConnected) {
-        console.log("Connecting to realtime API after permission granted");
-        connect();
-      }
-    } else {
-      console.error("Failed to get microphone permission");
-      // Show error state for microphone permission issues
-      setElephantState("error");
-      setSpeechText(
-        "I can't hear you! Please allow microphone access and try again.",
-      );
-
-      // Reset state after showing error
-      setTimeout(() => {
-        setElephantState("idle");
-        setSpeechText(undefined);
-      }, 4000);
-
-      // You might want to show another dialog or message here
-      // explaining how to enable microphone permissions
-    }
-  };
-
-  const memoizedStartRecording = useCallback(() => {
-    if (currentRecorder.startRecording) {
-      currentRecorder.startRecording();
-    }
-  }, [currentRecorder]); // Now safe to depend on the whole memoized object
-
   // Start recording automatically when ready (only for realtime API after connection is established)
   useEffect(() => {
     if (
@@ -660,7 +446,7 @@ const Home = memo(() => {
       console.log(
         "Auto-starting realtime recording because connection is established",
       );
-      memoizedStartRecording();
+      currentRecorder.startRecording();
     }
   }, [
     useRealtimeAPI,
@@ -668,7 +454,7 @@ const Home = memo(() => {
     appState,
     currentRecorder.isRecording,
     currentRecorder.isProcessing,
-    memoizedStartRecording,
+    currentRecorder.startRecording
   ]);
 
   // Restart recording after processing is complete
@@ -684,7 +470,7 @@ const Home = memo(() => {
       const timer = setTimeout(() => {
         if (!currentRecorder.isRecording && !currentRecorder.isProcessing) {
           console.log("Restarting recording after processing completed");
-          memoizedStartRecording();
+          currentRecorder.startRecording();
         }
       }, 1000);
 
@@ -696,7 +482,7 @@ const Home = memo(() => {
     appState,
     elephantState,
     currentRecorder.isRecording,
-    memoizedStartRecording,
+    currentRecorder.startRecording
   ]);
 
   // Handle microphone button to stop current recording and trigger processing
@@ -724,7 +510,7 @@ const Home = memo(() => {
       }
 
       // Start recording
-      memoizedStartRecording();
+      currentRecorder.startRecording();
 
       // Log current state after starting
       setTimeout(() => {
@@ -838,7 +624,7 @@ const Home = memo(() => {
             console.log(
               "Auto-restarting recording after processing text input response",
             );
-            memoizedStartRecording();
+            currentRecorder.startRecording();
           }
         }, 1000);
       }, 4000);
@@ -899,7 +685,7 @@ const Home = memo(() => {
               !currentRecorder.isProcessing
             ) {
               console.log("Auto-restarting recording after error message");
-              memoizedStartRecording();
+              currentRecorder.startRecording();
             }
         }, 1000);
       }, 4000);
