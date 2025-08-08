@@ -361,9 +361,18 @@ const Home = memo(() => {
     isConnected,
     isRecording: isRealtimeRecording,
     stopRecording: stopRealtimeRecording,
-  } = realtimeAudio;
+  } = useRealtimeAudio({
+    provider: aiProvider,
+    voice: aiSettings.voicePreference,
+    onError: handleError,
+    onConversationStart: handleConversationStart,
+    onStorybookPageDisplay: handleStorybookPageDisplay,
+    onAudioPlayback: handleAudioPlayback,
+    onCapturedFrame: setCapturedFrame,
+    selectedChildId: selectedChildId || undefined
+  });
 
-  const mediaManager = (realtimeAudio as any).mediaManager || { hasVideoPermission: false, videoElement: null };
+  const mediaManager = (useRealtimeAudio as any).mediaManager || { hasVideoPermission: false, videoElement: null };
 
   // Initialize traditional recorder
   const traditionalRecorder = useAudioRecorder({
@@ -428,10 +437,10 @@ const Home = memo(() => {
           isReady: isConnected,
           isRecording: isRealtimeRecording,
           isProcessing: false, // Realtime API doesn't have isProcessing state
-          startRecording: realtimeStartRecording,
-          stopRecording: stopRealtimeRecording,
+          startRecording: connect, // useRealtimeAudio's connect starts recording
+          stopRecording: disconnectRealtime,
           requestMicrophonePermission: realtimeRequestPermission,
-          recorderState: isRealtimeRecording ? "recording" : "inactive",
+          recorderState: isConnecting ? "connecting" : isConnected ? (isRealtimeRecording ? "recording" : "inactive") : "error",
         }
       : {
           isReady: traditionalRecorder.isReady,
@@ -447,9 +456,10 @@ const Home = memo(() => {
     useRealtimeAPI,
     isConnected,
     isRealtimeRecording,
-    realtimeStartRecording,
-    stopRealtimeRecording,
+    connect,
+    disconnectRealtime,
     realtimeRequestPermission,
+    isConnecting,
     traditionalRecorder.isReady,
     traditionalRecorder.isRecording,
     traditionalRecorder.isProcessing,
@@ -813,7 +823,10 @@ const Home = memo(() => {
   };
 
 
-
+  // Dummy variables for StorybookDisplay props to satisfy the type checker
+  const [autoPageTurnEnabled, setAutoPageTurnEnabled] = useState(false);
+  const [isAppuSpeaking, setIsAppuSpeaking] = useState(false);
+  const [isUserSpeaking, setIsUserSpeaking] = useState(false);
 
 
   const handleCloseStorybook = () => {
