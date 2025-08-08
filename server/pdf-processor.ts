@@ -303,7 +303,8 @@ Emotional Care: Prioritize the child's feeling of safety. If the story has a mom
         input: narrationText,
         instructions: childFriendlyPrompt,
         response_format: 'mp3',
-        speed: 0.8 // Slightly slower pace for young children
+        speed: 0.8, // Slightly slower pace for young children
+        prompt_cache_key: "pdf-processor-tts-child-friendly-v1"
       });
 
 
@@ -461,6 +462,7 @@ Return your response in this exact JSON format:
         ],
         max_tokens: 700,
         temperature: 0.6,
+        prompt_cache_key: "pdf-processor-vision-analysis-v1",
       });
 
       const responseContent = response.choices[0].message.content || "";
