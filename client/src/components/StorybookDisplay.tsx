@@ -151,7 +151,7 @@ export default function StorybookDisplay({
     console.log('Auto page advance interrupted by speech');
   }, []);
 
-  // Audio management for workflow state machine
+  // Audio management with workflow integration
   const audioManager = {
     isPlaying: isPlayingAudio,
     
@@ -174,7 +174,7 @@ export default function StorybookDisplay({
           console.log('🔊 AUDIO: Audio started playing');
           setIsPlayingAudio(true);
           onAppuSpeakingChangeRef.current?.(true);
-          workflowStateMachine?.handleAudioPlaybackStart();
+          workflowStateMachine?.handleAppuSpeakingStart('page-audio-start');
           bookStateManager.bookStateAPI.transitionToAudioPlaying();
         };
 
@@ -183,7 +183,7 @@ export default function StorybookDisplay({
           setIsPlayingAudio(false);
           onAppuSpeakingChangeRef.current?.(false);
           audioElementRef.current = null;
-          workflowStateMachine?.handleAudioPlaybackEnd();
+          workflowStateMachine?.handleAppuSpeakingStop('page-audio-end');
           bookStateManager.bookStateAPI.transitionToAudioCompleted();
         };
 
@@ -219,7 +219,32 @@ export default function StorybookDisplay({
             });
         }
       }
-    }, [currentPage?.audioUrl, workflowStateMachine]),
+    }, [currentPage?.audioUrl, workflowStateMachine, bookStateManager]),
+
+    // New method to check if audio should play based on workflow state
+    attemptAudioPlayback: useCallback(() => {
+      if (!currentPage?.audioUrl) {
+        console.log('🔊 AUDIO: No audio URL available for playback');
+        return;
+      }
+
+      if (bookStateManager.bookState !== 'AUDIO_READY_TO_PLAY') {
+        console.log('🔊 AUDIO: Book state not ready for audio playback:', bookStateManager.bookState);
+        return;
+      }
+
+      // Check workflow state - only play if idle or if we just stopped speaking
+      const workflowState = workflowStateMachine?.currentState;
+      console.log('🔊 AUDIO: Checking workflow state for audio playback:', workflowState);
+
+      if (workflowState === 'IDLE' || workflowState === 'APPU_SPEAKING_STOPPED') {
+        console.log('🔊 AUDIO: Workflow state allows audio playback - starting audio');
+        audioManager.playPageAudio();
+      } else {
+        console.log('🔊 AUDIO: Workflow state prevents audio playback - waiting for IDLE state');
+        console.log('🔊 AUDIO: Current workflow state:', workflowState);
+      }
+    }, [currentPage?.audioUrl, bookStateManager.bookState, workflowStateMachine?.currentState]),
     
     pauseAudio: useCallback(() => {
       if (audioElementRef.current && !audioElementRef.current.paused) {
@@ -265,33 +290,59 @@ export default function StorybookDisplay({
     initialAudioDelay: 1000,
     onSilenceDetected: handleAutoPageAdvance,
     onSilenceInterrupted: handleSilenceInterrupted,
-    onInitialAudioTrigger: audioManager.playPageAudio,
+    onInitialAudioTrigger: audioManager.attemptAudioPlayback,
     enabled: autoPageTurnEnabled && isVisible,
     openaiConnection: openaiConnection,
     workflowStateMachine: workflowStateMachine
   });
 
-  
-
-  /* Play audio based on different triggers with conditional logic
+  // Monitor workflow state changes and trigger audio when appropriate
   useEffect(() => {
-    if (currentPage?.audioUrl && imageLoaded && isVisible) {
-      if (isAppuSpeaking) {
-        // Let silence detection handle timing - no immediate play
-        console.log('Appu is speaking - silence detection will handle audio timing');
-      } else {
-        // Appu is not speaking, safe to play immediately
-        console.log('Page loaded - playing audio immediately');
-        playPageAudio();
+    if (!workflowStateMachine) return;
+
+    const workflowState = workflowStateMachine.currentState;
+    console.log('🔄 WORKFLOW-BOOK: Workflow state changed to:', workflowState);
+
+    // If workflow becomes idle and we have audio ready to play, attempt playback
+    if (workflowState === 'IDLE' && bookStateManager.bookState === 'AUDIO_READY_TO_PLAY') {
+      console.log('🔄 WORKFLOW-BOOK: Workflow is now idle, attempting audio playback');
+      audioManager.attemptAudioPlayback();
+    }
+
+    // If workflow becomes appu speaking stopped, also attempt playback
+    if (workflowState === 'APPU_SPEAKING_STOPPED' && bookStateManager.bookState === 'AUDIO_READY_TO_PLAY') {
+      console.log('🔄 WORKFLOW-BOOK: Appu stopped speaking, attempting audio playback');
+      audioManager.attemptAudioPlayback();
+    }
+  }, [workflowStateMachine?.currentState, bookStateManager.bookState, audioManager]);
+
+  // Monitor book state changes and trigger audio when page is ready
+  useEffect(() => {
+    console.log('📖 BOOK-WORKFLOW: Book state changed to:', bookStateManager.bookState);
+
+    // When page loads and audio is ready, check workflow state
+    if (bookStateManager.bookState === 'AUDIO_READY_TO_PLAY' && currentPage?.audioUrl && imageLoaded && isVisible) {
+      console.log('📖 BOOK-WORKFLOW: Audio ready to play - checking workflow state');
+      audioManager.attemptAudioPlayback();
+    }
+  }, [bookStateManager.bookState, currentPage?.audioUrl, imageLoaded, isVisible, audioManager]);
+
+  // Monitor page loading completion
+  useEffect(() => {
+    if (currentPage && imageLoaded && isVisible) {
+      console.log('📖 PAGE-LOADED: Page fully loaded, transitioning book state');
+      
+      // Transition from PAGE_LOADING to PAGE_LOADED when image is loaded
+      if (bookStateManager.bookState === 'PAGE_LOADING') {
+        bookStateManager.bookStateAPI.transitionToPageLoaded();
+        
+        // If there's audio, transition to audio ready
+        if (currentPage.audioUrl) {
+          bookStateManager.bookStateAPI.transitionToAudioReadyToPlay();
+        }
       }
     }
-  }, [currentPage?.pageNumber, imageLoaded, isVisible, isAppuSpeaking, playPageAudio]);
-
-  // Enable/disable silence detection based on visibility and settings
-  useEffect(() => {
-    silenceDetection.setEnabled(autoPageTurnEnabled && isVisible);
-  }, [autoPageTurnEnabled, isVisible, silenceDetection]);
-*/
+  }, [currentPage, imageLoaded, isVisible, bookStateManager]);
   
   useEffect(() => {
     if (currentPage?.pageImageUrl) {
