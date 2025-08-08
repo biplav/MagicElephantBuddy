@@ -213,9 +213,5 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
     startInitialAudioTimer,
     interruptSilence,
     resetSilenceDetection: clearTimers,
-    // Legacy methods for backward compatibility
-    setEnabled: () => {}, 
-    setAppuSpeaking: () => {},
-    setUserSpeaking: () => {}
   };
 }
