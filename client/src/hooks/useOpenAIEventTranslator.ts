@@ -160,41 +160,29 @@ export function useOpenAIEventTranslator(options: OpenAIEventTranslatorOptions =
 
   // Listen to OpenAI events and translate them
   useEffect(() => {
-    if (!openaiConnection || !enabled || !workflowStateMachine) return;
-
-    const handleOpenAIEvent = (event: any) => {
-      try {
-        translateOpenAIEvent(event);
-      } catch (error) {
-        logger.error('🚨 Error translating OpenAI event', {
-          error: error instanceof Error ? error.message : String(error),
-          eventType: event?.type
-        });
-        workflowStateMachine.handleError('Event translation error');
-      }
-    };
-
-    // Add event listener based on the connection type
-    if (openaiConnection.addEventListener) {
-      openaiConnection.addEventListener('message', handleOpenAIEvent);
-    } else if (openaiConnection.on) {
-      openaiConnection.on('event', handleOpenAIEvent);
-    } else {
-      logger.warn('⚠️ OpenAI connection does not support event listeners');
+    if (!openaiConnection || !enabled || !workflowStateMachine) {
+      logger.debug('🔄 Event translator setup skipped', { 
+        hasConnection: !!openaiConnection, 
+        enabled, 
+        hasWorkflowStateMachine: !!workflowStateMachine 
+      });
       return;
     }
 
-    logger.info('🔗 OpenAI event translator connected');
+    // Since the openaiConnection is the hook result, not the WebSocket directly,
+    // we need to check if it has internal event handling capabilities
+    // For now, we'll log that the translator is ready but events will be handled
+    // internally by the useOpenAIConnection hook
+    
+    logger.info('🔗 OpenAI event translator initialized and ready');
+    logger.debug('📋 Event translator will receive events from internal OpenAI connection handler');
 
+    // No cleanup needed since we're not directly listening to events
+    // The actual event handling happens inside useOpenAIConnection
     return () => {
-      if (openaiConnection.removeEventListener) {
-        openaiConnection.removeEventListener('message', handleOpenAIEvent);
-      } else if (openaiConnection.off) {
-        openaiConnection.off('event', handleOpenAIEvent);
-      }
-      logger.info('🔌 OpenAI event translator disconnected');
+      logger.info('🔌 OpenAI event translator deinitialized');
     };
-  }, [openaiConnection, enabled, workflowStateMachine, translateOpenAIEvent, logger]);
+  }, [openaiConnection, enabled, workflowStateMachine, logger]);
 
   return {
     translateOpenAIEvent,

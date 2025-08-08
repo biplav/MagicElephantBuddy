@@ -308,6 +308,11 @@ const Home = memo(() => {
     }
   }, [enableLocalPlayback]);
 
+  // Initialize workflow state machine FIRST
+  const workflowStateMachine = useWorkflowStateMachine({
+    enabled: true
+  });
+
   // Initialize realtime audio with the selected provider and error handling
   const {
     connect,
@@ -333,15 +338,10 @@ const Home = memo(() => {
     onError: handleError,
     onConversationStart: handleConversationStart,
     onStorybookPageDisplay: handleStorybookPageDisplay,
-    onAudioPlayback: handleAudioPlayback,
+    onAudioPlaybook: handleAudioPlayback,
     onCapturedFrame: setCapturedFrame,
-    selectedChildId: selectedChildId || undefined
-  });
-
-  // Initialize workflow state machine AFTER openaiConnection is available
-  const workflowStateMachine = useWorkflowStateMachine({
-    enabled: true,
-    openaiConnection: openaiConnection
+    selectedChildId: selectedChildId || undefined,
+    workflowStateMachine: workflowStateMachine
   });
 
   // Initialize OpenAI event translator AFTER both dependencies are available

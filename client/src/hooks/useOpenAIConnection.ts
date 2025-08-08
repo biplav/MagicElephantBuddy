@@ -47,10 +47,15 @@ interface UseOpenAIConnectionOptions {
   onAppuSpeakingChange?: (isSpeaking: boolean) => void;
   // Media functions
   captureFrame?: () => string | null;
+  // Workflow integration
+  workflowStateMachine?: any;
 }
 
 export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
   const logger = createServiceLogger("openai-connection");
+
+  // Extract workflow state machine from options
+  const { workflowStateMachine } = options;
 
   const [state, setState] = useState<OpenAIConnectionState>({
     isConnected: false,
@@ -314,6 +319,55 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
             messageKeys: Object.keys(message),
             fullMessage: message,
           });
+
+          // Translate OpenAI events to workflow state machine events
+          if (workflowStateMachine) {
+            try {
+              switch (message.type) {
+                case 'session.created':
+                  workflowStateMachine.handleLoading();
+                  break;
+                case 'session.updated':
+                  if (workflowStateMachine.currentState === 'LOADING') {
+                    workflowStateMachine.handleIdle();
+                  }
+                  break;
+                case 'output_audio_buffer.started':
+                  workflowStateMachine.handleAppuSpeakingStart();
+                  break;
+                case 'output_audio_buffer.stopped':
+                  workflowStateMachine.handleAppuSpeakingStop();
+                  break;
+                case 'response.audio.delta':
+                  if (workflowStateMachine.currentState !== 'APPU_SPEAKING') {
+                    workflowStateMachine.handleAppuSpeakingStart();
+                  }
+                  break;
+                case 'input_audio_buffer.speech_started':
+                  workflowStateMachine.handleChildSpeechStart();
+                  break;
+                case 'input_audio_buffer.speech_stopped':
+                  workflowStateMachine.handleChildSpeechStop();
+                  break;
+                case 'response.created':
+                  workflowStateMachine.handleAppuThinking();
+                  break;
+                case 'response.done':
+                  if (workflowStateMachine.currentState !== 'APPU_SPEAKING') {
+                    workflowStateMachine.handleIdle();
+                  }
+                  break;
+                case 'error':
+                  workflowStateMachine.handleError(message.error?.message || 'OpenAI error occurred');
+                  break;
+              }
+            } catch (translationError) {
+              logger.error('🚨 Error translating OpenAI event to workflow state', {
+                error: translationError instanceof Error ? translationError.message : String(translationError),
+                eventType: message.type
+              });
+            }
+          }
 
           switch (message.type) {
             case "input_audio_buffer.speech_started":

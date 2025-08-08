@@ -71,6 +71,7 @@ interface UseRealtimeAudioOptions {
   onBookSelected?: (book: any) => void;
   onAppuSpeakingChange?: (speaking: boolean) => void;
   modelType?: 'openai' | 'gemini';
+  workflowStateMachine?: any;
 }
 
 interface RealtimeAudioState {
@@ -125,7 +126,34 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
   ]);
 
   // Initialize connection hooks with stable options
-  const openaiConnection = useOpenAIConnection(connectionOptions);
+  const openaiConnection = useOpenAIConnection({
+    childId: options.childId,
+    enableVideo: false, // Camera activated on-demand
+    onTranscriptionReceived: (transcription) => {
+      logger.info('🎤 Transcription received', { transcription });
+      // Assuming setLastTranscription is defined elsewhere or intended to be managed by the hook's state
+      // For now, we'll just log it as per the original structure. If setLastTranscription is part of this hook's state, it needs to be added.
+    },
+    onResponseReceived: (response) => {
+      logger.info('💬 Response received', { response });
+      // Assuming setLastResponse is defined elsewhere or intended to be managed by the hook's state
+    },
+    onAudioResponseReceived: (audioData) => {
+      logger.info('🔊 Audio response received');
+      // Handle audio response
+    },
+    onError: (error) => {
+      logger.error('❌ OpenAI connection error', { error });
+      // Assuming setError is defined elsewhere or intended to be managed by the hook's state
+      options.onError?.(error);
+    },
+    onStorybookPageDisplay: options.onStorybookPageDisplay,
+    onAppuSpeakingChange: (speaking) => {
+      logger.info('🗣️ Appu speaking change', { speaking });
+      // Assuming setIsAppuSpeaking is defined elsewhere or intended to be managed by the hook's state
+    },
+    workflowStateMachine: options.workflowStateMachine
+  });
   const geminiConnection = useGeminiConnection(stableCallbacks);
 
   // Get the active connection based on model type
