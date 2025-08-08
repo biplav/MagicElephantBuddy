@@ -28,6 +28,7 @@ interface StorybookDisplayProps {
   openaiConnection?: any;
   bookStateManager: any; // Add book state manager as prop
   bookId?: string; // Add explicit book ID prop
+  workflowStateMachine?: any; // Add workflow state machine
 }
 
 export default function StorybookDisplay({
@@ -41,7 +42,8 @@ export default function StorybookDisplay({
   isUserSpeaking = false,
   openaiConnection,
   bookStateManager,
-  bookId
+  bookId,
+  workflowStateMachine
 }: StorybookDisplayProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isFlipping, setIsFlipping] = useState(false);
@@ -149,98 +151,130 @@ export default function StorybookDisplay({
     console.log('Auto page advance interrupted by speech');
   }, []);
 
-  // Play audio when page changes - defined before silence detection to avoid circular dependency
-  const playPageAudio = useCallback(() => {
-    if (currentPage?.audioUrl) {
-      console.log('🔊 WORKFLOW: Playing page audio:', currentPage.audioUrl);
+  // Audio management for workflow state machine
+  const audioManager = {
+    isPlaying: isPlayingAudio,
+    
+    playPageAudio: useCallback(() => {
+      if (currentPage?.audioUrl) {
+        console.log('🔊 AUDIO: Playing page audio:', currentPage.audioUrl);
 
-      // Stop any existing audio
+        // Stop any existing audio
+        if (audioElementRef.current) {
+          audioElementRef.current.pause();
+          audioElementRef.current.currentTime = 0;
+          setIsPlayingAudio(false);
+          onAppuSpeakingChangeRef.current?.(false);
+        }
+
+        const audio = new Audio(currentPage.audioUrl);
+        audio.preload = 'auto';
+
+        audio.onplay = () => {
+          console.log('🔊 AUDIO: Audio started playing');
+          setIsPlayingAudio(true);
+          onAppuSpeakingChangeRef.current?.(true);
+          workflowStateMachine?.handleAudioPlaybackStart();
+        };
+
+        audio.onended = () => {
+          console.log('🔊 AUDIO: Audio finished playing');
+          setIsPlayingAudio(false);
+          onAppuSpeakingChangeRef.current?.(false);
+          audioElementRef.current = null;
+          workflowStateMachine?.handleAudioPlaybackEnd();
+        };
+
+        audio.onerror = (error) => {
+          console.error('Error playing audio:', error);
+          setIsPlayingAudio(false);
+          onAppuSpeakingChangeRef.current?.(false);
+          audioElementRef.current = null;
+          workflowStateMachine?.handleError('Audio playback failed');
+        };
+
+        audio.onpause = () => {
+          console.log('Audio paused');
+          setIsPlayingAudio(false);
+          onAppuSpeakingChangeRef.current?.(false);
+        };
+
+        audioElementRef.current = audio;
+
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              console.log('Audio play promise resolved successfully');
+            })
+            .catch(error => {
+              console.error('Failed to play audio:', error);
+              setIsPlayingAudio(false);
+              onAppuSpeakingChangeRef.current?.(false);
+              workflowStateMachine?.handleError('Audio autoplay blocked');
+            });
+        }
+      }
+    }, [currentPage?.audioUrl, workflowStateMachine]),
+    
+    pauseAudio: useCallback(() => {
+      if (audioElementRef.current && !audioElementRef.current.paused) {
+        const currentTime = audioElementRef.current.currentTime;
+        audioElementRef.current.pause();
+        console.log('🔊 AUDIO: Audio paused at position', currentTime);
+        return currentTime;
+      }
+      return 0;
+    }, []),
+    
+    resumeAudio: useCallback((position: number) => {
+      if (audioElementRef.current) {
+        audioElementRef.current.currentTime = position;
+        const playPromise = audioElementRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              console.log('🔊 AUDIO: Audio resumed from position', position);
+            })
+            .catch(error => {
+              console.error('Failed to resume audio:', error);
+              workflowStateMachine?.handleError('Audio resume failed');
+            });
+        }
+      }
+    }, [workflowStateMachine]),
+    
+    stopAudio: useCallback(() => {
       if (audioElementRef.current) {
         audioElementRef.current.pause();
         audioElementRef.current.currentTime = 0;
         setIsPlayingAudio(false);
         onAppuSpeakingChangeRef.current?.(false);
-      }
-
-      const audio = new Audio(currentPage.audioUrl);
-      audio.preload = 'auto';
-
-      audio.onloadstart = () => {
-        console.log('Audio loading started');
-      };
-
-      audio.oncanplay = () => {
-        console.log('Audio can start playing');
-      };
-
-      audio.onplay = () => {
-        console.log('🔊 WORKFLOW: Audio started playing');
-        setIsPlayingAudio(true);
-        onAppuSpeakingChangeRef.current?.(true);
-      };
-
-      audio.onended = () => {
-        console.log('🔊 WORKFLOW: Audio finished playing - starting silence detection for page turn');
-        setIsPlayingAudio(false);
-        onAppuSpeakingChangeRef.current?.(false);
         audioElementRef.current = null;
-        
-        // Start silence detection for page turn after audio ends
-        console.log('🔇 WORKFLOW: Starting page turn timer');
-        silenceDetectionRef.current?.startPageTurnTimer();
-      };
-
-      audio.onerror = (error) => {
-        console.error('Error playing audio:', error, audio.error);
-        setIsPlayingAudio(false);
-        onAppuSpeakingChangeRef.current?.(false);
-        audioElementRef.current = null;
-      };
-
-      audio.onpause = () => {
-        console.log('Audio paused');
-        setIsPlayingAudio(false);
-        onAppuSpeakingChangeRef.current?.(false);
-      };
-
-      audioElementRef.current = audio;
-
-      // Try to play with better error handling
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            console.log('Audio play promise resolved successfully');
-          })
-          .catch(error => {
-            console.error('Failed to play audio:', error);
-            setIsPlayingAudio(false);
-            onAppuSpeakingChangeRef.current?.(false);
-
-            // Handle common autoplay restrictions
-            if (error.name === 'NotAllowedError') {
-              console.warn('Audio autoplay blocked by browser. User interaction required.');
-            }
-          });
+        console.log('🔊 AUDIO: Audio stopped');
       }
-    }
-  }, [currentPage?.audioUrl]); // Include currentPage.audioUrl dependency
+    }, [])
+  };
 
   const silenceDetection = useSilenceDetection({
-    silenceDuration: 3000, // 3 seconds for page turn
-    initialAudioDelay: 1000, // 1 second delay for initial audio after Appu stops
+    silenceDuration: 3000,
+    initialAudioDelay: 1000,
     onSilenceDetected: handleAutoPageAdvance,
     onSilenceInterrupted: handleSilenceInterrupted,
-    onInitialAudioTrigger: playPageAudio,
+    onInitialAudioTrigger: audioManager.playPageAudio,
     enabled: autoPageTurnEnabled && isVisible,
     openaiConnection: openaiConnection,
-    isPlayingAudio: isPlayingAudio
+    workflowStateMachine: workflowStateMachine
   });
 
-  // Update silence detection ref
+  // Register components with workflow state machine
   useEffect(() => {
-    silenceDetectionRef.current = silenceDetection;
-  }, [silenceDetection]);
+    if (workflowStateMachine) {
+      workflowStateMachine.registerSilenceDetection(silenceDetection);
+      workflowStateMachine.registerAudioManager(audioManager);
+      workflowStateMachine.registerBookStateManager(bookStateManager);
+    }
+  }, [workflowStateMachine, silenceDetection, audioManager, bookStateManager]);
 
   /* Play audio based on different triggers with conditional logic
   useEffect(() => {

@@ -14,6 +14,8 @@ import StorybookDisplay from "../components/StorybookDisplay";
 import { CheckCircle, Mic, MicOff, Video, VideoOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import SilenceTestControls from "@/components/SilenceTestControls";
+import { useSilenceDetection } from '@/hooks/useSilenceDetection';
+import { useWorkflowStateMachine } from '@/hooks/useWorkflowStateMachine';
 
 type AppState = "welcome" | "interaction";
 
@@ -286,7 +288,19 @@ const Home = memo(() => {
   const [isUserSpeaking, setIsUserSpeaking] = useState<boolean>(false);
   const [autoPageTurnEnabled, setAutoPageTurnEnabled] = useState<boolean>(true);
 
-  const realtimeOptions = useMemo(() => ({
+  // Workflow state machine for coordinating storybook reading
+  const workflowStateMachine = useWorkflowStateMachine({
+    enabled: autoPageTurnEnabled,
+    onStateChange: (state) => {
+      console.log('🔄 WORKFLOW STATE:', state);
+    },
+    onError: (error) => {
+      console.error('🔄 WORKFLOW ERROR:', error);
+    }
+  });
+
+  // Unified realtime audio service
+  const realtimeAudio = useRealtimeAudio({
     childId: selectedChildId || undefined,
     onTranscriptionReceived: handleTranscription,
     onResponseReceived: handleResponse,
@@ -302,18 +316,7 @@ const Home = memo(() => {
     enableVideo: false, // Camera will be initialized on-demand via getFrameAnalysis
     modelType: aiProvider,
     onConversationEnd: (tokensUsed?: number) => handleCloseConversation(tokensUsed || 0),
-  }), [
-    selectedChildId,
-    handleTranscription,
-    handleResponse,
-    handleAudioResponse,
-    handleError,
-    handleStorybookPageDisplay,
-    aiProvider,
-    handleCloseConversation
-  ]);
-
-  const realtimeAudio = useRealtimeAudio(realtimeOptions);
+  });
 
   // Destructure realtime audio properties immediately after hook call
   const {
@@ -437,13 +440,13 @@ const Home = memo(() => {
   // Now that currentRecorder is defined, define callbacks that depend on it
   const handleStartButton = useCallback(async () => {
     console.log("Start button clicked - transitioning to interaction");
-    
+
     // Enter fullscreen for better experience
     await enterFullscreen();
-    
+
     // Set state to interaction mode
     setAppState("interaction");
-    
+
     // Connect to the appropriate AI service
     if (useRealtimeAPI) {
       if (aiProvider === 'gemini') {
@@ -458,12 +461,12 @@ const Home = memo(() => {
 
   const handleStopSession = useCallback(async () => {
     console.log("Stop session clicked");
-    
+
     // Stop recording if active
     if (currentRecorder?.isRecording) {
       currentRecorder.stopRecording();
     }
-    
+
     // Disconnect from AI services
     if (useRealtimeAPI) {
       if (aiProvider === 'openai') {
@@ -472,16 +475,16 @@ const Home = memo(() => {
         disconnectRealtime();
       }
     }
-    
+
     // Close any active conversation
     await handleCloseConversation();
-    
+
     // Exit fullscreen
     await exitFullscreen();
-    
+
     // Return to welcome state
     setAppState("welcome");
-    
+
     // Reset UI state
     setElephantState("idle");
     setSpeechText(undefined);
@@ -490,14 +493,14 @@ const Home = memo(() => {
 
   const handleAllowPermission = useCallback(async () => {
     console.log("Permission allowed by user");
-    
+
     try {
       // Request microphone permission using realtime permission function
       await realtimeRequestPermission();
-      
+
       // Close the permission modal
       setPermissionModalOpen(false);
-      
+
       console.log("Microphone permission granted successfully");
     } catch (error) {
       console.error("Failed to get microphone permission:", error);
@@ -809,12 +812,13 @@ const Home = memo(() => {
   };
 
   const handlePageNavigation = (direction: 'next' | 'previous') => {
-    // You could send a message to Appu about the page change
-    // This would let Appu know the user manually navigated and can respond accordingly
     console.log(`User manually navigated to ${direction} page`);
-
-    // Optional: Send a message to the AI about the navigation
-    // This could trigger Appu to read the new page or comment on it
+    // Call the workflow state machine to handle page navigation
+    if (direction === 'next') {
+      workflowStateMachine.goToNextPage();
+    } else {
+      workflowStateMachine.goToPreviousPage();
+    }
   };
 
   return (
@@ -1448,10 +1452,13 @@ const Home = memo(() => {
           isVisible={isStorybookVisible}
           onPageNavigation={handlePageNavigation}
           autoPageTurnEnabled={autoPageTurnEnabled}
+          onAppuSpeakingChange={setIsAppuSpeaking}
           isAppuSpeaking={isAppuSpeaking}
           isUserSpeaking={isUserSpeaking}
-          openaiConnection={realtimeAudio?.openaiConnection}
+          openaiConnection={openaiConnection}
           bookStateManager={bookStateManager}
+          bookId={currentStorybookPage?.bookId}
+          workflowStateMachine={workflowStateMachine}
         />
       )}
     </div>

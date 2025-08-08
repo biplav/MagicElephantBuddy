@@ -10,7 +10,7 @@ interface SilenceDetectionOptions {
   onInitialAudioTrigger?: () => void;
   enabled?: boolean;
   openaiConnection?: any;
-  isPlayingAudio?: boolean;
+  workflowStateMachine?: any; // Reference to the workflow state machine
 }
 
 export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
@@ -22,7 +22,7 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
     onInitialAudioTrigger,
     enabled = false,
     openaiConnection,
-    isPlayingAudio = false
+    workflowStateMachine
   } = options;
 
   const logger = createServiceLogger('silence-detection');
@@ -140,40 +140,46 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
     }
   }, [isDetectingSilence, clearTimers, onSilenceInterrupted, logger]);
 
-  // Listen to OpenAI events
+  // Listen to OpenAI events and report to workflow state machine
   useEffect(() => {
     if (!openaiConnection || !enabled) return;
 
     const handleOpenAIEvent = (event: any) => {
       if (!enabled) return;
 
-      console.log('🔇 WORKFLOW: Received OpenAI event:', event.type, { 
-        isPlayingAudio, 
-        enabled,
-        hasInitialAudioTrigger: !!onInitialAudioTrigger 
-      });
+      console.log('🔇 TIMER: Received OpenAI event:', event.type);
 
       switch (event.type) {
         case 'output_audio_buffer.stopped':
-          console.log('🔇 WORKFLOW: Appu stopped speaking', { 
-            isPlayingAudio,
-            willStartTimer: !isPlayingAudio,
-            hasAudioTrigger: !!onInitialAudioTrigger
-          });
-          
-          if (!isPlayingAudio) {
-            logger.debug('🔇 WORKFLOW: Starting initial audio timer');
-            console.log('🔇 WORKFLOW: Starting initial audio timer with delay:', initialAudioDelay);
-            startInitialAudioTimer();
-          } else {
-            console.log('🔇 WORKFLOW: Audio is already playing, waiting for it to finish');
+          console.log('🔇 TIMER: Appu stopped speaking');
+          // Report to workflow state machine instead of handling directly
+          if (workflowStateMachine?.handleAppuSpeakingStop) {
+            workflowStateMachine.handleAppuSpeakingStop();
+          }
+          break;
+
+        case 'output_audio_buffer.started':
+          console.log('🔇 TIMER: Appu started speaking');
+          // Report to workflow state machine
+          if (workflowStateMachine?.handleAppuSpeakingStart) {
+            workflowStateMachine.handleAppuSpeakingStart();
           }
           break;
 
         case 'input_audio_buffer.speech_started':
-          console.log('🔇 WORKFLOW: User started speaking - interrupting all timers');
-          logger.debug('User started speaking - interrupting timers');
-          interruptSilence();
+          console.log('🔇 TIMER: User started speaking');
+          // Report to workflow state machine
+          if (workflowStateMachine?.handleUserSpeechStart) {
+            workflowStateMachine.handleUserSpeechStart();
+          }
+          break;
+
+        case 'input_audio_buffer.speech_stopped':
+          console.log('🔇 TIMER: User stopped speaking');
+          // Report to workflow state machine
+          if (workflowStateMachine?.handleUserSpeechEnd) {
+            workflowStateMachine.handleUserSpeechEnd();
+          }
           break;
       }
     };
@@ -191,7 +197,7 @@ export function useSilenceDetection(options: SilenceDetectionOptions = {}) {
         openaiConnection.off('event', handleOpenAIEvent);
       }
     };
-  }, [openaiConnection, enabled, isPlayingAudio, startInitialAudioTimer, interruptSilence, logger]);
+  }, [openaiConnection, enabled, workflowStateMachine, logger]);
 
   // Clear timers when disabled or unmounted
   useEffect(() => {
