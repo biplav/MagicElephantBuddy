@@ -86,7 +86,7 @@ const ParentDashboard = memo(() => {
   // Fetch captured frames for a specific conversation
   const fetchConversationFrames = useCallback(async (conversationId: number) => {
     if (conversationFrames[conversationId]) return; // Already fetched
-    
+
     try {
       console.log(`Fetching frames for conversation ${conversationId}`);
       const response = await fetch(`/api/conversations/${conversationId}/captured-frames`);
@@ -332,13 +332,13 @@ const ParentDashboard = memo(() => {
                                   <TrendingUp className="h-3 w-3" />
                                   <span>{conversation.tokensUsed.toLocaleString()} tokens</span>
                                 </div>
-                              )}</div>
-                              {conversation.summary && (
-                                <div className="mt-2 p-2 bg-white rounded border-l-2 border-blue-300">
-                                  <p className="text-xs text-gray-700 italic">{conversation.summary}</p>
-                                </div>
                               )}
                             </div>
+                            {conversation.summary && (
+                              <div className="mt-2 p-2 bg-white rounded border-l-2 border-blue-300">
+                                <p className="text-xs text-gray-700 italic">{conversation.summary}</p>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -418,7 +418,7 @@ const ParentDashboard = memo(() => {
                                           {format(new Date(frame.timestamp), 'HH:mm')}
                                         </span>
                                       </div>
-                                      
+
                                       {/* Frame context info */}
                                       <div className="text-xs text-purple-700 mb-2 space-y-1">
                                         {frame.reason && (
