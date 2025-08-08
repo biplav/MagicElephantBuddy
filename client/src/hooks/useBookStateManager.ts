@@ -228,7 +228,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
     }
   }, [clearAutoAdvanceTimer]);
 
-  // Monitor workflow state and automatically play audio when appropriate
+  // Monitor workflow state and automatically handle book states when workflow goes to IDLE
   useEffect(() => {
     if (!options.workflowStateMachine) {
       logger.debug('🔄 WORKFLOW-MONITOR: No workflow state machine available');
@@ -246,41 +246,80 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       currentPage: currentPageRef.current
     });
 
-    // Only attempt audio playback when workflow is IDLE and book has audio ready
-    if (workflowState === 'IDLE' && bookState === 'AUDIO_READY_TO_PLAY') {
+    // Handle different book states when workflow goes to IDLE
+    if (workflowState === 'IDLE') {
       const hasAudioUrl = selectedBookRef.current?.currentAudioUrl;
 
-      logger.info('🔄 WORKFLOW-MONITOR: Conditions met for auto-play', {
-        workflowState,
-        bookState,
-        hasAudioUrl: !!hasAudioUrl,
-        isPlayingAudio,
-        audioUrl: hasAudioUrl
-      });
+      switch (bookState) {
+        case 'AUDIO_READY_TO_PLAY':
+        case 'AUDIO_PAUSED':
+          // Start or resume audio playback
+          if (hasAudioUrl && !isPlayingAudio) {
+            logger.info('🔄 BOOK-WORKFLOW: Workflow is IDLE, starting/resuming audio playback', {
+              bookState,
+              audioUrl: hasAudioUrl,
+              page: currentPageRef.current,
+              book: selectedBookRef.current?.title
+            });
+            playPageAudio(hasAudioUrl);
+          } else {
+            logger.warn('🔄 WORKFLOW-MONITOR: Cannot start/resume audio', {
+              bookState,
+              hasAudioUrl: !!hasAudioUrl,
+              isPlayingAudio,
+              reason: !hasAudioUrl ? 'No audio URL' : 'Already playing audio'
+            });
+          }
+          break;
 
-      if (hasAudioUrl && !isPlayingAudio) {
-        logger.info('🔄 BOOK-WORKFLOW: Workflow is IDLE, auto-playing page audio', {
-          audioUrl: hasAudioUrl,
-          page: currentPageRef.current,
-          book: selectedBookRef.current?.title
-        });
-        playPageAudio(hasAudioUrl);
-      } else {
-        logger.warn('🔄 WORKFLOW-MONITOR: Cannot auto-play audio', {
-          hasAudioUrl: !!hasAudioUrl,
-          isPlayingAudio,
-          reason: !hasAudioUrl ? 'No audio URL' : 'Already playing audio'
-        });
+        case 'AUDIO_COMPLETED':
+        case 'PAGE_COMPLETED':
+          // Auto-advance to next page
+          logger.info('🔄 BOOK-WORKFLOW: Workflow is IDLE, auto-advancing to next page', {
+            bookState,
+            currentPage: currentPageRef.current,
+            totalPages: selectedBookRef.current?.totalPages,
+            book: selectedBookRef.current?.title
+          });
+
+          // Check if we can advance to next page
+          if (selectedBookRef.current && 
+              currentPageRef.current < (selectedBookRef.current.totalPages || 0)) {
+            
+            logger.info('🔄 BOOK-AUTO: Triggering auto page advance via navigateToNextPage');
+            navigateToNextPage().then(success => {
+              if (success) {
+                logger.info('🔄 BOOK-AUTO: Auto page advance successful');
+              } else {
+                logger.error('🔄 BOOK-AUTO: Auto page advance failed');
+              }
+            });
+          } else {
+            logger.info('🔄 BOOK-AUTO: Already at last page, cannot advance further', {
+              currentPage: currentPageRef.current,
+              totalPages: selectedBookRef.current?.totalPages
+            });
+            // Transition to completed state or idle
+            transitionToState('IDLE');
+          }
+          break;
+
+        default:
+          logger.debug('🔄 WORKFLOW-MONITOR: No action needed for book state', {
+            workflowState,
+            bookState,
+            reason: `Book state ${bookState} doesn't require action when workflow is IDLE`
+          });
+          break;
       }
     } else {
-      logger.debug('🔄 WORKFLOW-MONITOR: Conditions not met for auto-play', {
+      logger.debug('🔄 WORKFLOW-MONITOR: Workflow not in IDLE state', {
         workflowState,
         bookState,
-        isIdleWorkflow: workflowState === 'IDLE',
-        isAudioReady: bookState === 'AUDIO_READY_TO_PLAY'
+        reason: `Waiting for workflow to become IDLE (currently ${workflowState})`
       });
     }
-  }, [options.workflowStateMachine?.currentState, bookState, isPlayingAudio, playPageAudio, logger]);
+  }, [options.workflowStateMachine?.currentState, bookState, isPlayingAudio, playPageAudio, navigateToNextPage, transitionToState, logger]);
 
   // Helper function to manage reading session state
   const enterReadingSession = useCallback(() => {
