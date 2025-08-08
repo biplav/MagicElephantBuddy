@@ -194,9 +194,9 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
               temperature: 0.8,
               // Optimize context window for token efficiency
               // max_response_output_tokens: bookStateManager.isInReadingSession ? 150 : 300,
-              max_response_output_tokens: 300,
+              max_response_output_tokens: 300 //,
               // Add prompt caching to reduce costs for consistent system instructions
-              prompt_cache_key: cacheKey,
+              //prompt_cache_key: cacheKey,
             },
           };
 
