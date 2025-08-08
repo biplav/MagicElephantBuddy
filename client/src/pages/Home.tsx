@@ -285,69 +285,84 @@ const Home = memo(() => {
     setIsStorybookVisible(true);
   }, []);
 
-  // Initialize realtime audio hook with stable options FIRST
-  const [isAppuSpeaking, setIsAppuSpeaking] = useState<boolean>(false);
-  const [isUserSpeaking, setIsUserSpeaking] = useState<boolean>(false);
-  const [autoPageTurnEnabled, setAutoPageTurnEnabled] = useState<boolean>(true);
+  // These callbacks are required by useRealtimeAudio and useWorkflowStateMachine
+  const handleConversationStart = useCallback(() => {
+    console.log("Conversation started");
+    setElephantState("listening");
+  }, []);
 
-  // Initialize workflow state machine first
-  const workflowStateMachine = useWorkflowStateMachine({
-    enabled: true,
-    onStateChange: (state) => {
-      console.log(`🔄 MAIN: Workflow state changed to: ${state}`);
-      // Add any additional state-specific logic here
+  const handleAudioPlayback = useCallback((audioData: string) => {
+    if (enableLocalPlayback) {
+      try {
+        const audioBlob = base64ToBlob(audioData, "audio/mp3"); // Assuming mp3 for playback
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+        };
+        audio.play();
+      } catch (error) {
+        console.error("Error playing audio:", error);
+      }
     }
-  });
+  }, [enableLocalPlayback]);
 
-  // Initialize OpenAI event translator with proper dependencies
-  const openaiEventTranslator = useOpenAIEventTranslator({
-    openaiConnection: openaiConnection,
-    workflowStateMachine: workflowStateMachine,
-    enabled: true
-  });
-
-  // Unified realtime audio service
-  const realtimeAudio = useRealtimeAudio({
-    childId: selectedChildId || undefined,
-    onTranscriptionReceived: handleTranscription,
-    onResponseReceived: handleResponse,
-    onAudioResponseReceived: handleAudioResponse,
+  // Initialize audio recorder
+  const currentRecorder = useAudioRecorder({
+    onTranscription: handleTranscription,
     onError: handleError,
-    onStorybookPageDisplay: handleStorybookPageDisplay,
-    onAppuSpeakingChange: (speaking: boolean) => {
-      setIsAppuSpeaking(speaking);
-    },
-    onUserSpeakingChange: (speaking: boolean) => {
-      setIsUserSpeaking(speaking);
-    },
-    enableVideo: false, // Camera will be initialized on-demand via getFrameAnalysis
-    modelType: aiProvider,
-    onConversationEnd: (tokensUsed?: number) => handleCloseConversation(tokensUsed || 0),
   });
 
-  // Destructure realtime audio properties immediately after hook call
+  // Initialize realtime audio with the selected provider and error handling
   const {
-    isConnected,
-    isRecording: realtimeIsRecording,
-    error: audioError,
     connect,
     disconnect,
-    startRecording: realtimeStartRecording,
-    stopRecording: realtimeStopRecording,
-    requestMicrophonePermission: realtimeRequestPermission,
+    connectionState,
+    error: realtimeError,
+    isRecording: realtimeIsRecording,
+    audioLevel,
+    requestPermission: realtimeRequestPermission,
+    dataChannelState,
+    openaiConnection,
     captureCurrentFrame,
     videoEnabled,
     hasVideoPermission,
     isConnecting,
-    isRecording,
     modelType,
-    stopRecording,
+    stopRecording: realtimeStopRecording,
     disconnect: disconnectRealtime
+  } = useRealtimeAudio({
+    provider: aiProvider,
+    voice: aiSettings.voicePreference,
+    onError: handleError,
+    onConversationStart: handleConversationStart,
+    onStorybookPageDisplay: handleStorybookPageDisplay,
+    onAudioPlayback: handleAudioPlayback,
+    onCapturedFrame: setCapturedFrame,
+    selectedChildId: selectedChildId || undefined
+  });
+
+  // Initialize workflow state machine AFTER openaiConnection is available
+  const workflowStateMachine = useWorkflowStateMachine({
+    enabled: true,
+    openaiConnection: openaiConnection
+  });
+
+  // Initialize OpenAI event translator AFTER both dependencies are available
+  const openaiEventTranslator = useOpenAIEventTranslator({
+    workflowStateMachine: workflowStateMachine,
+    openaiConnection: openaiConnection,
+    enabled: true
+  });
+
+  // Destructure other realtime audio properties immediately after hook call
+  const {
+    isConnected,
+    isRecording: isRealtimeRecording,
+    stopRecording: stopRealtimeRecording,
   } = realtimeAudio;
 
-  // Get individual connections for direct access
-  const openaiConnection = (realtimeAudio as any).openaiConnection || { mediaCapture: null, lastCapturedFrame: null, tokensUsed: 0 };
-  const geminiConnection = (realtimeAudio as any).geminiConnection || {};
   const mediaManager = (realtimeAudio as any).mediaManager || { hasVideoPermission: false, videoElement: null };
 
   // Initialize traditional recorder
@@ -411,12 +426,12 @@ const Home = memo(() => {
     return useRealtimeAPI
       ? {
           isReady: isConnected,
-          isRecording: realtimeIsRecording,
+          isRecording: isRealtimeRecording,
           isProcessing: false, // Realtime API doesn't have isProcessing state
           startRecording: realtimeStartRecording,
-          stopRecording: realtimeStopRecording,
+          stopRecording: stopRealtimeRecording,
           requestMicrophonePermission: realtimeRequestPermission,
-          recorderState: realtimeIsRecording ? "recording" : "inactive",
+          recorderState: isRealtimeRecording ? "recording" : "inactive",
         }
       : {
           isReady: traditionalRecorder.isReady,
@@ -431,9 +446,9 @@ const Home = memo(() => {
   }, [
     useRealtimeAPI,
     isConnected,
-    realtimeIsRecording,
+    isRealtimeRecording,
     realtimeStartRecording,
-    realtimeStopRecording,
+    stopRealtimeRecording,
     realtimeRequestPermission,
     traditionalRecorder.isReady,
     traditionalRecorder.isRecording,
@@ -530,7 +545,7 @@ const Home = memo(() => {
   useEffect(() => {
     if (
       useRealtimeAPI &&
-      realtimeAudio.isConnected &&
+      isConnected &&
       appState === "interaction" &&
       !currentRecorder.isRecording &&
       !currentRecorder.isProcessing
@@ -542,7 +557,7 @@ const Home = memo(() => {
     }
   }, [
     useRealtimeAPI,
-    realtimeAudio.isConnected,
+    isConnected,
     appState,
     currentRecorder.isRecording,
     currentRecorder.isProcessing,
