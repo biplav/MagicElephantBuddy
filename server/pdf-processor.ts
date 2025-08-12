@@ -460,9 +460,7 @@ Return your response in this exact JSON format:
             ],
           },
         ],
-        max_tokens: 700,
-        temperature: 0.6,
-        prompt_cache_key: "pdf-processor-vision-analysis-v1",
+        max_completion_tokens: 800,
       });
 
       const responseContent = response.choices[0].message.content || "";
