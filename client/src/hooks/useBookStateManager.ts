@@ -228,6 +228,108 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
     }
   }, [clearAutoAdvanceTimer]);
 
+  // Define navigation functions first
+  const navigateToNextPage = useCallback(async () => {
+    logger.info("navigateToNextPage called", { 
+      hasSelectedBook: !!selectedBookRef.current, 
+      bookId: selectedBookRef.current?.id,
+      currentPage: currentPageRef.current,
+      selectedBookRef: selectedBookRef.current,
+      isInReadingSession: isInReadingSessionRef.current,
+      currentBookState: bookState
+    });
+
+    // Enhanced validation with fallback recovery
+    if (!selectedBookRef.current?.id) {
+      logger.error("No book selected for navigation - this indicates a state sync issue", { 
+        selectedBook: selectedBookRef.current,
+        currentPage: currentPageRef.current,
+        isInReadingSession: isInReadingSessionRef.current,
+        suggestedFix: "StorybookDisplay should sync book state with BookStateManager"
+      });
+      transitionToState('ERROR');
+      return false;
+    }
+
+    const nextPageNumber = currentPageRef.current + 1;
+
+    // Check if we're already at the last page
+    if (selectedBookRef.current.totalPages && nextPageNumber > selectedBookRef.current.totalPages) {
+      logger.info(`Already at last page (${currentPageRef.current}/${selectedBookRef.current.totalPages})`);
+      transitionToState('PAGE_COMPLETED');
+      return false;
+    }
+
+    logger.info(`Navigating to next page: ${nextPageNumber}`, { bookId: selectedBookRef.current.id });
+
+    try {
+      // Transition to loading state
+      transitionToState('PAGE_LOADING');
+
+      const pageResponse = await fetch(`/api/books/${selectedBookRef.current.id}/page/${nextPageNumber}`);
+
+      if (!pageResponse.ok) {
+        transitionToState('ERROR');
+        throw new Error(`Failed to fetch page: ${pageResponse.status}`);
+      }
+
+      const pageResponseData = await pageResponse.json();
+      const pageData = pageResponseData.page;
+
+      if (!pageData) {
+        transitionToState('ERROR');
+        throw new Error("Page data not found in response");
+      }
+
+      // Update current page and audio URL
+      currentPageRef.current = nextPageNumber;
+      selectedBookRef.current.currentAudioUrl = pageData.audioUrl;
+
+      // Clear any existing auto advance timer
+      clearAutoAdvanceTimer();
+
+      // Transition to page loaded
+      transitionToState('PAGE_LOADED');
+
+      // Call the display callback
+      if (options.onStorybookPageDisplay) {
+        options.onStorybookPageDisplay({
+          pageImageUrl: pageData.pageImageUrl,
+          pageText: pageData.pageText,
+          pageNumber: pageData.pageNumber,
+          totalPages: pageData.totalPages,
+          bookTitle: pageData.bookTitle,
+          audioUrl: pageData.audioUrl,
+        });
+      }
+
+      // If there's audio, transition to audio ready and let workflow monitoring handle playback
+      if (pageData.audioUrl) {
+        transitionToState('AUDIO_READY_TO_PLAY');
+        logger.info('📖 BOOK-AUDIO: Next page has audio URL, staying in AUDIO_READY_TO_PLAY state', {
+          audioUrl: pageData.audioUrl,
+          page: nextPageNumber,
+          book: pageData.bookTitle
+        });
+      } else {
+        // Only transition to IDLE if there's no audio to play
+        transitionToState('IDLE');
+        logger.info('📖 BOOK-AUDIO: Next page has no audio URL, transitioning to IDLE', {
+          page: nextPageNumber,
+          book: pageData.bookTitle
+        });
+      }
+
+      logger.info(`Successfully navigated to page ${nextPageNumber}`);
+      return true;
+
+    } catch (error: any) {
+      logger.error("Error navigating to next page", { error: error.message });
+      transitionToState('ERROR');
+      return false;
+    }
+  }, [logger, options.onStorybookPageDisplay, bookState, transitionToState, clearAutoAdvanceTimer]);
+
   // Monitor workflow state and automatically handle book states when workflow goes to IDLE
   useEffect(() => {
     if (!options.workflowStateMachine) {
@@ -277,7 +379,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
         case 'AUDIO_PAUSED':
           // Start or resume audio playback
           if (hasAudioUrl && !isPlayingAudio) {
-            logger.info('🔄 BOOK-WORKFLOW: Workflow is IDLE, starting/resuming audio playback', {
+            logger.info('🔄 BOOK-WORKFLOW: Workflow is IDLE, starting/resuming audio playbook', {
               bookState,
               audioUrl: hasAudioUrl,
               page: currentPageRef.current,
@@ -546,107 +648,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
   //   }
   // }, [logger]);
 
-  // Manual navigation functions for silence detection auto-advance
-  const navigateToNextPage = useCallback(async () => {
-    logger.info("navigateToNextPage called", { 
-      hasSelectedBook: !!selectedBookRef.current, 
-      bookId: selectedBookRef.current?.id,
-      currentPage: currentPageRef.current,
-      selectedBookRef: selectedBookRef.current,
-      isInReadingSession: isInReadingSessionRef.current,
-      currentBookState: bookState
-    });
-
-    // Enhanced validation with fallback recovery
-    if (!selectedBookRef.current?.id) {
-      logger.error("No book selected for navigation - this indicates a state sync issue", { 
-        selectedBook: selectedBookRef.current,
-        currentPage: currentPageRef.current,
-        isInReadingSession: isInReadingSessionRef.current,
-        suggestedFix: "StorybookDisplay should sync book state with BookStateManager"
-      });
-      transitionToState('ERROR');
-      return false;
-    }
-
-    const nextPageNumber = currentPageRef.current + 1;
-
-    // Check if we're already at the last page
-    if (selectedBookRef.current.totalPages && nextPageNumber > selectedBookRef.current.totalPages) {
-      logger.info(`Already at last page (${currentPageRef.current}/${selectedBookRef.current.totalPages})`);
-      transitionToState('PAGE_COMPLETED');
-      return false;
-    }
-
-    logger.info(`Navigating to next page: ${nextPageNumber}`, { bookId: selectedBookRef.current.id });
-
-    try {
-      // Transition to loading state
-      transitionToState('PAGE_LOADING');
-
-      const pageResponse = await fetch(`/api/books/${selectedBookRef.current.id}/page/${nextPageNumber}`);
-
-      if (!pageResponse.ok) {
-        transitionToState('ERROR');
-        throw new Error(`Failed to fetch page: ${pageResponse.status}`);
-      }
-
-      const pageResponseData = await pageResponse.json();
-      const pageData = pageResponseData.page;
-
-      if (!pageData) {
-        transitionToState('ERROR');
-        throw new Error("Page data not found in response");
-      }
-
-      // Update current page and audio URL
-      currentPageRef.current = nextPageNumber;
-      selectedBookRef.current.currentAudioUrl = pageData.audioUrl;
-
-      // Clear any existing auto advance timer
-      clearAutoAdvanceTimer();
-
-      // Transition to page loaded
-      transitionToState('PAGE_LOADED');
-
-      // Call the display callback
-      if (options.onStorybookPageDisplay) {
-        options.onStorybookPageDisplay({
-          pageImageUrl: pageData.pageImageUrl,
-          pageText: pageData.pageText,
-          pageNumber: pageData.pageNumber,
-          totalPages: pageData.totalPages,
-          bookTitle: pageData.bookTitle,
-          audioUrl: pageData.audioUrl,
-        });
-      }
-
-      // If there's audio, transition to audio ready and let workflow monitoring handle playback
-      if (pageData.audioUrl) {
-        transitionToState('AUDIO_READY_TO_PLAY');
-        logger.info('📖 BOOK-AUDIO: Next page has audio URL, staying in AUDIO_READY_TO_PLAY state', {
-          audioUrl: pageData.audioUrl,
-          page: nextPageNumber,
-          book: pageData.bookTitle
-        });
-      } else {
-        // Only transition to IDLE if there's no audio to play
-        transitionToState('IDLE');
-        logger.info('📖 BOOK-AUDIO: Next page has no audio URL, transitioning to IDLE', {
-          page: nextPageNumber,
-          book: pageData.bookTitle
-        });
-      }
-
-      logger.info(`Successfully navigated to page ${nextPageNumber}`);
-      return true;
-
-    } catch (error: any) {
-      logger.error("Error navigating to next page", { error: error.message });
-      transitionToState('ERROR');
-      return false;
-    }
-  }, [logger, options.onStorybookPageDisplay, bookState, transitionToState]);
+  
 
   const navigateToPreviousPage = useCallback(async () => {
     logger.info("navigateToPreviousPage called", { 
