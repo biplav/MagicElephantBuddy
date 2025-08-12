@@ -1767,7 +1767,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if(req) {
         //Below code is a hack needs to be removed later
-        const babyTigerBook = await storage.getBookByTitle('the baby tiger');
+        const babyTigerBook = await storage.getBookByTitle('Bal Hanuman And Orange');
         const babyTigerBookPages = await storage.getPagesByBook(babyTigerBook.id.toString());
         return res.json({
           success: true,

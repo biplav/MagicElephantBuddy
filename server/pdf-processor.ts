@@ -33,7 +33,10 @@ export class PDFProcessor {
   private aiService = createAIService("standard");
   private objectStorage = new Client();
 
-  async processPDF(pdfBuffer: Buffer, fileName: string): Promise<ProcessedBook> {
+  async processPDF(
+    pdfBuffer: Buffer,
+    fileName: string,
+  ): Promise<ProcessedBook> {
     console.log(`Processing PDF: ${fileName} (${pdfBuffer.length} bytes)`);
 
     // Create temporary directory for processing
@@ -48,13 +51,27 @@ export class PDFProcessor {
       const { fullText, totalPages } = await this.extractPDFData(pdfBuffer);
 
       // Process each page
-      const pages = await this.processPages(pdfPath, totalPages, fileName, tempDir);
+      const pages = await this.processPages(
+        pdfPath,
+        totalPages,
+        fileName,
+        tempDir,
+      );
 
       // Generate enhanced book metadata using first 5 pages - let OpenAI extract title
       const first5Pages = pages.slice(0, 5);
-      const metadata = await this.extractEnhancedMetadata(fullText, first5Pages, fileName);
-      const bookTitle = metadata.title || fileName.replace(".pdf", "").replace(/[-_]/g, " ");
-      const summary = await this.generateEnhancedBookSummary(fullText, first5Pages, bookTitle);
+      const metadata = await this.extractEnhancedMetadata(
+        fullText,
+        first5Pages,
+        fileName,
+      );
+      const bookTitle =
+        metadata.title || fileName.replace(".pdf", "").replace(/[-_]/g, " ");
+      const summary = await this.generateEnhancedBookSummary(
+        fullText,
+        first5Pages,
+        bookTitle,
+      );
 
       return {
         title: bookTitle,
@@ -81,7 +98,11 @@ export class PDFProcessor {
     return tempDir;
   }
 
-  private async savePDFFile(pdfBuffer: Buffer, fileName: string, tempDir: string): Promise<string> {
+  private async savePDFFile(
+    pdfBuffer: Buffer,
+    fileName: string,
+    tempDir: string,
+  ): Promise<string> {
     const pdfPath = path.join(tempDir, fileName);
     fs.writeFileSync(pdfPath, pdfBuffer);
 
@@ -98,8 +119,12 @@ export class PDFProcessor {
     return pdfPath;
   }
 
-  private async extractPDFData(pdfBuffer: Buffer): Promise<{ fullText: string; totalPages: number }> {
-    console.log(`Extracting text from PDF buffer of size: ${pdfBuffer.length} bytes`);
+  private async extractPDFData(
+    pdfBuffer: Buffer,
+  ): Promise<{ fullText: string; totalPages: number }> {
+    console.log(
+      `Extracting text from PDF buffer of size: ${pdfBuffer.length} bytes`,
+    );
 
     const pdfData = await pdfParse(pdfBuffer, {
       max: 0, // No page limit
@@ -118,7 +143,7 @@ export class PDFProcessor {
     pdfPath: string,
     totalPages: number,
     fileName: string,
-    tempDir: string
+    tempDir: string,
   ): Promise<ProcessedPage[]> {
     const convert = this.createPDFConverter(pdfPath, tempDir);
     const pages: ProcessedPage[] = [];
@@ -127,7 +152,12 @@ export class PDFProcessor {
       console.log(`Processing page ${pageNum}/${totalPages}`);
 
       try {
-        const page = await this.processPage(convert, pageNum, fileName, totalPages);
+        const page = await this.processPage(
+          convert,
+          pageNum,
+          fileName,
+          totalPages,
+        );
         pages.push(page);
 
         // Add delay between pages to avoid rate limits
@@ -161,19 +191,32 @@ export class PDFProcessor {
     convert: any,
     pageNum: number,
     fileName: string,
-    totalPages: number
+    totalPages: number,
   ): Promise<ProcessedPage> {
     // Convert page to image
     const imageBuffer = await this.convertPageToImage(convert, pageNum);
 
     // Store image in object storage
-    const imageUrl = await this.storeImageInObjectStorage(imageBuffer, fileName, pageNum);
+    const imageUrl = await this.storeImageInObjectStorage(
+      imageBuffer,
+      fileName,
+      pageNum,
+    );
 
     // Extract text and generate narration in a single OpenAI call with page context
-    const { extractedText, childFriendlyNarration } = await this.extractTextAndGenerateNarration(imageBuffer, pageNum, totalPages);
+    const { extractedText, childFriendlyNarration } =
+      await this.extractTextAndGenerateNarration(
+        imageBuffer,
+        pageNum,
+        totalPages,
+      );
 
     // Generate audio narration for the page
-    const audioUrl = await this.generatePageAudio(childFriendlyNarration, pageNum, fileName);
+    const audioUrl = await this.generatePageAudio(
+      childFriendlyNarration,
+      pageNum,
+      fileName,
+    );
 
     return {
       pageNumber: pageNum,
@@ -185,10 +228,15 @@ export class PDFProcessor {
     };
   }
 
-  private async convertPageToImage(convert: any, pageNum: number): Promise<Buffer> {
+  private async convertPageToImage(
+    convert: any,
+    pageNum: number,
+  ): Promise<Buffer> {
     console.log(`Converting page ${pageNum} to image...`);
 
-    const result: ConversionResult = await convert(pageNum, { responseType: "buffer" });
+    const result: ConversionResult = await convert(pageNum, {
+      responseType: "buffer",
+    });
 
     console.log(`Conversion result for page ${pageNum}:`, {
       hasBuffer: !!result.buffer,
@@ -201,22 +249,29 @@ export class PDFProcessor {
       throw new Error(`Empty image buffer for page ${pageNum}`);
     }
 
-    console.log(`Successfully generated image buffer for page ${pageNum}: ${result.buffer.length} bytes`);
+    console.log(
+      `Successfully generated image buffer for page ${pageNum}: ${result.buffer.length} bytes`,
+    );
     return result.buffer;
   }
 
   private async storeImageInObjectStorage(
     imageBuffer: Buffer,
     fileName: string,
-    pageNum: number
+    pageNum: number,
   ): Promise<string> {
     const imageFileName = `books/${fileName.replace(".pdf", "")}-page-${pageNum}.png`;
     const base64Image = imageBuffer.toString("base64");
 
-    const uploadResult = await this.objectStorage.uploadFromText(imageFileName, base64Image);
+    const uploadResult = await this.objectStorage.uploadFromText(
+      imageFileName,
+      base64Image,
+    );
 
     if (!uploadResult.ok) {
-      throw new Error(`Failed to upload image to object storage: ${uploadResult.error}`);
+      throw new Error(
+        `Failed to upload image to object storage: ${uploadResult.error}`,
+      );
     }
 
     const imageUrl = `/api/object-storage/${encodeURIComponent(imageFileName)}`;
@@ -228,7 +283,7 @@ export class PDFProcessor {
   private async generatePageAudio(
     text: string,
     pageNum: number,
-    fileName: string
+    fileName: string,
   ): Promise<string> {
     try {
       console.log(`Generating audio for page ${pageNum}...`);
@@ -237,11 +292,15 @@ export class PDFProcessor {
       const narrationText = this.prepareChildFriendlyNarration(text, pageNum);
 
       if (narrationText.length === 0) {
-        console.log(`No text content for page ${pageNum}, skipping audio generation`);
+        console.log(
+          `No text content for page ${pageNum}, skipping audio generation`,
+        );
         return "";
       }
 
-      console.log(`Generating child-friendly TTS for page ${pageNum}: "${narrationText.substring(0, 100)}..."`);
+      console.log(
+        `Generating child-friendly TTS for page ${pageNum}: "${narrationText.substring(0, 100)}..."`,
+      );
 
       const OpenAI = (await import("openai")).default;
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -298,15 +357,14 @@ Emotional Care: Prioritize the child's feeling of safety. If the story has a mom
 `;
 
       const ttsResponse = await openai.audio.speech.create({
-        model: 'gpt-4o-mini-tts', // Use higher quality model for better child-friendly voice
-        voice: 'alloy', // Nova has a gentle, warm tone suitable for children
+        model: "gpt-4o-mini-tts", // Use higher quality model for better child-friendly voice
+        voice: "alloy", // Nova has a gentle, warm tone suitable for children
         input: narrationText,
         instructions: childFriendlyPrompt,
-        response_format: 'mp3',
+        response_format: "mp3",
         speed: 0.8, // Slightly slower pace for young children
-        prompt_cache_key: "pdf-processor-tts-child-friendly-v1"
+        prompt_cache_key: "pdf-processor-tts-child-friendly-v1",
       });
-
 
       // Convert response to buffer
       const buffer = Buffer.from(await ttsResponse.arrayBuffer());
@@ -315,17 +373,23 @@ Emotional Care: Prioritize the child's feeling of safety. If the story has a mom
       const audioFileName = `books/${fileName.replace(".pdf", "")}-page-${pageNum}-audio.mp3`;
       const base64Audio = buffer.toString("base64");
 
-      const uploadResult = await this.objectStorage.uploadFromText(audioFileName, base64Audio);
+      const uploadResult = await this.objectStorage.uploadFromText(
+        audioFileName,
+        base64Audio,
+      );
 
       if (!uploadResult.ok) {
-        throw new Error(`Failed to upload audio to object storage: ${uploadResult.error}`);
+        throw new Error(
+          `Failed to upload audio to object storage: ${uploadResult.error}`,
+        );
       }
 
       const audioUrl = `/api/object-storage/${encodeURIComponent(audioFileName)}`;
-      console.log(`Generated and stored audio for page ${pageNum}: ${audioUrl}`);
+      console.log(
+        `Generated and stored audio for page ${pageNum}: ${audioUrl}`,
+      );
 
       return audioUrl;
-
     } catch (error) {
       console.error(`Error generating audio for page ${pageNum}:`, error);
       return "";
@@ -349,7 +413,8 @@ Emotional Care: Prioritize the child's feeling of safety. If the story has a mom
     // Example of adding some child-friendly elements:
     if (narrationText.length > 0) {
       const fillerWords = ["Hmm...", "Wow!", "Oh my!", "Look!"];
-      const randomFiller = fillerWords[Math.floor(Math.random() * fillerWords.length)];
+      const randomFiller =
+        fillerWords[Math.floor(Math.random() * fillerWords.length)];
 
       // Simple enhancement: add a playful intro if text is not too long
       if (narrationText.length < 100) {
@@ -368,7 +433,6 @@ Emotional Care: Prioritize the child's feeling of safety. If the story has a mom
     return narrationText;
   }
 
-
   private async addProcessingDelay(): Promise<void> {
     // 200ms delay between pages to avoid rate limits (increased for audio generation)
     await new Promise((resolve) => setTimeout(resolve, 200));
@@ -385,10 +449,16 @@ Emotional Care: Prioritize the child's feeling of safety. If the story has a mom
     }
   }
 
-  private async extractTextAndGenerateNarration(imageBuffer: Buffer, pageNumber: number, totalPages: number): Promise<{extractedText: string, childFriendlyNarration: string}> {
+  private async extractTextAndGenerateNarration(
+    imageBuffer: Buffer,
+    pageNumber: number,
+    totalPages: number,
+  ): Promise<{ extractedText: string; childFriendlyNarration: string }> {
     try {
       if (!this.isValidImageBuffer(imageBuffer)) {
-        console.warn("Invalid image buffer provided for text extraction and narration");
+        console.warn(
+          "Invalid image buffer provided for text extraction and narration",
+        );
         return { extractedText: "", childFriendlyNarration: "" };
       }
 
@@ -402,7 +472,7 @@ Emotional Care: Prioritize the child's feeling of safety. If the story has a mom
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
       const response = await openai.chat.completions.create({
-        model: "gpt-5-nano",
+        model: "gpt-4.1-nano",
         messages: [
           {
             role: "user",
@@ -474,7 +544,7 @@ Return your response in this exact JSON format:
 
         return {
           extractedText: parsedResponse.extractedText || "",
-          childFriendlyNarration: parsedResponse.childFriendlyNarration || ""
+          childFriendlyNarration: parsedResponse.childFriendlyNarration || "",
         };
       } catch (parseError) {
         console.error("Error parsing OpenAI JSON response:", parseError);
@@ -483,14 +553,16 @@ Return your response in this exact JSON format:
         // Fallback: try to extract content manually if JSON parsing fails
         return this.parseResponseFallback(responseContent);
       }
-
     } catch (error) {
       console.error("Error extracting text and generating narration:", error);
       return { extractedText: "", childFriendlyNarration: "" };
     }
   }
 
-  private parseResponseFallback(responseContent: string): {extractedText: string, childFriendlyNarration: string} {
+  private parseResponseFallback(responseContent: string): {
+    extractedText: string;
+    childFriendlyNarration: string;
+  } {
     // Fallback method to extract content if JSON parsing fails
     try {
       // Look for JSON-like content in the response
@@ -499,20 +571,22 @@ Return your response in this exact JSON format:
         const parsedContent = JSON.parse(jsonMatch[0]);
         return {
           extractedText: parsedContent.extractedText || "",
-          childFriendlyNarration: parsedContent.childFriendlyNarration || responseContent
+          childFriendlyNarration:
+            parsedContent.childFriendlyNarration || responseContent,
         };
       }
 
       // If no JSON found, use the entire response as narration
       return {
         extractedText: "",
-        childFriendlyNarration: responseContent
+        childFriendlyNarration: responseContent,
       };
     } catch (error) {
       console.error("Fallback parsing also failed:", error);
       return {
         extractedText: "",
-        childFriendlyNarration: responseContent || "Unable to process this page."
+        childFriendlyNarration:
+          responseContent || "Unable to process this page.",
       };
     }
   }
@@ -524,14 +598,14 @@ Return your response in this exact JSON format:
   private async generateEnhancedBookSummary(
     fullText: string,
     first5Pages: ProcessedPage[],
-    bookTitle: string
+    bookTitle: string,
   ): Promise<string> {
     try {
       // Prepare content from first 5 pages
-      const first5PagesContent = first5Pages.map(page => ({
+      const first5PagesContent = first5Pages.map((page) => ({
         pageNumber: page.pageNumber,
         text: page.text,
-        imageDescription: page.imageDescription
+        imageDescription: page.imageDescription,
       }));
 
       const prompt = `Generate a comprehensive summary of this children's book titled "${bookTitle}". 
@@ -556,14 +630,14 @@ Focus on what makes this book special and what children can learn from it.`;
   private async extractEnhancedMetadata(
     fullText: string,
     first5Pages: ProcessedPage[],
-    fileName: string
+    fileName: string,
   ): Promise<any> {
     try {
       // Prepare content from first 5 pages
-      const first5PagesContent = first5Pages.map(page => ({
+      const first5PagesContent = first5Pages.map((page) => ({
         pageNumber: page.pageNumber,
         text: page.text,
-        imageDescription: page.imageDescription
+        imageDescription: page.imageDescription,
       }));
 
       const prompt = `Analyze this children's book and extract metadata in JSON format. Extract the actual title from the book content, not the filename:
@@ -619,8 +693,6 @@ Please analyze both the text content and image descriptions to provide comprehen
       processingDate: new Date().toISOString(),
     };
   }
-
-
 
   private extractAuthor(fullText: string): string | undefined {
     // Simple pattern matching for author
