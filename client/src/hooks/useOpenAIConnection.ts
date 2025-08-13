@@ -65,8 +65,11 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
   const [tokensUsed, setTokensUsed] = useState<number>(0);
   const [isUserSpeaking, setIsUserSpeaking] = useState<boolean>(false);
 
-  // Initialize BookStateManager on-demand when needed
-  const bookStateManager = useBookStateManager({
+  // State to control when BookStateManager should be initialized
+  const [shouldInitializeBookManager, setShouldInitializeBookManager] = useState(false);
+  
+  // Conditionally initialize BookStateManager only when needed
+  const bookStateManager = shouldInitializeBookManager ? useBookStateManager({
     workflowStateMachine: options.workflowStateMachine,
     onStorybookPageDisplay: options.onStorybookPageDisplay,
     onFunctionCallResult: (callId: string, result: string) => {
@@ -75,7 +78,7 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
     onError: (callId: string, error: string) => {
       sendFunctionCallError(callId, error);
     }
-  });
+  }) : null;
 
   // Initialize media manager
   const mediaManager = useMediaManager({
@@ -457,13 +460,37 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
                 await handleGetEyesTool(message.call_id, message.arguments);
               } else if (message.name === 'book_search_tool') {
                 logger.info('🔧 Handling book_search_tool', { args: message.arguments });
-                // Delegate to bookStateManager
-                bookStateManager.handleBookSearchTool(message.call_id, message.arguments);
+                
+                // Initialize BookStateManager lazily when book tool is first called
+                if (!shouldInitializeBookManager) {
+                  logger.info("📚 LAZY-INIT: Triggering BookStateManager initialization for book_search_tool");
+                  setShouldInitializeBookManager(true);
+                }
+                
+                // Delegate to bookStateManager (will be available on next render)
+                if (bookStateManager) {
+                  bookStateManager.handleBookSearchTool(message.call_id, message.arguments);
+                } else {
+                  // BookStateManager not ready yet, send temporary response
+                  sendFunctionCallResult(message.call_id, "Initializing book system, please try again in a moment.");
+                }
 
               } else if (message.name === 'display_book_page') {
                 logger.info('🔧 Handling display_book_page', { args: message.arguments });
-                // Delegate to bookStateManager  
-                bookStateManager.handleDisplayBookPage(message.call_id, message.arguments);
+                
+                // Initialize BookStateManager lazily when book tool is first called
+                if (!shouldInitializeBookManager) {
+                  logger.info("📚 LAZY-INIT: Triggering BookStateManager initialization for display_book_page");
+                  setShouldInitializeBookManager(true);
+                }
+                
+                // Delegate to bookStateManager (will be available on next render)
+                if (bookStateManager) {
+                  bookStateManager.handleDisplayBookPage(message.call_id, message.arguments);
+                } else {
+                  // BookStateManager not ready yet, send temporary response
+                  sendFunctionCallResult(message.call_id, "Initializing book system, please try again in a moment.");
+                }
               }
               break;
             case "response.done":
@@ -561,6 +588,7 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
       webrtcConnection,
       mediaManager,
       bookStateManager,
+      shouldInitializeBookManager,
       logger,
       isAppuSpeaking,
       tokensUsed,
@@ -712,7 +740,8 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
     options.enableVideo,
     mediaManager,
     options.onError,
-    bookStateManager, // Ensure bookStateManager is a dependency if used directly in connect
+    bookStateManager,
+    shouldInitializeBookManager,
     logger,
     // ... other dependencies used within connect
   ]);
