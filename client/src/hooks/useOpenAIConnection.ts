@@ -62,6 +62,8 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [isAppuSpeaking, setIsAppuSpeaking] = useState<boolean>(false);
   const [lastCapturedFrame, setLastCapturedFrame] = useState<string | null>(null);
+  const [tokensUsed, setTokensUsed] = useState<number>(0);
+  const [isUserSpeaking, setIsUserSpeaking] = useState<boolean>(false);
 
   // Initialize BookStateManager on-demand when needed
   const bookStateManager = useBookStateManager({
@@ -109,6 +111,7 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const conversationIdRef = useRef<number | null>(null);
 
   // Helper method to send function call output
   const sendFunctionCallOutput = useCallback((callId: string, result: any) => {
@@ -749,9 +752,15 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
     }
   }, []);
 
-  // State for tokens used
-  const [tokensUsed, setTokensUsed] = useState<number>(0);
-  const [isUserSpeaking, setIsUserSpeaking] = useState<boolean>(false);
+  
+
+  const state = {
+    isConnected,
+    isRecording,
+    error,
+    lastCapturedFrame,
+    conversationId
+  };
 
   return {
     ...state,
