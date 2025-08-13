@@ -3,7 +3,7 @@ import { createServiceLogger } from "@/lib/logger";
 import { useWebRTCConnection } from "./useWebRTCConnection";
 import { useOpenAISession } from "./useOpenAISession";
 import { useMediaManager } from "./useMediaManager";
-import { useBookStateManager } from "./useBookStateManager";
+import { useBookManager } from "./useBookManager";
 
 interface OpenAIConnectionOptions {
   childId?: string;
@@ -82,11 +82,8 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
     }
   }) : null; */
 
-  // State to control when BookStateManager should be initialized
-  const [shouldInitializeBookManager, setShouldInitializeBookManager] = useState(false);
-
-  // Conditionally initialize BookStateManager only when needed
-  const bookStateManager = shouldInitializeBookManager ? useBookStateManager({
+  // Initialize Redux-based book manager (always available)
+  const bookManager = useBookManager({
     workflowStateMachine: options.workflowStateMachine,
     onStorybookPageDisplay: options.onStorybookPageDisplay,
     onFunctionCallResult: (callId: string, result: string) => {
@@ -95,7 +92,7 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
     onError: (callId: string, error: string) => {
       sendFunctionCallError(callId, error);
     }
-  }) : null;
+  });
 
   // Initialize media manager
   const mediaManager = useMediaManager({
@@ -477,37 +474,13 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
                 await handleGetEyesTool(message.call_id, message.arguments);
               } else if (message.name === 'book_search_tool') {
                 logger.info('🔧 Handling book_search_tool', { args: message.arguments });
-                
-                // Initialize BookStateManager lazily when book tool is first called
-                if (!shouldInitializeBookManager) {
-                  logger.info("📚 LAZY-INIT: Triggering BookStateManager initialization for book_search_tool");
-                  setShouldInitializeBookManager(true);
-                }
-                
-                // Delegate to bookStateManager (will be available on next render)
-                if (bookStateManager) {
-                  bookStateManager.handleBookSearchTool(message.call_id, message.arguments);
-                } else {
-                  // BookStateManager not ready yet, send temporary response
-                  sendFunctionCallResult(message.call_id, "Initializing book system, please try again in a moment.");
-                }
+                // Redux book manager is always available
+                bookManager.handleBookSearchTool(message.call_id, message.arguments);
 
               } else if (message.name === 'display_book_page') {
                 logger.info('🔧 Handling display_book_page', { args: message.arguments });
-                
-                // Initialize BookStateManager lazily when book tool is first called
-                if (!shouldInitializeBookManager) {
-                  logger.info("📚 LAZY-INIT: Triggering BookStateManager initialization for display_book_page");
-                  setShouldInitializeBookManager(true);
-                }
-                
-                // Delegate to bookStateManager (will be available on next render)
-                if (bookStateManager) {
-                  bookStateManager.handleDisplayBookPage(message.call_id, message.arguments);
-                } else {
-                  // BookStateManager not ready yet, send temporary response
-                  sendFunctionCallResult(message.call_id, "Initializing book system, please try again in a moment.");
-                }
+                // Redux book manager is always available
+                bookManager.handleDisplayBookPage(message.call_id, message.arguments);
               }
               break;
             case "response.done":
@@ -604,8 +577,7 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
       sendFunctionCallOutput,
       webrtcConnection,
       mediaManager,
-      bookStateManager,
-      shouldInitializeBookManager,
+      bookManager,
       logger,
       isAppuSpeaking,
       tokensUsed,
@@ -614,7 +586,7 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
       options.onStorybookPageDisplay,
       sendFunctionCallResult,
       sendFunctionCallError,
-      conversationIdRef, // Include conversationIdRef if used inside
+      conversationIdRef,
     ],
   );
 
@@ -757,10 +729,8 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
     options.enableVideo,
     mediaManager,
     options.onError,
-    bookStateManager,
-    shouldInitializeBookManager,
+    bookManager,
     logger,
-    // ... other dependencies used within connect
   ]);
 
   const disconnect = useCallback(() => {
