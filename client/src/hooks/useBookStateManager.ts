@@ -41,7 +41,6 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
 
   // Reading session optimization refs
   const isInReadingSessionRef = useRef<boolean>(false);
-  const readingSessionMessagesRef = useRef<any[]>([]);
 
   // Audio management refs
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
