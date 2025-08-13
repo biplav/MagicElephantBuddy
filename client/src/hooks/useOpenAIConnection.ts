@@ -305,44 +305,44 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
           });
 
           // Translate OpenAI events to workflow state machine events
-          if (workflowStateMachine) {
+          if (options.workflowStateMachine) {
             try {
               switch (message.type) {
                 case 'session.created':
-                  workflowStateMachine.handleLoading();
+                  options.workflowStateMachine.handleLoading();
                   break;
                 case 'session.updated':
-                  if (workflowStateMachine.currentState === 'LOADING') {
-                    workflowStateMachine.handleIdle();
+                  if (options.workflowStateMachine.currentState === 'LOADING') {
+                    options.workflowStateMachine.handleIdle();
                   }
                   break;
                 case 'output_audio_buffer.started':
-                  workflowStateMachine.handleAppuSpeakingStart();
+                  options.workflowStateMachine.handleAppuSpeakingStart();
                   break;
                 case 'output_audio_buffer.stopped':
-                  workflowStateMachine.handleAppuSpeakingStop();
+                  options.workflowStateMachine.handleAppuSpeakingStop();
                   break;
                 case 'response.audio.delta':
-                  if (workflowStateMachine.currentState !== 'APPU_SPEAKING') {
-                    workflowStateMachine.handleAppuSpeakingStart();
+                  if (options.workflowStateMachine.currentState !== 'APPU_SPEAKING') {
+                    options.workflowStateMachine.handleAppuSpeakingStart();
                   }
                   break;
                 case 'input_audio_buffer.speech_started':
-                  workflowStateMachine.handleChildSpeechStart();
+                  options.workflowStateMachine.handleChildSpeechStart();
                   break;
                 case 'input_audio_buffer.speech_stopped':
-                  workflowStateMachine.handleChildSpeechStop();
+                  options.workflowStateMachine.handleChildSpeechStop();
                   break;
                 case 'response.created':
-                  workflowStateMachine.handleAppuThinking();
+                  options.workflowStateMachine.handleAppuThinking();
                   break;
                 case 'response.done':
-                  if (workflowStateMachine.currentState !== 'APPU_SPEAKING') {
-                    workflowStateMachine.handleIdle();
+                  if (options.workflowStateMachine.currentState !== 'APPU_SPEAKING') {
+                    options.workflowStateMachine.handleIdle();
                   }
                   break;
                 case 'error':
-                  workflowStateMachine.handleError(message.error?.message || 'OpenAI error occurred');
+                  options.workflowStateMachine.handleError(message.error?.message || 'OpenAI error occurred');
                   break;
               }
             } catch (translationError) {
