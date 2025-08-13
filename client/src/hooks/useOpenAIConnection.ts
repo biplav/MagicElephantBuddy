@@ -1,9 +1,9 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { createServiceLogger } from "@/lib/logger";
 import { useWebRTCConnection } from "./useWebRTCConnection";
 import { useOpenAISession } from "./useOpenAISession";
-import { useBookStateManager } from "./useBookStateManager";
 import { useMediaManager } from "./useMediaManager";
+
 interface OpenAIConnectionOptions {
   childId?: string;
   onTranscriptionReceived?: (transcription: string) => void;
@@ -51,22 +51,28 @@ interface UseOpenAIConnectionOptions {
   workflowStateMachine?: any;
 }
 
-export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
+export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
   const logger = createServiceLogger("openai-connection");
 
-  // Extract workflow state machine from options
-  const { workflowStateMachine } = options;
+  // Connection state
+  const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<number | null>(null);
+  const [isAppuSpeaking, setIsAppuSpeaking] = useState<boolean>(false);
+  const [lastCapturedFrame, setLastCapturedFrame] = useState<string | null>(null);
 
-  const [state, setState] = useState<OpenAIConnectionState>({
-    isConnected: false,
-    isRecording: false,
-    error: null,
-    lastCapturedFrame: null,
+  // Initialize BookStateManager on-demand when needed
+  const bookStateManager = useBookStateManager({
+    workflowStateMachine: options.workflowStateMachine,
+    onStorybookPageDisplay: options.onStorybookPageDisplay,
+    onFunctionCallResult: (callId: string, result: string) => {
+      sendFunctionCallResult(callId, result);
+    },
+    onError: (callId: string, error: string) => {
+      sendFunctionCallError(callId, error);
+    }
   });
-
-  const [isAppuSpeaking, setIsAppuSpeaking] = useState(false);
-  const [isUserSpeaking, setIsUserSpeaking] = useState(false);
-  const [tokensUsed, setTokensUsed] = useState<number>(0);
 
   // Initialize media manager
   const mediaManager = useMediaManager({
@@ -78,17 +84,14 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
   // Initialize modular hooks
   const webrtcConnection = useWebRTCConnection({
     onConnectionStateChange: (state) => {
-      setState((prev) => ({
-        ...prev,
-        isConnected: state === 'connected',
-        isRecording: state === 'connected',
-      }));
+      setIsConnected(state === 'connected');
+      setIsRecording(state === 'connected');
     },
     onTrackReceived: (event) => {
       logger.info("Received audio track from OpenAI");
     },
     onError: (error) => {
-      setState((prev) => ({ ...prev, error }));
+      setError(error);
       options.onError?.(error);
     },
   });
@@ -103,28 +106,8 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
   } = useOpenAISession({ childId: options.childId });
 
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
-  const conversationIdRef = useRef<string | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-
-  // Initialize book state manager with event callbacks
-  const bookStateManager = useBookStateManager({
-    onStorybookPageDisplay: options.onStorybookPageDisplay,
-    onFunctionCallResult: (callId: string, result: any) => {
-      sendFunctionCallOutput(callId, result);
-      // Trigger model response after function call
-      dataChannelRef.current?.send(JSON.stringify({
-        type: 'response.create'
-      }));
-    },
-    onError: (callId: string, error: string) => {
-      sendFunctionCallOutput(callId, error);
-      // Trigger model response after error
-      dataChannelRef.current?.send(JSON.stringify({
-        type: 'response.create'
-      }));
-    }
-  });
 
   // Helper method to send function call output
   const sendFunctionCallOutput = useCallback((callId: string, result: any) => {
@@ -139,6 +122,15 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     console.log("Sending function call output:", response);
     dataChannelRef.current?.send(response);
   }, []);
+
+  // Helper methods for sending function call results and errors
+  const sendFunctionCallResult = useCallback((callId: string, result: string) => {
+    sendFunctionCallOutput(callId, { result });
+  }, [sendFunctionCallOutput]);
+
+  const sendFunctionCallError = useCallback((callId: string, error: string) => {
+    sendFunctionCallOutput(callId, { error });
+  }, [sendFunctionCallOutput]);
 
   const setupDataChannel = useCallback(
     (pc: RTCPeerConnection) => {
@@ -162,9 +154,6 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
       channel.onopen = async () => {
         logger.info("Data channel opened");
         clearInterval(stateCheckInterval);
-
-        // Update book state manager with the active data channel
-        // This will be handled via a different approach since we can't call hooks conditionally
 
         try {
           const childId = getSelectedChildId();
@@ -192,11 +181,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
                 silence_duration_ms: 200,
               },
               temperature: 0.8,
-              // Optimize context window for token efficiency
-              // max_response_output_tokens: bookStateManager.isInReadingSession ? 150 : 300,
               max_response_output_tokens: 300 //,
-              // Add prompt caching to reduce costs for consistent system instructions
-              //prompt_cache_key: cacheKey,
             },
           };
 
@@ -249,13 +234,10 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         }
       };
 
-      // Book-related functionality now handled by bookStateManager
-
       const handleGetEyesTool = async (callId: string, args: any) => {
         logger.info("getEyesTool was called!", { callId, args });
 
         try {
-          // Use MediaManager to handle all frame capture and analysis
           const analysisResult = await mediaManager.getFrameAnalysis({
             reason: args.reason || "Child wants to show something",
             lookingFor: args.lookingFor || null,
@@ -263,18 +245,15 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
             conversationId: conversationIdRef.current,
           });
 
-          // Store the captured frame for UI display if successful
           if (analysisResult.success && analysisResult.analysis) {
             const frameData = mediaManager.captureFrame();
             if (frameData) {
-              setState((prev) => ({ ...prev, lastCapturedFrame: frameData }));
+              setLastCapturedFrame(frameData);
             }
           }
 
-          // Send the result back to OpenAI
           sendFunctionCallOutput(callId, analysisResult.message);
 
-          // Trigger model response after function call
           dataChannelRef.current?.send(JSON.stringify({
             type: 'response.create'
           }));
@@ -290,13 +269,11 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
             stack: error.stack,
           });
 
-          // Send error response back to OpenAI
           sendFunctionCallOutput(
             callId,
             "I'm having trouble seeing what you're showing me right now. Can you try again?",
           );
 
-          // Trigger model response after error function call
           dataChannelRef.current?.send(JSON.stringify({
             type: 'response.create'
           }));
@@ -309,7 +286,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
           logger.info("Raw data channel message received", {
             messageSize: messageEvent.data?.length,
             dataType: typeof messageEvent.data,
-            rawData: messageEvent.data?.substring(0, 500), // First 500 chars for inspection
+            rawData: messageEvent.data?.substring(0, 500),
           });
 
           const message = JSON.parse(messageEvent.data);
@@ -419,7 +396,6 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
                 fullMessage: message,
               });
 
-              // Mark Appu as speaking when receiving audio
               if (!isAppuSpeaking) {
                 setIsAppuSpeaking(true);
                 options.onAppuSpeakingChange?.(true);
@@ -456,8 +432,6 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
                 itemStatus: message.item?.status,
                 fullMessage: message,
               });
-              // This event indicates OpenAI is adding a new item to the response
-              // Could be text, audio, or tool calls
               break;
             case "response.function_call_arguments.delta":
               logger.info("Function call arguments delta", {
@@ -477,10 +451,15 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
               // Handle different tool calls
               if (message.name === "getEyesTool") {
                 await handleGetEyesTool(message.call_id, message.arguments);
-              } else if (message.name === "bookSearchTool") {
-                await bookStateManager.handleBookSearchTool(message.call_id, message.arguments);
-              } else if (message.name === "display_book_page") {
-                await bookStateManager.handleDisplayBookPage(message.call_id, message.arguments);
+              } else if (message.name === 'book_search_tool') {
+                logger.info('🔧 Handling book_search_tool', { args: message.arguments });
+                // Delegate to bookStateManager
+                bookStateManager.handleBookSearchTool(message.call_id, message.arguments);
+
+              } else if (message.name === 'display_book_page') {
+                logger.info('🔧 Handling display_book_page', { args: message.arguments });
+                // Delegate to bookStateManager  
+                bookStateManager.handleDisplayBookPage(message.call_id, message.arguments);
               }
               break;
             case "response.done":
@@ -520,10 +499,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
                 fullError: message.error,
                 fullMessage: message,
               });
-              setState((prev) => ({
-                ...prev,
-                error: message.error?.message || "Unknown error",
-              }));
+              setError(message.error?.message || "Unknown error");
               options.onError?.(message.error?.message || "Unknown error");
               break;
             default:
@@ -552,7 +528,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
             ["connecting", "open", "closing", "closed"][channel.readyState as unknown as number] ||
             "unknown",
         });
-        setState((prev) => ({ ...prev, error: "Data channel error occurred" }));
+        setError("Data channel error occurred");
         options.onError?.("Data channel connection failed");
       };
 
@@ -565,14 +541,11 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
           reason: closeEvent?.reason,
         });
         clearInterval(stateCheckInterval);
-        setState((prev) => ({
-          ...prev,
-          isConnected: false,
-          isRecording: false,
-        }));
+        setIsConnected(false);
+        setIsRecording(false);
+        setLastCapturedFrame(null);
       };
 
-      // Handle buffered amount changes
       channel.onbufferedamountlow = () => {
         logger.info("Data channel buffer amount low");
       };
@@ -587,7 +560,12 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
       logger,
       isAppuSpeaking,
       tokensUsed,
-      options.onAppuSpeakingChange
+      options.onAppuSpeakingChange,
+      options.workflowStateMachine,
+      options.onStorybookPageDisplay,
+      sendFunctionCallResult,
+      sendFunctionCallError,
+      conversationIdRef, // Include conversationIdRef if used inside
     ],
   );
 
@@ -595,10 +573,8 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     try {
       logger.info("Starting OpenAI WebRTC connection");
 
-      // Camera will be initialized on-demand when getEyesTool is called
       logger.info("Connection starting - camera will initialize when AI needs to see something");
 
-      // Handle session creation with explicit error handling
       const client_secret = await createSession().catch((sessionError) => {
         logger.error("Session creation failed", {
           error: sessionError.message,
@@ -607,7 +583,6 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         throw new Error(`Session creation failed: ${sessionError.message}`);
       });
 
-      // Create peer connection using webrtcConnection
       const pc = webrtcConnection.createPeerConnection();
       pcRef.current = pc;
 
@@ -620,11 +595,9 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
           echoCancellation: true,
           noiseSuppression: true,
         },
-        // Video will be requested lazily when getEyesTool is called
         video: false,
       };
 
-      // Handle media stream with explicit error handling (audio only)
       const stream = await navigator.mediaDevices
         .getUserMedia(mediaConstraints)
         .catch((mediaError) => {
@@ -643,7 +616,6 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         pc.addTrack(audioTrack, stream);
       }
 
-      // Handle offer creation with explicit error handling
       const offer = await pc
         .createOffer({
           offerToReceiveAudio: true,
@@ -665,7 +637,6 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         );
       });
 
-      // Handle API request with explicit error handling
       const realtimeResponse = await fetch(
         "https://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview-2024-12-17",
         {
@@ -717,7 +688,7 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
         stack: error.stack,
         name: error.name,
       });
-      setState((prev) => ({ ...prev, error: error.message }));
+      setError(error.message);
       options.onError?.(error.message);
 
       // Clean up on error
@@ -736,7 +707,10 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     setupDataChannel,
     options.enableVideo,
     mediaManager,
-    options.onError
+    options.onError,
+    bookStateManager, // Ensure bookStateManager is a dependency if used directly in connect
+    logger,
+    // ... other dependencies used within connect
   ]);
 
   const disconnect = useCallback(() => {
@@ -757,21 +731,14 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
       streamRef.current = null;
     }
 
-    // Clean up media capture resources
     mediaManager.cleanup();
 
-    setState((prev) => ({
-      ...prev,
-      isConnected: false,
-      isRecording: false,
-      lastCapturedFrame: null,
-    }));
-    setTokensUsed(0); // Reset tokens when disconnecting
+    setIsConnected(false);
+    setIsRecording(false);
+    setLastCapturedFrame(null);
+    setTokensUsed(0);
   }, [mediaManager]);
 
-  // Placeholder for sendMessage function if it's needed elsewhere,
-  // otherwise it can be removed or adjusted based on actual usage.
-  // For now, it's not directly used in the provided code snippet's logic.
   const sendMessage = useCallback((message: string) => {
     if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
       dataChannelRef.current.send(JSON.stringify({ type: 'message', content: message }));
@@ -781,6 +748,9 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     }
   }, []);
 
+  // State for tokens used
+  const [tokensUsed, setTokensUsed] = useState<number>(0);
+  const [isUserSpeaking, setIsUserSpeaking] = useState<boolean>(false);
 
   return {
     ...state,
@@ -790,7 +760,6 @@ export function useOpenAIConnection(options: OpenAIConnectionOptions = {}) {
     tokensUsed,
     isAppuSpeaking,
     isUserSpeaking,
-    // Expose media manager methods
     captureFrame: mediaManager.captureFrame,
     hasVideoPermission: mediaManager.hasVideoPermission,
     videoElement: mediaManager.videoElement

@@ -306,10 +306,7 @@ const Home = memo(() => {
   // Initialize workflow state machine FIRST (before other hooks that depend on it)
   const workflowStateMachine = useWorkflowStateMachine();
 
-  // Initialize BookStateManager with enhanced logging
-  const bookStateManager = useBookStateManager({
-    workflowStateMachine: workflowStateMachine,
-  });
+  // BookStateManager will be initialized on-demand when displaybook tool is called
 
   // Initialize realtime audio with the selected provider and error handling
   const {
@@ -1448,7 +1445,6 @@ const Home = memo(() => {
           isAppuSpeaking={isAppuSpeaking}
           isUserSpeaking={isUserSpeaking}
           openaiConnection={openaiConnection}
-          bookStateManager={bookStateManager}
           bookId={currentStorybookPage?.bookId}
           workflowStateMachine={workflowStateMachine}
         />
