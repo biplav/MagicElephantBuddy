@@ -66,7 +66,9 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
   const [isUserSpeaking, setIsUserSpeaking] = useState<boolean>(false);
 
   // State to control when BookStateManager should be initialized
-  const [shouldInitializeBookManager, setShouldInitializeBookManager] = useState(false);
+  /*const [shouldInitializeBookManager, setShouldInitializeBookManager] = useState(false);
+
+  
   
   // Conditionally initialize BookStateManager only when needed
   const bookStateManager = shouldInitializeBookManager ? useBookStateManager({
@@ -78,7 +80,22 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
     onError: (callId: string, error: string) => {
       sendFunctionCallError(callId, error);
     }
-  }) : null;
+  }) : null; */
+
+  let bookStateManager: ReturnType<typeof useBookStateManager> | null = null;
+  function initializeBookStateManager() {
+    if(bookStateManager) return
+    bookStateManager = useBookStateManager({
+      workflowStateMachine: options.workflowStateMachine,
+      onStorybookPageDisplay: options.onStorybookPageDisplay,
+      onFunctionCallResult: (callId: string, result: string) => {
+        sendFunctionCallResult(callId, result);
+      },
+      onError: (callId: string, error: string) => {
+        sendFunctionCallError(callId, error);
+      }
+    });
+  }
 
   // Initialize media manager
   const mediaManager = useMediaManager({
@@ -462,7 +479,7 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
                 logger.info('🔧 Handling book_search_tool', { args: message.arguments });
                 
                 // Initialize BookStateManager lazily when book tool is first called
-                if (!shouldInitializeBookManager) {
+               /* if (!shouldInitializeBookManager) {
                   logger.info("📚 LAZY-INIT: Triggering BookStateManager initialization for book_search_tool");
                   setShouldInitializeBookManager(true);
                 }
@@ -472,8 +489,11 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
                   bookStateManager.handleBookSearchTool(message.call_id, message.arguments);
                 } else {
                   // BookStateManager not ready yet, send temporary response
-                  sendFunctionCallResult(message.call_id, "Initializing book system, please try again in a moment.");
-                }
+                  sendFunctionCallResult(message.call_id, "Initializing book system, please try again in a moment.");*/
+              if (!bookStateManager) {
+                  initializeBookStateManager();
+              }
+              bookStateManager.handleBookSearchTool(message.call_id, message.arguments);
 
               } else if (message.name === 'display_book_page') {
                 logger.info('🔧 Handling display_book_page', { args: message.arguments });
