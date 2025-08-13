@@ -65,23 +65,6 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
   const [tokensUsed, setTokensUsed] = useState<number>(0);
   const [isUserSpeaking, setIsUserSpeaking] = useState<boolean>(false);
 
-  // State to control when BookStateManager should be initialized
-  /*const [shouldInitializeBookManager, setShouldInitializeBookManager] = useState(false);
-
-  
-  
-  // Conditionally initialize BookStateManager only when needed
-  const bookStateManager = shouldInitializeBookManager ? useBookStateManager({
-    workflowStateMachine: options.workflowStateMachine,
-    onStorybookPageDisplay: options.onStorybookPageDisplay,
-    onFunctionCallResult: (callId: string, result: string) => {
-      sendFunctionCallResult(callId, result);
-    },
-    onError: (callId: string, error: string) => {
-      sendFunctionCallError(callId, error);
-    }
-  }) : null; */
-
   // Initialize Redux-based book manager (always available)
   const bookManager = useBookManager({
     workflowStateMachine: options.workflowStateMachine,
@@ -472,7 +455,7 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
               // Handle different tool calls
               if (message.name === "getEyesTool") {
                 await handleGetEyesTool(message.call_id, message.arguments);
-              } else if (message.name === 'book_search_tool') {
+              } else if (message.name === 'bookSearchTool' || message.name === 'book_search_tool') {
                 logger.info('🔧 Handling book_search_tool', { args: message.arguments });
                 // Redux book manager is always available
                 bookManager.handleBookSearchTool(message.call_id, message.arguments);
