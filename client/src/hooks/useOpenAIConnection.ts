@@ -3,6 +3,7 @@ import { createServiceLogger } from "@/lib/logger";
 import { useWebRTCConnection } from "./useWebRTCConnection";
 import { useOpenAISession } from "./useOpenAISession";
 import { useMediaManager } from "./useMediaManager";
+import { useBookStateManager } from "./useBookStateManager";
 
 interface OpenAIConnectionOptions {
   childId?: string;
