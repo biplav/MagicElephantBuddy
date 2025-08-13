@@ -458,7 +458,7 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
                 arguments: message.arguments,
                 fullMessage: message,
               });
-              
+
               // Add validation for required fields
               if (!message.call_id || !message.name) {
                 logger.error("Invalid function call message - missing required fields", {
@@ -468,7 +468,7 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
                 });
                 break;
               }
-              
+
               // Handle different tool calls with error handling
               try {
                 if (message.name === "getEyesTool") {
@@ -558,7 +558,7 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
             ["connecting", "open", "closing", "closed"][channel.readyState as unknown as number] ||
             "unknown",
         });
-        
+
         // Only set error if the channel is actually closed, not just experiencing a temporary issue
         if (channel.readyState === 3) { // CLOSED state
           setError("Data channel connection lost");
@@ -605,7 +605,8 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
     ],
   );
 
-  const connect = useCallback(async () => {
+  const connect = useCallback(async (retryCount = 0) => {
+    const maxRetries = 3;
     try {
       logger.info("Starting OpenAI WebRTC connection");
 
@@ -724,17 +725,23 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
         stack: error.stack,
         name: error.name,
       });
-      setError(error.message);
-      options.onError?.(error.message);
 
-      // Clean up on error
-      if (pcRef.current) {
-        pcRef.current.close();
-        pcRef.current = null;
-      }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-        streamRef.current = null;
+      if (retryCount < maxRetries) {
+        logger.info(`Retrying connection, attempt ${retryCount + 1}/${maxRetries}`);
+        setTimeout(() => connect(retryCount + 1), 2000); // Retry after 2 seconds
+      } else {
+        setError(error.message);
+        options.onError?.(error.message);
+
+        // Clean up on error
+        if (pcRef.current) {
+          pcRef.current.close();
+          pcRef.current = null;
+        }
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop());
+          streamRef.current = null;
+        }
       }
     }
   }, [
@@ -783,7 +790,7 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
     }
   }, []);
 
-  
+
 
   const state = {
     isConnected,
