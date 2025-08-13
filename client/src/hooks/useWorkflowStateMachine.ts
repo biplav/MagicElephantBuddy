@@ -15,6 +15,7 @@ interface WorkflowStateMachineOptions {
   onStateChange?: (state: WorkflowState) => void;
   enabled?: boolean;
   openaiConnection?: any;
+  autoIdleTimeoutMs?: number; // Default: 3000ms (3 seconds)
 }
 
 export function useWorkflowStateMachine(options: WorkflowStateMachineOptions = {}) {
@@ -22,6 +23,58 @@ export function useWorkflowStateMachine(options: WorkflowStateMachineOptions = {
 
   const [currentState, setCurrentState] = useState<WorkflowState>('IDLE');
   const [isEnabled, setIsEnabled] = useState(options.enabled ?? true);
+  
+  // Auto-idle timer configuration and state
+  const autoIdleTimeoutMs = options.autoIdleTimeoutMs ?? 3000; // Default 3 seconds
+  const autoIdleTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastActivityTimeRef = useRef<number>(Date.now());
+
+  // Auto-idle timer management
+  const startAutoIdleTimer = useCallback(() => {
+    // Clear any existing timer
+    if (autoIdleTimerRef.current) {
+      clearTimeout(autoIdleTimerRef.current);
+    }
+
+    // Don't start timer if disabled or already in IDLE/ERROR states
+    if (!isEnabled || currentState === 'IDLE' || currentState === 'ERROR') {
+      return;
+    }
+
+    logger.debug('⏰ Starting auto-idle timer', { 
+      currentState, 
+      timeoutMs: autoIdleTimeoutMs,
+      enabled: isEnabled 
+    });
+
+    autoIdleTimerRef.current = setTimeout(() => {
+      const timeSinceLastActivity = Date.now() - lastActivityTimeRef.current;
+      
+      logger.info('⏰ Auto-idle timer triggered', {
+        currentState,
+        timeSinceLastActivity,
+        threshold: autoIdleTimeoutMs
+      });
+
+      // Only transition to IDLE if we're not already there and enough time has passed
+      if (currentState !== 'IDLE' && currentState !== 'ERROR' && timeSinceLastActivity >= autoIdleTimeoutMs) {
+        handleStateTransition('IDLE', 'auto-idle-timeout');
+      }
+    }, autoIdleTimeoutMs);
+  }, [currentState, isEnabled, autoIdleTimeoutMs, logger]);
+
+  const clearAutoIdleTimer = useCallback(() => {
+    if (autoIdleTimerRef.current) {
+      logger.debug('⏰ Clearing auto-idle timer');
+      clearTimeout(autoIdleTimerRef.current);
+      autoIdleTimerRef.current = null;
+    }
+  }, [logger]);
+
+  const resetActivityTimer = useCallback(() => {
+    lastActivityTimeRef.current = Date.now();
+    startAutoIdleTimer();
+  }, [startAutoIdleTimer]);
 
   // Internal state management with enhanced monitoring
   const handleStateTransition = useCallback((newState: WorkflowState, context?: string) => {
@@ -53,6 +106,15 @@ export function useWorkflowStateMachine(options: WorkflowStateMachineOptions = {
     setCurrentState(newState);
     options.onStateChange?.(newState);
 
+    // Manage auto-idle timer based on new state
+    if (newState === 'IDLE' || newState === 'ERROR') {
+      // Clear timer when reaching terminal states
+      clearAutoIdleTimer();
+    } else {
+      // Reset activity timer for active states
+      resetActivityTimer();
+    }
+
     // Log state-specific information
     switch (newState) {
       case 'APPU_SPEAKING':
@@ -80,7 +142,7 @@ export function useWorkflowStateMachine(options: WorkflowStateMachineOptions = {
         console.error(`❌ SYSTEM: Error state (was ${oldState})`);
         break;
     }
-  }, [currentState, logger, options.onStateChange, isEnabled]);
+  }, [currentState, logger, options.onStateChange, isEnabled, clearAutoIdleTimer, resetActivityTimer]);
 
   // Event handlers for OpenAI events with enhanced context
   const handleAppuSpeakingStart = useCallback((context: string = 'openai-audio-start') => {
@@ -176,6 +238,24 @@ export function useWorkflowStateMachine(options: WorkflowStateMachineOptions = {
     setIsEnabled(options.enabled ?? true);
   }, [options.enabled]);
 
+  // Cleanup auto-idle timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoIdleTimerRef.current) {
+        clearTimeout(autoIdleTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Start auto-idle timer when enabled and not in terminal states
+  useEffect(() => {
+    if (isEnabled && currentState !== 'IDLE' && currentState !== 'ERROR') {
+      startAutoIdleTimer();
+    } else {
+      clearAutoIdleTimer();
+    }
+  }, [isEnabled, currentState, startAutoIdleTimer, clearAutoIdleTimer]);
+
   return {
     // Current state
     currentState,
@@ -195,6 +275,11 @@ export function useWorkflowStateMachine(options: WorkflowStateMachineOptions = {
     resetWorkflow,
     setEnabled,
 
+    // Auto-idle timer controls
+    startAutoIdleTimer,
+    clearAutoIdleTimer,
+    resetActivityTimer,
+
     // State checks (computed properties)
     isAppuSpeaking: currentState === 'APPU_SPEAKING',
     isAppuThinking: currentState === 'APPU_THINKING',
@@ -211,6 +296,12 @@ export function useWorkflowStateMachine(options: WorkflowStateMachineOptions = {
       isEnabled,
       hasOpenAIConnection: !!options.openaiConnection,
       timestamp: new Date().toISOString(),
+      autoIdleTimer: {
+        timeoutMs: autoIdleTimeoutMs,
+        isActive: !!autoIdleTimerRef.current,
+        lastActivity: new Date(lastActivityTimeRef.current).toISOString(),
+        timeSinceLastActivity: Date.now() - lastActivityTimeRef.current
+      },
       stateChecks: {
         isAppuSpeaking: currentState === 'APPU_SPEAKING',
         isAppuThinking: currentState === 'APPU_THINKING',

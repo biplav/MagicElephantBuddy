@@ -144,6 +144,195 @@ describe('useWorkflowStateMachine', () => {
     });
   });
 
+  describe('Auto-Idle Timer Behavior', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('should automatically transition to IDLE after default timeout (3 seconds)', () => {
+      const onStateChange = jest.fn();
+      const { result } = renderHook(() => 
+        useWorkflowStateMachine({ onStateChange, enabled: true })
+      );
+
+      // Move to APPU_SPEAKING
+      act(() => {
+        result.current.handleAppuSpeakingStart('test');
+      });
+      expect(result.current.currentState).toBe('APPU_SPEAKING');
+
+      // Fast-forward time by 3 seconds
+      act(() => {
+        jest.advanceTimersByTime(3000);
+      });
+
+      expect(result.current.currentState).toBe('IDLE');
+      expect(onStateChange).toHaveBeenLastCalledWith('IDLE');
+    });
+
+    it('should use custom timeout when provided', () => {
+      const onStateChange = jest.fn();
+      const { result } = renderHook(() => 
+        useWorkflowStateMachine({ 
+          onStateChange, 
+          enabled: true, 
+          autoIdleTimeoutMs: 5000 
+        })
+      );
+
+      // Move to APPU_THINKING
+      act(() => {
+        result.current.handleAppuThinking('test');
+      });
+      expect(result.current.currentState).toBe('APPU_THINKING');
+
+      // Fast-forward by 3 seconds (should not trigger)
+      act(() => {
+        jest.advanceTimersByTime(3000);
+      });
+      expect(result.current.currentState).toBe('APPU_THINKING');
+
+      // Fast-forward by another 2 seconds (total 5 seconds)
+      act(() => {
+        jest.advanceTimersByTime(2000);
+      });
+      expect(result.current.currentState).toBe('IDLE');
+    });
+
+    it('should not auto-transition when already in IDLE or ERROR states', () => {
+      const onStateChange = jest.fn();
+      const { result } = renderHook(() => 
+        useWorkflowStateMachine({ onStateChange, enabled: true })
+      );
+
+      // Already in IDLE - should not set timer
+      expect(result.current.currentState).toBe('IDLE');
+      
+      act(() => {
+        jest.advanceTimersByTime(5000);
+      });
+      expect(result.current.currentState).toBe('IDLE');
+      expect(onStateChange).not.toHaveBeenCalled();
+
+      // Move to ERROR state
+      act(() => {
+        result.current.handleError('test error');
+      });
+      expect(result.current.currentState).toBe('ERROR');
+
+      // Should not auto-transition from ERROR
+      act(() => {
+        jest.advanceTimersByTime(5000);
+      });
+      expect(result.current.currentState).toBe('ERROR');
+    });
+
+    it('should reset timer on new activity', () => {
+      const onStateChange = jest.fn();
+      const { result } = renderHook(() => 
+        useWorkflowStateMachine({ onStateChange, enabled: true })
+      );
+
+      // Move to APPU_SPEAKING
+      act(() => {
+        result.current.handleAppuSpeakingStart('test');
+      });
+      expect(result.current.currentState).toBe('APPU_SPEAKING');
+
+      // Fast-forward by 2 seconds
+      act(() => {
+        jest.advanceTimersByTime(2000);
+      });
+      expect(result.current.currentState).toBe('APPU_SPEAKING');
+
+      // New activity - should reset timer
+      act(() => {
+        result.current.handleAppuThinking('new activity');
+      });
+      expect(result.current.currentState).toBe('APPU_THINKING');
+
+      // Fast-forward by 2 seconds (should not trigger, timer was reset)
+      act(() => {
+        jest.advanceTimersByTime(2000);
+      });
+      expect(result.current.currentState).toBe('APPU_THINKING');
+
+      // Fast-forward by another 1 second (total 3 seconds from reset)
+      act(() => {
+        jest.advanceTimersByTime(1000);
+      });
+      expect(result.current.currentState).toBe('IDLE');
+    });
+
+    it('should not auto-transition when disabled', () => {
+      const onStateChange = jest.fn();
+      const { result } = renderHook(() => 
+        useWorkflowStateMachine({ onStateChange, enabled: false })
+      );
+
+      // Try to move to APPU_SPEAKING (should be ignored when disabled)
+      act(() => {
+        result.current.handleAppuSpeakingStart('test');
+      });
+      expect(result.current.currentState).toBe('IDLE');
+
+      // Fast-forward time
+      act(() => {
+        jest.advanceTimersByTime(5000);
+      });
+      expect(result.current.currentState).toBe('IDLE');
+      expect(onStateChange).not.toHaveBeenCalled();
+    });
+
+    it('should clear timer when manually transitioning to IDLE', () => {
+      const onStateChange = jest.fn();
+      const { result } = renderHook(() => 
+        useWorkflowStateMachine({ onStateChange, enabled: true })
+      );
+
+      // Move to APPU_SPEAKING
+      act(() => {
+        result.current.handleAppuSpeakingStart('test');
+      });
+      expect(result.current.currentState).toBe('APPU_SPEAKING');
+
+      // Manually transition to IDLE before timer expires
+      act(() => {
+        result.current.handleIdle('manual');
+      });
+      expect(result.current.currentState).toBe('IDLE');
+
+      // Fast-forward time - should not trigger additional transitions
+      const callCountBefore = onStateChange.mock.calls.length;
+      act(() => {
+        jest.advanceTimersByTime(5000);
+      });
+      expect(onStateChange.mock.calls.length).toBe(callCountBefore);
+    });
+
+    it('should provide auto-idle timer info in debug output', () => {
+      const { result } = renderHook(() => 
+        useWorkflowStateMachine({ enabled: true, autoIdleTimeoutMs: 5000 })
+      );
+
+      // Move to active state
+      act(() => {
+        result.current.handleAppuSpeakingStart('test');
+      });
+
+      const debugInfo = result.current.getDebugInfo();
+      expect(debugInfo.autoIdleTimer).toBeDefined();
+      expect(debugInfo.autoIdleTimer.timeoutMs).toBe(5000);
+      expect(debugInfo.autoIdleTimer.isActive).toBe(true);
+      expect(debugInfo.autoIdleTimer.lastActivity).toBeDefined();
+      expect(debugInfo.autoIdleTimer.timeSinceLastActivity).toBeGreaterThanOrEqual(0);
+    });
+  });
+
   describe('Disabled State Behavior', () => {
     it('should ignore state transitions when disabled', () => {
       const onStateChange = jest.fn();
