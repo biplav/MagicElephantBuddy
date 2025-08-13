@@ -157,6 +157,8 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
 
   // Audio Play with workflow integration
   const playPageAudio = useCallback(() => {
+    const audioUrl = selectedBookRef.current?.currentAudioUrl;
+
     logger.info('🔊 BOOK-AUDIO: Starting audio playback', {
       audioUrl,
       currentState: bookState,
@@ -164,10 +166,20 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       book: selectedBookRef.current?.title,
       workflowState: options.workflowStateMachine?.currentState
     });
-    
-    audioElementRef.current?.play();
-    
-  }, [transitionToState, options.workflowStateMachine, options.onAutoPageAdvance, logger, bookState]);
+
+    if (audioElementRef.current && audioUrl) {
+      audioElementRef.current.play().catch(error => {
+        logger.error('🔊 BOOK-AUDIO: Error playing audio', { error: error.message });
+        transitionToState('ERROR');
+      });
+    } else {
+      logger.warn('🔊 BOOK-AUDIO: Cannot play audio - no audio element or URL', {
+        hasAudioElement: !!audioElementRef.current,
+        hasAudioUrl: !!audioUrl
+      });
+    }
+
+  }, [transitionToState, options.workflowStateMachine, logger, bookState]);
 
   // Clear auto advance timer
   const clearAutoAdvanceTimer = useCallback(() => {
@@ -317,14 +329,14 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
           bookState,
           speaker: workflowState === 'APPU_SPEAKING' ? 'Appu' : 'Child'
         });
-        
+
         // Pause the audio
         if (audioElementRef.current) {
           audioElementRef.current.pause();
           setIsPlayingAudio(false);
           logger.info('🔊 BOOK-AUDIO: Audio paused due to speech activity');
         }
-        
+
         // Transition to paused state
         transitionToState('AUDIO_PAUSED');
       }
@@ -370,7 +382,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
           // Check if we can advance to next page
           if (selectedBookRef.current && 
               currentPageRef.current < (selectedBookRef.current.totalPages || 0)) {
-            
+
             logger.info('🔄 BOOK-AUTO: Triggering auto page advance via navigateToNextPage');
             navigateToNextPage().then(success => {
               if (success) {
@@ -608,7 +620,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
   //   }
   // }, [logger]);
 
-  
+
 
   const navigateToPreviousPage = useCallback(async () => {
     logger.info("navigateToPreviousPage called", { 

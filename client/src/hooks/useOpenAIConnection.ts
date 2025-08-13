@@ -293,6 +293,12 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
             rawData: messageEvent.data?.substring(0, 500),
           });
 
+          // Add validation for message data
+          if (!messageEvent.data || typeof messageEvent.data !== 'string') {
+            logger.warn("Invalid message data received", { data: messageEvent.data });
+            return;
+          }
+
           const message = JSON.parse(messageEvent.data);
 
           logger.info("Parsed data channel message", {
@@ -452,18 +458,38 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
                 arguments: message.arguments,
                 fullMessage: message,
               });
-              // Handle different tool calls
-              if (message.name === "getEyesTool") {
-                await handleGetEyesTool(message.call_id, message.arguments);
-              } else if (message.name === 'bookSearchTool' || message.name === 'book_search_tool') {
-                logger.info('🔧 Handling book_search_tool', { args: message.arguments });
-                // Redux book manager is always available
-                bookManager.handleBookSearchTool(message.call_id, message.arguments);
-
-              } else if (message.name === 'display_book_page') {
-                logger.info('🔧 Handling display_book_page', { args: message.arguments });
-                // Redux book manager is always available
-                bookManager.handleDisplayBookPage(message.call_id, message.arguments);
+              
+              // Add validation for required fields
+              if (!message.call_id || !message.name) {
+                logger.error("Invalid function call message - missing required fields", {
+                  hasCallId: !!message.call_id,
+                  hasName: !!message.name,
+                  message
+                });
+                break;
+              }
+              
+              // Handle different tool calls with error handling
+              try {
+                if (message.name === "getEyesTool") {
+                  await handleGetEyesTool(message.call_id, message.arguments);
+                } else if (message.name === 'bookSearchTool' || message.name === 'book_search_tool') {
+                  logger.info('🔧 Handling book_search_tool', { args: message.arguments });
+                  bookManager.handleBookSearchTool(message.call_id, message.arguments);
+                } else if (message.name === 'display_book_page') {
+                  logger.info('🔧 Handling display_book_page', { args: message.arguments });
+                  bookManager.handleDisplayBookPage(message.call_id, message.arguments);
+                } else {
+                  logger.warn('🔧 Unknown function call', { name: message.name, callId: message.call_id });
+                  sendFunctionCallError(message.call_id, `Unknown function: ${message.name}`);
+                }
+              } catch (functionError) {
+                logger.error('🔧 Error handling function call', {
+                  name: message.name,
+                  callId: message.call_id,
+                  error: functionError instanceof Error ? functionError.message : String(functionError)
+                });
+                sendFunctionCallError(message.call_id, "Function execution failed");
               }
               break;
             case "response.done":
@@ -532,8 +558,14 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
             ["connecting", "open", "closing", "closed"][channel.readyState as unknown as number] ||
             "unknown",
         });
-        setError("Data channel error occurred");
-        options.onError?.("Data channel connection failed");
+        
+        // Only set error if the channel is actually closed, not just experiencing a temporary issue
+        if (channel.readyState === 3) { // CLOSED state
+          setError("Data channel connection lost");
+          options.onError?.("Data channel connection failed");
+        } else {
+          logger.warn("Data channel error but still connected, attempting to continue");
+        }
       };
 
       channel.onclose = (event) => {
