@@ -115,12 +115,15 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
 
   // Helper method to send function call output
   const sendFunctionCallOutput = useCallback((callId: string, result: any) => {
+    // Ensure output is a string to prevent data channel issues
+    const output = typeof result === 'string' ? result : JSON.stringify(result);
+    
     var response = JSON.stringify({
       type: "conversation.item.create",
       item: {
         type: "function_call_output",
         call_id: callId,
-        output: result,
+        output: output,
       },
     });
     console.log("Sending function call output:", response);

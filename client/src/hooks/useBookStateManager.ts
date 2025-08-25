@@ -455,8 +455,8 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       const searchResults = await searchResponse.json();
       logger.info("Book search results", { results: searchResults });
 
-      // Send a structured JSON response with summary and title
-      let resultMessage: any;
+      // Send a string response to prevent data channel disconnection
+      let resultMessage: string;
       if (searchResults.books?.length > 0) {
         const selectedBook = searchResults.books[0];
         selectedBookRef.current = {
@@ -468,22 +468,13 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
           genre: selectedBook.genre
         };
         currentPageRef.current = 0;
-        const responseData = {
-          title: selectedBook.title,
-          summary: selectedBook.summary,
-          id: selectedBook.id,
-          totalPages: selectedBook.totalPages
-        };
-        resultMessage = responseData;//JSON.stringify(responseData);
+        
+        resultMessage = `I found "${selectedBook.title}" by ${selectedBook.author}! ${selectedBook.summary} It has ${selectedBook.totalPages} pages. Would you like me to read it to you?`;
       } else {
-        const responseData = {
-          title: "No Books Found",
-          summary: "No books found matching your search. Let me suggest something else!"
-        };
-        resultMessage = responseData;//JSON.stringify(responseData);
+        resultMessage = "No books found matching your search. Let me suggest something else! What kind of story would you like to hear?";
       }
 
-      // Emit structured JSON result instead of plain text
+      // Emit string result to prevent data channel issues
       options.onFunctionCallResult?.(callId, resultMessage);
 
     } catch (error: any) {
