@@ -1027,10 +1027,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             type: "string", 
             description: "Keywords or themes to search for (e.g., 'dragon adventure', 'counting numbers', 'friendship story')"
           },
-          ageRange: {
-            type: "string",
-            description: "Age range filter (e.g., '3-5', '4-6') - optional"
-          },
           context: {
             type: "string",
             description: "Why you're searching for books (e.g., 'child asked for bedtime story', 'teaching about animals')"
@@ -1067,7 +1063,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "gpt-4o-realtime-preview-2024-12-17",
+            model: "gpt-4o-mini-realtime-preview-2024-12-17",
             voice: "alloy",
             instructions: enhancedInstructions,
             tools,

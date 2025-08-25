@@ -22,7 +22,7 @@ interface BookStateManagerOptions {
     bookTitle: string;
     audioUrl?: string;
   }) => void;
-  onFunctionCallResult?: (callId: string, result: string) => void;
+  onFunctionCallResult?: (callId: string, result: any) => void;
   onError?: (callId: string, error: string) => void;
   onBookStateChange?: (state: BookState) => void;
   workflowStateMachine?: any;
@@ -456,7 +456,7 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
       logger.info("Book search results", { results: searchResults });
 
       // Send a structured JSON response with summary and title
-      let resultMessage: string;
+      let resultMessage: any;
       if (searchResults.books?.length > 0) {
         const selectedBook = searchResults.books[0];
         selectedBookRef.current = {
@@ -474,13 +474,13 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
           id: selectedBook.id,
           totalPages: selectedBook.totalPages
         };
-        resultMessage = JSON.stringify(responseData);
+        resultMessage = responseData;//JSON.stringify(responseData);
       } else {
         const responseData = {
           title: "No Books Found",
           summary: "No books found matching your search. Let me suggest something else!"
         };
-        resultMessage = JSON.stringify(responseData);
+        resultMessage = responseData;//JSON.stringify(responseData);
       }
 
       // Emit structured JSON result instead of plain text

@@ -69,7 +69,7 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
   const bookManager = useBookManager({
     workflowStateMachine: options.workflowStateMachine,
     onStorybookPageDisplay: options.onStorybookPageDisplay,
-    onFunctionCallResult: (callId: string, result: string) => {
+    onFunctionCallResult: (callId: string, result: any) => {
       sendFunctionCallResult(callId, result);
     },
     onError: (callId: string, error: string) => {
@@ -128,11 +128,11 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
   }, []);
 
   // Helper methods for sending function call results and errors
-  const sendFunctionCallResult = useCallback((callId: string, result: string) => {
+  const sendFunctionCallResult = useCallback((callId: string, result: any) => {
     sendFunctionCallOutput(callId, { result });
   }, [sendFunctionCallOutput]);
 
-  const sendFunctionCallError = useCallback((callId: string, error: string) => {
+  const sendFunctionCallError = useCallback((callId: string, error: any) => {
     sendFunctionCallOutput(callId, { error });
   }, [sendFunctionCallOutput]);
 
@@ -178,11 +178,14 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
               input_audio_transcription: {
                 model: "whisper-1",
               },
+              input_audio_noise_reduction:  {
+                type: "far_field"
+              },
               turn_detection: {
                 type: "server_vad",
-                threshold: 0.5,
-                prefix_padding_ms: 300,
-                silence_duration_ms: 200,
+                threshold: 0.65,
+                prefix_padding_ms: 200,
+                silence_duration_ms: 800,
               },
               temperature: 0.8,
               max_response_output_tokens: 300 //,

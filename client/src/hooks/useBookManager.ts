@@ -25,7 +25,7 @@ interface BookManagerOptions {
     bookTitle: string;
     audioUrl?: string;
   }) => void;
-  onFunctionCallResult?: (callId: string, result: string) => void;
+  onFunctionCallResult?: (callId: string, result: any) => void;
   onError?: (callId: string, error: string) => void;
   workflowStateMachine?: any;
 }
@@ -238,7 +238,7 @@ export function useBookManager(options: BookManagerOptions = {}) {
       const searchResults = await searchResponse.json();
       logger.info("Book search results", { results: searchResults });
       
-      let resultMessage: string;
+      let resultMessage: any;
       if (searchResults.books?.length > 0) {
         const selectedBookData = searchResults.books[0];
         
@@ -259,13 +259,13 @@ export function useBookManager(options: BookManagerOptions = {}) {
           id: selectedBookData.id,
           totalPages: selectedBookData.totalPages
         };
-        resultMessage = JSON.stringify(responseData);
+        resultMessage = responseData;
       } else {
         const responseData = {
           title: "No Books Found",
           summary: "No books found matching your search. Let me suggest something else!"
         };
-        resultMessage = JSON.stringify(responseData);
+        resultMessage = responseData;
       }
       
       // Remove from pending calls

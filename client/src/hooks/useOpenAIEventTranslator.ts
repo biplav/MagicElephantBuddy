@@ -32,6 +32,7 @@ export function useOpenAIEventTranslator(options: OpenAIEventTranslatorOptions =
     console.log('🔄 OPENAI EVENT:', eventInfo);
 
     switch (event.type) {
+
       // Session and connection events
       case 'session.created':
         logger.info('📡 OpenAI session created');
