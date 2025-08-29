@@ -117,7 +117,7 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
   const sendFunctionCallOutput = useCallback((callId: string, result: any) => {
     // Ensure output is a string to prevent data channel issues
     const output = typeof result === 'string' ? result : JSON.stringify(result);
-    
+
     var response = JSON.stringify({
       type: "conversation.item.create",
       item: {
@@ -136,11 +136,11 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
     toolResponseDone();
   }, [sendFunctionCallOutput]);
 
-  const function toolResponseDone() {
+  const toolResponseDone = useCallback(() => {
     dataChannelRef.current?.send(JSON.stringify({
       type: 'response.create'
     }));
-  }
+  }, []);
 
   const sendFunctionCallError = useCallback((callId: string, error: any) => {
     sendFunctionCallOutput(callId, { error });
