@@ -313,7 +313,7 @@ export function useBookManager(options: BookManagerOptions = {}) {
         });
         dispatch(transitionToState('ERROR'));
         dispatch(removePendingFunctionCall(callId));
-        options.onError?.(callId, "No book is currently selected. Please search for a book first.");
+        options.onError?.(callId, "No book is currently selected. You must use book_search_tool first to find and select a book before you can display its pages.");
         return;
       }
       
