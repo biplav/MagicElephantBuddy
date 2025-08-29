@@ -148,6 +148,7 @@ This is a full-stack Node.js application called "Appu" - an AI-powered magical e
 - June 30, 2025: Integrated Mem0 managed services with provided API key (m0-2IdIqmadwhL5Lf5hI...) - created hybrid memory service supporting both open source and cloud operations, implemented automatic fallback when API key issues occur, added comprehensive Memory Console with service status display and mode switching, graceful error handling shows API key validation status and helpful guidance for users
 - July 18, 2025: Completed dependency cleanup - removed @neondatabase/serverless package and all references to NeonDB from documentation, confirmed unified CockroachDB architecture with native vector support for all database operations
 - August 3, 2025: Fixed critical infinite re-render loop in useSilenceDetection hook - completely refactored to separate internal state (refs) from UI state (useState), implemented performance optimizations with batched updates and stable callbacks, resolved circular dependency between handleAutoPageAdvance and handleNextPage in StorybookDisplay component
+- August 29, 2025: Consolidated book management architecture - removed duplicate useBookStateManager hook and standardized on Redux-based useBookManager only, eliminated selectedBook null reference conflicts that caused PostgreSQL parsing errors, unified book state management across all AI interaction flows
 
 ## User Preferences
 

@@ -46,6 +46,7 @@ interface UseOpenAIConnectionOptions {
   }) => void;
   onBookSelected?: (book: any) => void;
   onAppuSpeakingChange?: (isSpeaking: boolean) => void;
+  onUserSpeakingChange?: (isSpeaking: boolean) => void;
   // Media functions
   captureFrame?: () => string | null;
   // Workflow integration
@@ -260,7 +261,7 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
             reason: args.reason || "Child wants to show something",
             lookingFor: args.lookingFor || null,
             context: args.context || null,
-            conversationId: conversationIdRef.current,
+            conversationId: conversationIdRef.current?.toString(),
           });
 
           if (analysisResult.success && analysisResult.analysis) {
@@ -574,7 +575,7 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
         });
 
         // Only set error if the channel is actually closed, not just experiencing a temporary issue
-        if (channel.readyState === 3) { // CLOSED state
+        if (channel.readyState === "closed") { // CLOSED state
           setError("Data channel connection lost");
           options.onError?.("Data channel connection failed");
         } else {
