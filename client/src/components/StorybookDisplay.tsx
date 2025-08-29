@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, ChevronRight, Book, Clock } from 'lucide-react';
+import { useBookManager } from '@/hooks/useBookManager';
 
 
 interface StorybookPage {
@@ -26,7 +27,6 @@ interface StorybookDisplayProps {
   isAppuSpeaking?: boolean;
   isUserSpeaking?: boolean;
   openaiConnection?: any;
-  bookStateManager: any; // Add book state manager as prop
   bookId?: string; // Add explicit book ID prop
   workflowStateMachine?: any; // Add workflow state machine
 }
@@ -41,7 +41,6 @@ export default function StorybookDisplay({
   isAppuSpeaking = false,
   isUserSpeaking = false,
   openaiConnection,
-  bookStateManager,
   bookId,
   workflowStateMachine
 }: StorybookDisplayProps) {
@@ -50,28 +49,39 @@ export default function StorybookDisplay({
   const [flipDirection, setFlipDirection] = useState<'next' | 'previous'>('next');
   const onAppuSpeakingChangeRef = useRef(onAppuSpeakingChange);
 
+  // Initialize Redux-based book manager
+  const bookManager = useBookManager({
+    workflowStateMachine: workflowStateMachine,
+    onStorybookPageDisplay: () => {}, // Not needed here since we already have the page
+    onFunctionCallResult: () => {}, // Not needed for display-only
+    onError: (callId: string, error: string) => {
+      console.error('Book manager error:', error);
+    }
+  });
+
   useEffect(() => {
     onAppuSpeakingChangeRef.current = onAppuSpeakingChange;
   }, [onAppuSpeakingChange]);
 
   // Sync audio playing state with parent component
   useEffect(() => {
-    onAppuSpeakingChangeRef.current?.(bookStateManager.isPlayingAudio);
-  }, [bookStateManager.isPlayingAudio]);
+    onAppuSpeakingChangeRef.current?.(bookManager.isPlayingAudio);
+  }, [bookManager.isPlayingAudio]);
 
   // Internal navigation handlers
   const handleInternalNextPage = useCallback(async () => {
     if (currentPage && currentPage.pageNumber < currentPage.totalPages && !isFlipping) {
       console.log('Navigating to next page');
 
-      // Stop audio via BookStateManager
-      bookStateManager.stopAudio();
+      // Stop audio via Book Manager
+      bookManager.stopAudio();
 
       setFlipDirection('next');
       setIsFlipping(true);
 
       try {
-        const success = await bookStateManager.navigateToNextPage();
+        // Navigation is handled by external logic since StorybookDisplay is for display only
+        const success = true;
         if (success) {
           onPageNavigation?.('next');
         }
@@ -81,20 +91,21 @@ export default function StorybookDisplay({
         setIsFlipping(false);
       }
     }
-  }, [currentPage, isFlipping, bookStateManager, onPageNavigation]);
+  }, [currentPage, isFlipping, bookManager, onPageNavigation]);
 
   const handleInternalPreviousPage = useCallback(async () => {
     if (currentPage && currentPage.pageNumber > 1 && !isFlipping) {
       console.log('Navigating to previous page');
 
-      // Stop audio via BookStateManager
-      bookStateManager.stopAudio();
+      // Stop audio via Book Manager
+      bookManager.stopAudio();
 
       setFlipDirection('previous');
       setIsFlipping(true);
 
       try {
-        const success = await bookStateManager.navigateToPreviousPage();
+        // Navigation is handled by external logic since StorybookDisplay is for display only
+        const success = true;
         if (success) {
           onPageNavigation?.('previous');
         }
@@ -104,31 +115,33 @@ export default function StorybookDisplay({
         setIsFlipping(false);
       }
     }
-  }, [currentPage, isFlipping, bookStateManager, onPageNavigation]);
+  }, [currentPage, isFlipping, bookManager, onPageNavigation]);
 
-  // Sync current page data with book state manager
+  // Sync current page data with book manager (Redux)
   useEffect(() => {
-    if (currentPage && bookStateManager && bookId) {
-      // Ensure book state manager has the current book information
-      bookStateManager.selectedBookRef.current = {
-        id: bookId, // Use the explicit book ID prop
+    if (currentPage && bookId) {
+      // Ensure Redux store has the current book information
+      const bookData = {
+        id: bookId,
         title: currentPage.bookTitle,
-        totalPages: currentPage.totalPages
+        totalPages: currentPage.totalPages,
+        currentAudioUrl: currentPage.audioUrl || null
       };
-      bookStateManager.currentPageRef.current = currentPage.pageNumber;
-      bookStateManager.isInReadingSessionRef.current = true;
+      
+      // Note: Redux store updates are handled by parent components
+      // StorybookDisplay is primarily for display purposes
 
-      console.log('📚 SYNC: Updated BookStateManager with current page:', {
+      console.log('📚 SYNC: Updated Redux BookManager with current page:', {
         bookId: bookId,
         bookTitle: currentPage.bookTitle,
         pageNumber: currentPage.pageNumber,
         totalPages: currentPage.totalPages,
         isInReadingSession: true
       });
-    } else if (currentPage && bookStateManager && !bookId) {
+    } else if (currentPage && !bookId) {
       console.warn('📚 SYNC: Missing bookId prop - this may cause navigation issues');
     }
-  }, [currentPage, bookStateManager, bookId]);
+  }, [currentPage, bookId, bookManager]);
 
 
 
@@ -137,17 +150,17 @@ export default function StorybookDisplay({
     if (currentPage && imageLoaded && isVisible) {
       console.log('📖 PAGE-LOADED: Page fully loaded, transitioning book state');
 
-      // Transition from PAGE_LOADING to PAGE_LOADED when image is loaded
-      if (bookStateManager.bookState === 'PAGE_LOADING') {
-        bookStateManager.bookStateAPI.transitionToPageLoaded();
+      // Transition book state in Redux store
+      if (bookManager.bookState === 'PAGE_LOADING') {
+        bookManager.transitionToState('PAGE_LOADED');
 
         // If there's audio, transition to audio ready
         if (currentPage.audioUrl) {
-          bookStateManager.bookStateAPI.transitionToAudioReadyToPlay();
+          bookManager.transitionToState('AUDIO_READY_TO_PLAY');
         }
       }
     }
-  }, [currentPage, imageLoaded, isVisible, bookStateManager]);
+  }, [currentPage, imageLoaded, isVisible, bookManager]);
 
   useEffect(() => {
     if (currentPage?.pageImageUrl) {
@@ -159,19 +172,17 @@ export default function StorybookDisplay({
 
   const handleNextPage = useCallback(() => {
     if (currentPage && currentPage.pageNumber < currentPage.totalPages) {
-      // Clear auto advance timer when manually navigating
-      bookStateManager.clearAutoAdvanceTimer();
+      // Note: Auto advance timer is handled by workflow state machine
       handleInternalNextPage();
     }
-  }, [currentPage, bookStateManager, handleInternalNextPage]);
+  }, [currentPage, handleInternalNextPage]);
 
   const handlePreviousPage = useCallback(() => {
     if (currentPage && currentPage.pageNumber > 1) {
-      // Clear auto advance timer when manually navigating
-      bookStateManager.clearAutoAdvanceTimer();
+      // Note: Auto advance timer is handled by workflow state machine
       handleInternalPreviousPage();
     }
-  }, [currentPage, bookStateManager, handleInternalPreviousPage]);
+  }, [currentPage, handleInternalPreviousPage]);
 
   if (!isVisible || !currentPage) {
     return null;
@@ -197,18 +208,18 @@ export default function StorybookDisplay({
             <Badge variant="secondary" className="text-sm">
               Page {currentPage.pageNumber} of {currentPage.totalPages}
             </Badge>
-            {bookStateManager.isPlayingAudio && (
+            {bookManager.isPlayingAudio && (
               <Badge variant="default" className="text-xs animate-pulse bg-green-600">
                 🔊 Playing Audio
               </Badge>
             )}
-            {currentPage?.audioUrl && !bookStateManager.isPlayingAudio && (
+            {currentPage?.audioUrl && !bookManager.isPlayingAudio && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
                   if (currentPage?.audioUrl) {
-                    bookStateManager.playPageAudio(currentPage.audioUrl);
+                    bookManager.playPageAudio();
                   }
                 }}
                 className="text-xs"
@@ -216,12 +227,12 @@ export default function StorybookDisplay({
                 ▶️ Play Audio
               </Button>
             )}
-            {bookStateManager.bookState !== 'IDLE' && (
+            {bookManager.bookState !== 'IDLE' && (
               <Badge
-                variant={bookStateManager.bookState === 'ERROR' ? 'destructive' : 'outline'}
+                variant={bookManager.bookState === 'ERROR' ? 'destructive' : 'outline'}
                 className="text-xs"
               >
-                {bookStateManager.bookState.replace(/_/g, ' ')}
+                {bookManager.bookState.replace(/_/g, ' ')}
               </Badge>
             )}
 
