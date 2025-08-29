@@ -9,7 +9,7 @@ import { CapturedFrameDisplay } from "@/components/CapturedFrameDisplay";
 import { motion, AnimatePresence } from "framer-motion";
 import useAudioRecorder from "@/hooks/useAudioRecorder";
 import useRealtimeAudio from "@/hooks/useRealtimeAudio";
-import { useBookManager } from "@/hooks/useBookManager";
+import { useBookManagerContext } from "@/context/BookManagerContext";
 import StorybookDisplay from "../components/StorybookDisplay";
 import { CheckCircle, Mic, MicOff, Video, VideoOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -312,22 +312,8 @@ const Home = memo(() => {
   // Initialize workflow state machine FIRST (before other hooks that depend on it)
   const workflowStateMachine = useWorkflowStateMachine();
 
-  // Create stable callbacks for book manager to prevent re-initialization
-  const stableBookCallbacks = useMemo(() => ({
-    onStorybookPageDisplay: handleStorybookPageDisplay,
-    onFunctionCallResult: (callId: string, result: any) => {
-      console.log("Book function call result:", { callId, result });
-    },
-    onError: (callId: string, error: string) => {
-      console.error("Book function call error:", { callId, error });
-    }
-  }), [handleStorybookPageDisplay]);
-
-  // Initialize book manager with stable callbacks
-  const bookManager = useBookManager({
-    workflowStateMachine: workflowStateMachine,
-    ...stableBookCallbacks
-  });
+  // Use book manager from context (single instance at App level)
+  const bookManager = useBookManagerContext();
 
   // Initialize realtime audio with the selected provider and error handling
   const {

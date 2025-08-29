@@ -5,6 +5,7 @@ import { Provider as ReduxProvider } from "react-redux";
 import { bookStore } from "./store/bookStore";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { BookManagerProvider } from "@/context/BookManagerContext";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import AudioTest from "@/pages/AudioTest";
@@ -37,10 +38,12 @@ function App() {
   return (
     <ReduxProvider store={bookStore}>
       <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
+        <BookManagerProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Router />
+          </TooltipProvider>
+        </BookManagerProvider>
       </QueryClientProvider>
     </ReduxProvider>
   );

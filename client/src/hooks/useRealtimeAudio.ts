@@ -130,7 +130,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
   const openaiConnection = useOpenAIConnection({
     childId: options.childId,
     enableVideo: false, // Camera activated on-demand
-    bookManager: options.bookManager, // Pass pre-initialized book manager
+    bookManager: options.bookManager,
     onTranscriptionReceived: (transcription) => {
       logger.info('🎤 Transcription received', { transcription });
       // Assuming setLastTranscription is defined elsewhere or intended to be managed by the hook's state
@@ -155,7 +155,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       // Assuming setIsAppuSpeaking is defined elsewhere or intended to be managed by the hook's state
     },
     workflowStateMachine: options.workflowStateMachine,
-    bookManager: options.bookManager // Pass pre-initialized book manager
+    bookManager: options.bookManager
   });
   const geminiConnection = useGeminiConnection(stableCallbacks);
 
