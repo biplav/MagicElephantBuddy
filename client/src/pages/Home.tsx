@@ -8,14 +8,14 @@ import { VideoDisplay } from "@/components/VideoDisplay";
 import { CapturedFrameDisplay } from "@/components/CapturedFrameDisplay";
 import { motion, AnimatePresence } from "framer-motion";
 import useAudioRecorder from "@/hooks/useAudioRecorder";
-import useRealtimeAudio from "@/hooks/useRealtimeAudio";
-import { useBookManagerContext } from "@/context/BookManagerContext";
+import { useStableRealtimeAudio } from "@/hooks/useStableRealtimeAudio";
+import { useGlobalBookManager, useGlobalWorkflowStateMachine } from "@/context/ServiceManagerContext";
 import StorybookDisplay from "../components/StorybookDisplay";
 import { CheckCircle, Mic, MicOff, Video, VideoOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import SilenceTestControls from "@/components/SilenceTestControls";
 import { useSilenceDetection } from '@/hooks/useSilenceDetection';
-import { useWorkflowStateMachine } from '@/hooks/useWorkflowStateMachine';
+// useWorkflowStateMachine now comes from ServiceManagerContext
 import { useOpenAIEventTranslator } from '@/hooks/useOpenAIEventTranslator';
 
 
@@ -309,11 +309,9 @@ const Home = memo(() => {
     }
   }, [enableLocalPlayback]);
 
-  // Initialize workflow state machine FIRST (before other hooks that depend on it)
-  const workflowStateMachine = useWorkflowStateMachine();
-
-  // Use book manager from context (single instance at App level)
-  const bookManager = useBookManagerContext();
+  // Use global services (initialized ONCE at App level - no re-initialization)
+  const workflowStateMachine = useGlobalWorkflowStateMachine();
+  const bookManager = useGlobalBookManager();
 
   // Initialize realtime audio with the selected provider and error handling
   const {
@@ -334,7 +332,7 @@ const Home = memo(() => {
     stopRecording: realtimeStopRecording,
     disconnect: disconnectRealtime,
     isConnected
-  } = useRealtimeAudio({
+  } = useStableRealtimeAudio({
     provider: aiProvider,
     voice: aiSettings.voicePreference,
     onError: handleError,
