@@ -30,9 +30,23 @@ interface BookManagerOptions {
   workflowStateMachine?: any;
 }
 
+// Single instance tracker to prevent multiple initializations
+let bookManagerInstanceCount = 0;
+
 export function useBookManager(options: BookManagerOptions = {}) {
   const logger = createServiceLogger('book-manager');
   const dispatch = useDispatch();
+  
+  // Track instance creation
+  useEffect(() => {
+    bookManagerInstanceCount++;
+    const instanceId = bookManagerInstanceCount;
+    logger.info(`🔄 BOOK-MANAGER: Instance ${instanceId} created (total: ${bookManagerInstanceCount})`);
+    
+    return () => {
+      logger.info(`🔄 BOOK-MANAGER: Instance ${instanceId} destroyed`);
+    };
+  }, [logger]);
   
   // Redux state selectors
   const bookState = useSelector((state: BookRootState) => state.book.bookState);

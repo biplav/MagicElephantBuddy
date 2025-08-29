@@ -127,7 +127,13 @@ const Home = memo(() => {
       if (response.ok) {
         const children = await response.json();
         console.log("Loaded children:", children);
-        setAvailableChildren(children);
+        // Only update if children array actually changed
+        setAvailableChildren(prevChildren => {
+          if (JSON.stringify(prevChildren) !== JSON.stringify(children)) {
+            return children;
+          }
+          return prevChildren;
+        });
 
         // Auto-select first child if none selected - check localStorage directly
         const currentSelectedChildId = localStorage.getItem("selectedChildId");
@@ -306,9 +312,8 @@ const Home = memo(() => {
   // Initialize workflow state machine FIRST (before other hooks that depend on it)
   const workflowStateMachine = useWorkflowStateMachine();
 
-  // Initialize book manager ONCE at the top level to prevent re-initialization
-  const bookManager = useBookManager({
-    workflowStateMachine: workflowStateMachine,
+  // Create stable callbacks for book manager to prevent re-initialization
+  const stableBookCallbacks = useMemo(() => ({
     onStorybookPageDisplay: handleStorybookPageDisplay,
     onFunctionCallResult: (callId: string, result: any) => {
       console.log("Book function call result:", { callId, result });
@@ -316,6 +321,12 @@ const Home = memo(() => {
     onError: (callId: string, error: string) => {
       console.error("Book function call error:", { callId, error });
     }
+  }), [handleStorybookPageDisplay]);
+
+  // Initialize book manager with stable callbacks
+  const bookManager = useBookManager({
+    workflowStateMachine: workflowStateMachine,
+    ...stableBookCallbacks
   });
 
   // Initialize realtime audio with the selected provider and error handling
