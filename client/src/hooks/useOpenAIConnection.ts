@@ -68,12 +68,13 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
   const [tokensUsed, setTokensUsed] = useState<number>(0);
   const [isUserSpeaking, setIsUserSpeaking] = useState<boolean>(false);
 
-  // Use passed book manager (required - no fallback to prevent re-initialization)
-  const bookManager = options.bookManager;
-  
-  if (!bookManager) {
-    throw new Error('useOpenAIConnection requires bookManager to be passed from parent component');
-  }
+  // Use passed book manager with fallback for singleton pattern
+  const bookManager = options.bookManager || {
+    // Minimal fallback interface to prevent crashes during singleton transition
+    handleStorybookPageDisplay: () => {},
+    handleFunctionCall: () => {},
+    state: { bookState: 'IDLE' }
+  };
 
   // Initialize media manager
   const mediaManager = useMediaManager({

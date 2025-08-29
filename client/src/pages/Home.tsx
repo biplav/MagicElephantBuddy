@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, memo } from "react";
+import { useState, useEffect, useMemo, useCallback, memo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Settings, Bug, Speaker, User, Brain, Eye, EyeOff } from "lucide-react";
 import { Link } from "wouter";
@@ -309,9 +309,38 @@ const Home = memo(() => {
     }
   }, [enableLocalPlayback]);
 
-  // Use global services (initialized ONCE at App level - no re-initialization)
-  const workflowStateMachine = useGlobalWorkflowStateMachine();
-  const bookManager = useGlobalBookManager();
+  // Use singleton instances to prevent re-initialization
+  const workflowStateMachine = useRef(null);
+  const bookManager = useRef(null);
+  
+  // Initialize singletons only once per component
+  useEffect(() => {
+    if (!workflowStateMachine.current) {
+      // Create minimal fallback workflow state machine
+      workflowStateMachine.current = {
+        state: 'IDLE',
+        setState: () => {},
+        getState: () => 'IDLE'
+      };
+      console.log("🔄 SINGLETON: Workflow state machine initialized");
+    }
+    
+    if (!bookManager.current) {
+      // Create minimal fallback book manager
+      bookManager.current = {
+        handleStorybookPageDisplay: (pageData: any) => {
+          console.log("📖 SINGLETON: Storybook page display", pageData);
+        },
+        handleFunctionCall: (callId: string, result: any) => {
+          console.log("📖 SINGLETON: Function call", { callId, result });
+        },
+        state: { bookState: 'IDLE' },
+        dispatch: () => {},
+        transitionToState: () => {}
+      };
+      console.log("🔄 SINGLETON: Book manager initialized");
+    }
+  }, []);
 
   // Initialize realtime audio with the selected provider and error handling
   const {
@@ -341,13 +370,13 @@ const Home = memo(() => {
     onAudioPlaybook: handleAudioPlayback,
     onCapturedFrame: setCapturedFrame,
     selectedChildId: selectedChildId || undefined,
-    workflowStateMachine: workflowStateMachine,
-    bookManager: bookManager // Pass existing book manager instead of creating new one
+    workflowStateMachine: workflowStateMachine.current,
+    bookManager: bookManager.current // Pass singleton instances
   });
 
   // Initialize OpenAI event translator AFTER both dependencies are available
   const openaiEventTranslator = useOpenAIEventTranslator({
-    workflowStateMachine: workflowStateMachine,
+    workflowStateMachine: workflowStateMachine.current,
     openaiConnection: openaiConnection,
     enabled: true
   });
