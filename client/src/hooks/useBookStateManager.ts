@@ -503,6 +503,29 @@ export function useBookStateManager(options: BookStateManagerOptions = {}) {
         bookId = selectedBookRef.current?.id;
         pageNumber = currentPageRef?.current + 1;
       }
+      
+      // Validate required parameters
+      if (!bookId || bookId === 'undefined') {
+        logger.error("No valid bookId available for display_book_page", { 
+          argsBookId: argsJson.bookId,
+          selectedBookId: selectedBookRef.current?.id,
+          selectedBookRef: selectedBookRef.current 
+        });
+        transitionToState('ERROR');
+        options.onError?.(callId, "No book is currently selected. You must use book_search_tool first to find and select a book before you can display its pages.");
+        return;
+      }
+      
+      if (!pageNumber || pageNumber === 'undefined') {
+        logger.error("No valid pageNumber available for display_book_page", { 
+          argsPageNumber: argsJson.pageNumber,
+          currentPage: currentPageRef?.current 
+        });
+        transitionToState('ERROR');
+        options.onError?.(callId, "Invalid page number. Please specify a valid page to display.");
+        return;
+      }
+      
       // Fetch page data from API
       const pageResponse = await fetch(`/api/books/${bookId}/page/${pageNumber}`);
 
