@@ -30,6 +30,20 @@ const Home = memo(() => {
   const dispatch = useDispatch();
   const selectedBook = useSelector((state: BookRootState) => state.book.selectedBook);
   
+  // ✅ CRITICAL FIX: Create a global helper function for Redux dispatch
+  useEffect(() => {
+    window.dispatchSetSelectedBook = (bookData: any) => {
+      console.log("🌍 GLOBAL DISPATCH: Setting selected book", bookData);
+      dispatch(setSelectedBook(bookData));
+    };
+    window.getCurrentSelectedBook = () => selectedBook;
+    
+    return () => {
+      delete window.dispatchSetSelectedBook;
+      delete window.getCurrentSelectedBook;
+    };
+  }, [dispatch, selectedBook]);
+  
   const [appState, setAppState] = useState<AppState>("welcome");
   const [permissionModalOpen, setPermissionModalOpen] = useState(false);
   const [elephantState, setElephantState] = useState<
@@ -398,7 +412,7 @@ const Home = memo(() => {
     dispatch: () => {},
     transitionToState: () => {},
     
-    // AI Tool Methods - Required by AI interactions - WITH PROPER FUNCTION CALL RESULT HANDLING
+    // AI Tool Methods - Fixed to use CURRENT dispatch and selectedBook
     handleBookSearchTool: async (callId: string, args: any, sendFunctionCallOutput?: any, sendResponse?: any) => {
       console.log("📖 STABLE-REF: Book search tool called", { callId, args });
       try {
@@ -419,7 +433,7 @@ const Home = memo(() => {
         if (searchResults.books?.length > 0) {
           const selectedBookData = searchResults.books[0];
           
-          // ✅ CRITICAL FIX: Update Redux store with selected book
+          // ✅ CRITICAL FIX: Call external Redux dispatch function (not captured in closure)
           console.log("📖 STABLE-REF: Setting selected book in Redux store", selectedBookData);
           const bookToSet = {
             id: selectedBookData.id,
@@ -430,16 +444,10 @@ const Home = memo(() => {
             currentPage: 1,
             audioUrl: null
           };
-          console.log("📖 STABLE-REF: Dispatching setSelectedBook action", bookToSet);
-          dispatch(setSelectedBook(bookToSet));
+          console.log("📖 STABLE-REF: Calling EXTERNAL Redux dispatch", bookToSet);
           
-          // ✅ VERIFY: Check if Redux state was updated
-          setTimeout(() => {
-            console.log("📖 STABLE-REF: Checking Redux state after dispatch", { 
-              selectedBook,
-              hasSelectedBook: !!selectedBook 
-            });
-          }, 100);
+          // Call the current dispatch function directly via a helper
+          window.dispatchSetSelectedBook?.(bookToSet);
           
           resultMessage = {
             title: selectedBookData.title,
@@ -500,15 +508,17 @@ const Home = memo(() => {
           selectedBookTitle: selectedBook?.title
         });
         
-        if (!selectedBook) {
+        // ✅ CRITICAL FIX: Get current selected book from global helper
+        const currentSelectedBook = window.getCurrentSelectedBook?.();
+        if (!currentSelectedBook) {
           console.error("📖 STABLE-REF: No book selected in Redux store", { 
-            hasSelectedBook: !!selectedBook,
+            hasSelectedBook: !!currentSelectedBook,
             parsedArgs 
           });
           throw new Error("No book selected. Please search for a book first.");
         }
         
-        const bookId = selectedBook.id;
+        const bookId = currentSelectedBook.id;
         
         // ✅ PARSE PAGE REQUEST: Convert pageRequest string to page number
         let pageNumber = 1; // Default to first page
