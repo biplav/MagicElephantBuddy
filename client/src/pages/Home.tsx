@@ -9,7 +9,7 @@ import { CapturedFrameDisplay } from "@/components/CapturedFrameDisplay";
 import { motion, AnimatePresence } from "framer-motion";
 import useAudioRecorder from "@/hooks/useAudioRecorder";
 import { useStableRealtimeAudio } from "@/hooks/useStableRealtimeAudio";
-import { useGlobalBookManager, useGlobalWorkflowStateMachine } from "@/context/ServiceManagerContext";
+// Using stable refs instead of global services
 import StorybookDisplay from "../components/StorybookDisplay";
 import { CheckCircle, Mic, MicOff, Video, VideoOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -309,38 +309,24 @@ const Home = memo(() => {
     }
   }, [enableLocalPlayback]);
 
-  // Use singleton instances to prevent re-initialization
-  const workflowStateMachine = useRef(null);
-  const bookManager = useRef(null);
+  // Use stable refs to prevent re-initialization (fixed approach)
+  const workflowStateMachine = useRef({
+    state: 'IDLE',
+    setState: () => {},
+    getState: () => 'IDLE'
+  });
   
-  // Initialize singletons only once per component
-  useEffect(() => {
-    if (!workflowStateMachine.current) {
-      // Create minimal fallback workflow state machine
-      workflowStateMachine.current = {
-        state: 'IDLE',
-        setState: () => {},
-        getState: () => 'IDLE'
-      };
-      console.log("🔄 SINGLETON: Workflow state machine initialized");
-    }
-    
-    if (!bookManager.current) {
-      // Create minimal fallback book manager
-      bookManager.current = {
-        handleStorybookPageDisplay: (pageData: any) => {
-          console.log("📖 SINGLETON: Storybook page display", pageData);
-        },
-        handleFunctionCall: (callId: string, result: any) => {
-          console.log("📖 SINGLETON: Function call", { callId, result });
-        },
-        state: { bookState: 'IDLE' },
-        dispatch: () => {},
-        transitionToState: () => {}
-      };
-      console.log("🔄 SINGLETON: Book manager initialized");
-    }
-  }, []);
+  const bookManager = useRef({
+    handleStorybookPageDisplay: (pageData: any) => {
+      console.log("📖 STABLE-REF: Storybook page display", pageData);
+    },
+    handleFunctionCall: (callId: string, result: any) => {
+      console.log("📖 STABLE-REF: Function call", { callId, result });
+    },
+    state: { bookState: 'IDLE' },
+    dispatch: () => {},
+    transitionToState: () => {}
+  });
 
   // Initialize realtime audio with the selected provider and error handling
   const {
@@ -371,7 +357,7 @@ const Home = memo(() => {
     onCapturedFrame: setCapturedFrame,
     selectedChildId: selectedChildId || undefined,
     workflowStateMachine: workflowStateMachine.current,
-    bookManager: bookManager.current // Pass singleton instances
+    bookManager: bookManager.current // Pass stable ref instances
   });
 
   // Initialize OpenAI event translator AFTER both dependencies are available
