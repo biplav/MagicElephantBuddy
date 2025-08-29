@@ -243,15 +243,25 @@ export function useBookManager(options: BookManagerOptions = {}) {
         const selectedBookData = searchResults.books[0];
         
         // Update Redux store
-        dispatch(setSelectedBook({
+        const bookToSet = {
           id: selectedBookData.id,
           title: selectedBookData.title,
           totalPages: selectedBookData.totalPages,
           summary: selectedBookData.summary,
           author: selectedBookData.author,
           genre: selectedBookData.genre
-        }));
+        };
+        logger.info("Setting selected book in Redux", { bookToSet });
+        dispatch(setSelectedBook(bookToSet));
         dispatch(setCurrentPage(0));
+        
+        // Verify the book was set by logging after dispatch
+        setTimeout(() => {
+          logger.info("Verifying selected book was set", { 
+            currentSelectedBook: selectedBook?.id,
+            expectedBookId: bookToSet.id 
+          });
+        }, 100);
         
         const responseData = {
           title: selectedBookData.title,
