@@ -421,7 +421,7 @@ const Home = memo(() => {
           
           // ✅ CRITICAL FIX: Update Redux store with selected book
           console.log("📖 STABLE-REF: Setting selected book in Redux store", selectedBookData);
-          dispatch(setSelectedBook({
+          const bookToSet = {
             id: selectedBookData.id,
             title: selectedBookData.title,
             author: selectedBookData.author,
@@ -429,7 +429,17 @@ const Home = memo(() => {
             totalPages: selectedBookData.totalPages,
             currentPage: 1,
             audioUrl: null
-          }));
+          };
+          console.log("📖 STABLE-REF: Dispatching setSelectedBook action", bookToSet);
+          dispatch(setSelectedBook(bookToSet));
+          
+          // ✅ VERIFY: Check if Redux state was updated
+          setTimeout(() => {
+            console.log("📖 STABLE-REF: Checking Redux state after dispatch", { 
+              selectedBook,
+              hasSelectedBook: !!selectedBook 
+            });
+          }, 100);
           
           resultMessage = {
             title: selectedBookData.title,
@@ -483,6 +493,13 @@ const Home = memo(() => {
         console.log("📖 STABLE-REF: Parsed arguments", { parsedArgs, pageRequest });
         
         // ✅ CRITICAL FIX: Must have selected book from Redux
+        console.log("📖 STABLE-REF: Current Redux selectedBook state", { 
+          selectedBook,
+          hasSelectedBook: !!selectedBook,
+          selectedBookId: selectedBook?.id,
+          selectedBookTitle: selectedBook?.title
+        });
+        
         if (!selectedBook) {
           console.error("📖 STABLE-REF: No book selected in Redux store", { 
             hasSelectedBook: !!selectedBook,
