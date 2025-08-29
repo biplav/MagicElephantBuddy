@@ -17,11 +17,19 @@ import SilenceTestControls from "@/components/SilenceTestControls";
 import { useSilenceDetection } from '@/hooks/useSilenceDetection';
 // useWorkflowStateMachine now comes from ServiceManagerContext
 import { useOpenAIEventTranslator } from '@/hooks/useOpenAIEventTranslator';
+// Import Redux for book state management
+import { useDispatch, useSelector } from 'react-redux';
+import { setSelectedBook } from '@/store/bookStore';
+import type { BookRootState } from '@/store/bookStore';
 
 
 type AppState = "welcome" | "interaction";
 
 const Home = memo(() => {
+  // Redux dispatch for book state management
+  const dispatch = useDispatch();
+  const selectedBook = useSelector((state: BookRootState) => state.book.selectedBook);
+  
   const [appState, setAppState] = useState<AppState>("welcome");
   const [permissionModalOpen, setPermissionModalOpen] = useState(false);
   const [elephantState, setElephantState] = useState<
@@ -410,6 +418,19 @@ const Home = memo(() => {
         let resultMessage: any;
         if (searchResults.books?.length > 0) {
           const selectedBookData = searchResults.books[0];
+          
+          // ✅ CRITICAL FIX: Update Redux store with selected book
+          console.log("📖 STABLE-REF: Setting selected book in Redux store", selectedBookData);
+          dispatch(setSelectedBook({
+            id: selectedBookData.id,
+            title: selectedBookData.title,
+            author: selectedBookData.author,
+            summary: selectedBookData.summary,
+            totalPages: selectedBookData.totalPages,
+            currentPage: 1,
+            audioUrl: null
+          }));
+          
           resultMessage = {
             title: selectedBookData.title,
             summary: selectedBookData.summary,
@@ -432,12 +453,24 @@ const Home = memo(() => {
     },
     
     handleDisplayBookPage: async (callId: string, args: any, sendFunctionCallOutput?: any, sendResponse?: any) => {
-      console.log("📖 STABLE-REF: Display book page called", { callId, args });
+      console.log("📖 STABLE-REF: Display book page called", { callId, args, selectedBook });
       try {
         const argsJson = JSON.parse(args);
         let { bookId, pageNumber } = argsJson;
         
+        // ✅ CRITICAL FIX: Use selected book from Redux if bookId is missing
+        if (!bookId && selectedBook) {
+          bookId = selectedBook.id;
+          console.log("📖 STABLE-REF: Using selected book ID from Redux store", { bookId });
+        }
+        
         if (!bookId || !pageNumber) {
+          console.error("📖 STABLE-REF: Missing required parameters", { 
+            bookId, 
+            pageNumber, 
+            hasSelectedBook: !!selectedBook,
+            selectedBookId: selectedBook?.id 
+          });
           throw new Error("Invalid book ID or page number");
         }
         
