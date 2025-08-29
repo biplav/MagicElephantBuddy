@@ -72,6 +72,7 @@ interface UseRealtimeAudioOptions {
   onAppuSpeakingChange?: (speaking: boolean) => void;
   modelType?: 'openai' | 'gemini';
   workflowStateMachine?: any;
+  bookManager?: any; // Pre-initialized book manager to prevent re-initialization
 }
 
 interface RealtimeAudioState {
@@ -129,6 +130,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
   const openaiConnection = useOpenAIConnection({
     childId: options.childId,
     enableVideo: false, // Camera activated on-demand
+    bookManager: options.bookManager, // Pass pre-initialized book manager
     onTranscriptionReceived: (transcription) => {
       logger.info('🎤 Transcription received', { transcription });
       // Assuming setLastTranscription is defined elsewhere or intended to be managed by the hook's state
@@ -152,7 +154,8 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       logger.info('🗣️ Appu speaking change', { speaking });
       // Assuming setIsAppuSpeaking is defined elsewhere or intended to be managed by the hook's state
     },
-    workflowStateMachine: options.workflowStateMachine
+    workflowStateMachine: options.workflowStateMachine,
+    bookManager: options.bookManager // Pass pre-initialized book manager
   });
   const geminiConnection = useGeminiConnection(stableCallbacks);
 

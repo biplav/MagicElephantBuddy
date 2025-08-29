@@ -51,6 +51,8 @@ interface UseOpenAIConnectionOptions {
   captureFrame?: () => string | null;
   // Workflow integration
   workflowStateMachine?: any;
+  // Pre-initialized book manager to prevent re-initialization
+  bookManager?: any;
 }
 
 export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
@@ -66,8 +68,8 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
   const [tokensUsed, setTokensUsed] = useState<number>(0);
   const [isUserSpeaking, setIsUserSpeaking] = useState<boolean>(false);
 
-  // Initialize Redux-based book manager (always available)
-  const bookManager = useBookManager({
+  // Use passed book manager or create fallback (should always be passed from parent)
+  const bookManager = options.bookManager || useBookManager({
     workflowStateMachine: options.workflowStateMachine,
     onStorybookPageDisplay: options.onStorybookPageDisplay,
     onFunctionCallResult: (callId: string, result: any) => {

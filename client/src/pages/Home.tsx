@@ -9,6 +9,7 @@ import { CapturedFrameDisplay } from "@/components/CapturedFrameDisplay";
 import { motion, AnimatePresence } from "framer-motion";
 import useAudioRecorder from "@/hooks/useAudioRecorder";
 import useRealtimeAudio from "@/hooks/useRealtimeAudio";
+import { useBookManager } from "@/hooks/useBookManager";
 import StorybookDisplay from "../components/StorybookDisplay";
 import { CheckCircle, Mic, MicOff, Video, VideoOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -305,7 +306,17 @@ const Home = memo(() => {
   // Initialize workflow state machine FIRST (before other hooks that depend on it)
   const workflowStateMachine = useWorkflowStateMachine();
 
-  // BookStateManager will be initialized on-demand when displaybook tool is called
+  // Initialize book manager ONCE at the top level to prevent re-initialization
+  const bookManager = useBookManager({
+    workflowStateMachine: workflowStateMachine,
+    onStorybookPageDisplay: handleStorybookPageDisplay,
+    onFunctionCallResult: (callId: string, result: any) => {
+      console.log("Book function call result:", { callId, result });
+    },
+    onError: (callId: string, error: string) => {
+      console.error("Book function call error:", { callId, error });
+    }
+  });
 
   // Initialize realtime audio with the selected provider and error handling
   const {
@@ -335,7 +346,8 @@ const Home = memo(() => {
     onAudioPlaybook: handleAudioPlayback,
     onCapturedFrame: setCapturedFrame,
     selectedChildId: selectedChildId || undefined,
-    workflowStateMachine: workflowStateMachine
+    workflowStateMachine: workflowStateMachine,
+    bookManager: bookManager // Pass existing book manager instead of creating new one
   });
 
   // Initialize OpenAI event translator AFTER both dependencies are available
