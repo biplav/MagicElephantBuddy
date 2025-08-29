@@ -1759,38 +1759,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Book search and retrieval endpoint for OpenAI tool
   app.post("/api/books/search", async (req: Request, res: Response) => {
     try {
-      const { context, bookTitle, keywords, ageRange } = req.body;
+      const { context, bookTitle, keywords, ageRange, query } = req.body;
       
-      if(req) {
-        //Below code is a hack needs to be removed later
-        const babyTigerBook = await storage.getBookByTitle('Bal Hanuman And Orange');
-        const babyTigerBookPages = await storage.getPagesByBook(babyTigerBook.id.toString());
-        return res.json({
-          success: true,
-          message: `I found "${babyTigerBookPages.title}"! This looks like a wonderful story.`,
-          books: [{
-            ...babyTigerBook,
-            pages: babyTigerBookPages.map(page => ({
-              pageNumber: page.pageNumber,
-              imageUrl: page.imageUrl,
-              pageText: page.pageText,
-              imageDescription: page.imageDescription
-            }))
-          }]
-        });
-        //Above code is a hack needs to be removed later
-      }
+      // Log the incoming request for debugging
+      console.log(`📚 Book search request:`, { context, bookTitle, keywords, ageRange, query });
+      // Handle the simple query parameter from frontend
+      const searchQuery = query || bookTitle || keywords || context;
       
-
-      console.log(`📚 Book search request:`, { context, bookTitle, keywords, ageRange });
+      console.log(`📚 Processing search query:`, searchQuery);
 
       // If specific book title is provided, search for exact match
-      if (bookTitle) {
-        const book = await storage.getBookByTitle(bookTitle);
+      if (bookTitle || query) {
+        const searchTerm = searchQuery;
+        const book = await storage.getBookByTitle(searchTerm);
         if (!book) {
           return res.json({
             success: false,
-            message: `I couldn't find a book titled "${bookTitle}". Let me suggest some other books!`,
+            message: `I couldn't find a book titled "${searchTerm}". Let me suggest some other books!`,
             books: []
           });
         }
@@ -1814,7 +1799,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Search by keywords or context
-      const searchTerms = keywords || context || '';
+      const searchTerms = searchQuery || '';
+      console.log(`📚 Searching for books with terms:`, searchTerms);
       const books = await storage.searchBooks(searchTerms, ageRange);
 
       if (books.length === 0) {
