@@ -255,14 +255,6 @@ export function useBookManager(options: BookManagerOptions = {}) {
         dispatch(setSelectedBook(bookToSet));
         dispatch(setCurrentPage(0));
         
-        // Verify the book was set by logging after dispatch
-        setTimeout(() => {
-          logger.info("Verifying selected book was set", { 
-            currentSelectedBook: selectedBook?.id,
-            expectedBookId: bookToSet.id 
-          });
-        }, 100);
-        
         const responseData = {
           title: selectedBookData.title,
           summary: selectedBookData.summary,
@@ -492,6 +484,22 @@ export function useBookManager(options: BookManagerOptions = {}) {
       }
     }
   }, [options.workflowStateMachine?.currentState, bookState, isPlayingAudio, selectedBook, currentPage, audioElement, dispatch, playPageAudio, navigateToNextPage, logger]);
+  
+  // Track selectedBook changes for debugging
+  useEffect(() => {
+    if (selectedBook) {
+      logger.info("✅ selectedBook updated in Redux store", { 
+        bookId: selectedBook.id,
+        title: selectedBook.title,
+        totalPages: selectedBook.totalPages,
+        hasSelectedBook: true
+      });
+    } else {
+      logger.info("❌ selectedBook is null/undefined in Redux store", { 
+        hasSelectedBook: false 
+      });
+    }
+  }, [selectedBook, logger]);
   
   return {
     // State
