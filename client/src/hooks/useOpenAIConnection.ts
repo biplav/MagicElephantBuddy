@@ -133,10 +133,18 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
   // Helper methods for sending function call results and errors
   const sendFunctionCallResult = useCallback((callId: string, result: any) => {
     sendFunctionCallOutput(callId, { result });
+    toolResponseDone();
   }, [sendFunctionCallOutput]);
+
+  const function toolResponseDone() {
+    dataChannelRef.current?.send(JSON.stringify({
+      type: 'response.create'
+    }));
+  }
 
   const sendFunctionCallError = useCallback((callId: string, error: any) => {
     sendFunctionCallOutput(callId, { error });
+    toolResponseDone();
   }, [sendFunctionCallOutput]);
 
   const setupDataChannel = useCallback(
