@@ -154,8 +154,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
       logger.info('🗣️ Appu speaking change', { speaking });
       // Assuming setIsAppuSpeaking is defined elsewhere or intended to be managed by the hook's state
     },
-    workflowStateMachine: options.workflowStateMachine,
-    bookManager: options.bookManager
+    workflowStateMachine: options.workflowStateMachine
   });
   const geminiConnection = useGeminiConnection(stableCallbacks);
 
