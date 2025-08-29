@@ -114,7 +114,9 @@ const bookSlice = createSlice({
     
     // Audio management
     setAudioElement: (state, action: PayloadAction<HTMLAudioElement | null>) => {
-      state.audioElement = action.payload;
+      // For complex objects like HTMLAudioElement, we need to handle them differently
+      // Store as any to avoid Redux Toolkit's Immer issues with DOM elements
+      state.audioElement = action.payload as any;
     },
     
     setIsPlayingAudio: (state, action: PayloadAction<boolean>) => {
