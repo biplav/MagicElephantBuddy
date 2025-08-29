@@ -73,6 +73,8 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
     // Minimal fallback interface to prevent crashes during singleton transition
     handleStorybookPageDisplay: () => {},
     handleFunctionCall: () => {},
+    handleBookSearchTool: async () => ({ error: "No book manager available" }),
+    handleDisplayBookPage: async () => ({ error: "No book manager available" }),
     state: { bookState: 'IDLE' }
   };
 
@@ -487,13 +489,25 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
                 if (message.name === "getEyesTool") {
                   await handleGetEyesTool(message.call_id, message.arguments);
                 } else if (message.name === 'bookSearchTool' || message.name === 'book_search_tool') {
-                  logger.info('🔧 Handling book_search_tool', { args: message.arguments });
+                  logger.info('🔧 Handling bookSearchTool', { callId: message.call_id, args: message.arguments });
+                  if (!bookManager.handleBookSearchTool) {
+                    logger.error('🔧 Book manager missing handleBookSearchTool method');
+                    sendFunctionCallError(message.call_id, "Book search not available");
+                    break;
+                  }
                   const result = await bookManager.handleBookSearchTool(message.call_id, message.arguments);
+                  logger.info('🔧 Book search result', { callId: message.call_id, result });
                   sendFunctionCallResult(message.call_id, result);
                   dataChannelRef.current?.send(JSON.stringify({ type: 'response.create' }));
                 } else if (message.name === 'display_book_page') {
-                  logger.info('🔧 Handling display_book_page', { args: message.arguments });
+                  logger.info('🔧 Handling display_book_page', { callId: message.call_id, args: message.arguments });
+                  if (!bookManager.handleDisplayBookPage) {
+                    logger.error('🔧 Book manager missing handleDisplayBookPage method');
+                    sendFunctionCallError(message.call_id, "Page display not available");
+                    break;
+                  }
                   const result = await bookManager.handleDisplayBookPage(message.call_id, message.arguments);
+                  logger.info('🔧 Page display result', { callId: message.call_id, result });
                   sendFunctionCallOutput(message.call_id, result);
                   dataChannelRef.current?.send(JSON.stringify({ type: 'response.create' }));
                 } else {
