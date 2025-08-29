@@ -309,11 +309,71 @@ const Home = memo(() => {
     }
   }, [enableLocalPlayback]);
 
-  // Use stable refs to prevent re-initialization (fixed approach)
+  // Create a complete workflow state machine with all required methods
   const workflowStateMachine = useRef({
+    currentState: 'IDLE' as const,
+    
+    // Core state management
+    handleStateTransition: (newState: string, context?: string) => {
+      console.log(`🔄 STABLE-REF: State transition ${workflowStateMachine.current.currentState} → ${newState}`, { context });
+      workflowStateMachine.current.currentState = newState as any;
+    },
+    
+    // OpenAI Event Handler Methods - Required by useOpenAIEventTranslator
+    handleLoading: (context: string = 'system-loading') => {
+      console.log('⏳ STABLE-REF: Loading state', { context });
+      workflowStateMachine.current.handleStateTransition('LOADING', context);
+    },
+    
+    handleIdle: (context: string = 'system-idle') => {
+      console.log('😴 STABLE-REF: Idle state', { context });
+      workflowStateMachine.current.handleStateTransition('IDLE', context);
+    },
+    
+    handleError: (errorMessage?: string, context: string = 'system-error') => {
+      console.log('❌ STABLE-REF: Error state', { error: errorMessage, context });
+      workflowStateMachine.current.handleStateTransition('ERROR', `${context}: ${errorMessage || 'unknown error'}`);
+    },
+    
+    handleAppuSpeakingStart: (context: string = 'openai-audio-start') => {
+      console.log('🔊 STABLE-REF: Appu started speaking', { context });
+      workflowStateMachine.current.handleStateTransition('APPU_SPEAKING', context);
+    },
+    
+    handleAppuSpeakingStop: (context: string = 'openai-audio-stop') => {
+      console.log('🔇 STABLE-REF: Appu stopped speaking', { context });
+      workflowStateMachine.current.handleStateTransition('APPU_SPEAKING_STOPPED', context);
+    },
+    
+    handleAppuThinking: (context: string = 'openai-processing') => {
+      console.log('🤔 STABLE-REF: Appu is thinking', { context });
+      workflowStateMachine.current.handleStateTransition('APPU_THINKING', context);
+    },
+    
+    handleChildSpeechStart: (context: string = 'openai-user-speech') => {
+      console.log('🎤 STABLE-REF: Child started speaking', { context });
+      workflowStateMachine.current.handleStateTransition('CHILD_SPEAKING', context);
+    },
+    
+    handleChildSpeechStop: (context: string = 'openai-user-speech-end') => {
+      console.log('🔇 STABLE-REF: Child stopped speaking', { context });
+      workflowStateMachine.current.handleStateTransition('CHILD_SPEAKING_STOPPED', context);
+    },
+    
+    // Additional utility methods
+    resetWorkflow: () => {
+      console.log('🔄 STABLE-REF: Resetting workflow');
+      workflowStateMachine.current.handleStateTransition('IDLE', 'workflow-reset');
+    },
+    
+    setEnabled: (enabled: boolean) => {
+      console.log('🔄 STABLE-REF: Setting enabled state', { enabled });
+    },
+    
+    // Legacy methods for backward compatibility
     state: 'IDLE',
     setState: () => {},
-    getState: () => 'IDLE'
+    getState: () => workflowStateMachine.current.currentState
   });
   
   // Create a proper book manager with all required methods
