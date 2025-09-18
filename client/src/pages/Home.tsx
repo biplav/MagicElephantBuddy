@@ -453,71 +453,26 @@ const Home = memo(() => {
     },
     
     handleDisplayBookPage: async (callId: string, args: any, sendFunctionCallOutput?: any, sendResponse?: any) => {
-      console.log("📖 STABLE-REF: Display book page called", { 
-        callId, 
-        args, 
-        argsType: typeof args,
-        rawArgs: args,
-        selectedBook 
-      });
-      
+      console.log("📖 STABLE-REF: Display book page called", { callId, args, selectedBook });
       try {
-        // ✅ ENHANCED PARSING: Handle both string and object arguments
-        let parsedArgs;
-        if (typeof args === 'string') {
-          try {
-            parsedArgs = JSON.parse(args);
-          } catch (parseError) {
-            console.log("📖 STABLE-REF: Failed to parse args as JSON, treating as raw string", { args, parseError });
-            parsedArgs = {};
-          }
-        } else if (typeof args === 'object' && args !== null) {
-          parsedArgs = args;
-        } else {
-          parsedArgs = {};
+        const argsJson = JSON.parse(args);
+        let { bookId, pageNumber } = argsJson;
+        
+        // ✅ CRITICAL FIX: Use selected book from Redux if bookId is missing
+        if (!bookId && selectedBook) {
+          bookId = selectedBook.id;
+          console.log("📖 STABLE-REF: Using selected book ID from Redux store", { bookId });
         }
         
-        // ✅ MATCH SERVER FUNCTION DEFINITION: Extract pageRequest string parameter
-        let { pageRequest } = parsedArgs;
-        
-        console.log("📖 STABLE-REF: Parsed arguments", { parsedArgs, pageRequest });
-        
-        // ✅ CRITICAL FIX: Must have selected book from Redux
-        if (!selectedBook) {
-          console.error("📖 STABLE-REF: No book selected in Redux store", { 
+        if (!bookId || !pageNumber) {
+          console.error("📖 STABLE-REF: Missing required parameters", { 
+            bookId, 
+            pageNumber, 
             hasSelectedBook: !!selectedBook,
-            parsedArgs 
+            selectedBookId: selectedBook?.id 
           });
-          throw new Error("No book selected. Please search for a book first.");
+          throw new Error("Invalid book ID or page number");
         }
-        
-        const bookId = selectedBook.id;
-        
-        // ✅ PARSE PAGE REQUEST: Convert pageRequest string to page number
-        let pageNumber = 1; // Default to first page
-        
-        if (pageRequest) {
-          if (pageRequest === 'first' || pageRequest === 'start') {
-            pageNumber = 1;
-          } else if (pageRequest === 'next') {
-            pageNumber = selectedBook.currentPage + 1;
-          } else if (pageRequest === 'previous' || pageRequest === 'back') {
-            pageNumber = Math.max(1, selectedBook.currentPage - 1);
-          } else if (!isNaN(parseInt(pageRequest))) {
-            pageNumber = parseInt(pageRequest);
-          }
-        }
-        
-        // ✅ VALIDATE PAGE NUMBER: Ensure within book bounds
-        if (pageNumber < 1) pageNumber = 1;
-        if (pageNumber > selectedBook.totalPages) pageNumber = selectedBook.totalPages;
-        
-        console.log("📖 STABLE-REF: Final parameters", { 
-          bookId, 
-          pageNumber, 
-          pageRequest,
-          selectedBookPages: selectedBook.totalPages 
-        });
         
         const pageResponse = await fetch(`/api/books/${bookId}/page/${pageNumber}`);
         
