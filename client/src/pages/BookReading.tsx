@@ -54,18 +54,14 @@ export default function BookReading() {
     queryKey: ['book-page', selectedBook?.id, currentPage],
     queryFn: async (): Promise<Page | null> => {
       if (!selectedBook?.id) return null;
-      console.log('📖 Fetching page:', currentPage, 'for book:', selectedBook.id);
       const response = await fetch(`/api/books/${selectedBook.id}/page/${currentPage}`);
       if (!response.ok) throw new Error('Failed to fetch page');
       const data = await response.json();
-      console.log('📖 Page data received:', data);
       
       // Check if data has the expected structure
       if (data.page) {
-        console.log('📖 Using data.page structure');
         return data.page as Page;
       } else {
-        console.log('📖 Using direct data structure');
         return data as Page;
       }
     },
@@ -86,17 +82,11 @@ export default function BookReading() {
 
   // Auto-advance to next page when audio completes
   function handleAudioComplete() {
-    try {
-      console.log('📖 Audio completed, current page:', currentPage);
-      if (selectedBook && currentPage < selectedBook.totalPages) {
-        handleNextPage();
-      } else {
-        // Book finished
-        setIsReading(false);
-        console.log('📖 Book reading completed!');
-      }
-    } catch (error) {
-      console.error('📖 Error in handleAudioComplete:', error);
+    if (selectedBook && currentPage < selectedBook.totalPages) {
+      handleNextPage();
+    } else {
+      // Book finished
+      setIsReading(false);
     }
   }
 
@@ -123,15 +113,9 @@ export default function BookReading() {
   };
 
   const selectBook = (book: Book) => {
-    try {
-      console.log('📖 Selecting book:', book);
-      setSelectedBook(book);
-      setCurrentPage(1);
-      setIsReading(false);
-      console.log('📖 Book selected successfully');
-    } catch (error) {
-      console.error('📖 Error selecting book:', error);
-    }
+    setSelectedBook(book);
+    setCurrentPage(1);
+    setIsReading(false);
   };
 
   const startReading = () => {
@@ -270,10 +254,10 @@ export default function BookReading() {
               <div className="flex gap-2 pt-3">
                 <Button 
                   onClick={startReading}
-                  disabled={bookLoading}
+                  disabled={booksLoading}
                   data-testid="button-start-reading"
                 >
-                  {bookLoading ? 'Loading...' : 'Start Reading'}
+                  {booksLoading ? 'Loading...' : 'Start Reading'}
                 </Button>
                 <Button 
                   variant="outline" 
