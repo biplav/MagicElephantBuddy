@@ -1596,6 +1596,173 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Simplified AI Integration Endpoints for Book Reading
+  app.post("/api/ai/book-search", async (req: Request, res: Response) => {
+    try {
+      const { bookTitle, keywords, context, sessionId } = req.body;
+      
+      // Search for books using existing endpoint logic
+      const searchQuery = bookTitle || keywords || context || '';
+      const searchResults = await storage.searchBooks({ query: searchQuery });
+      
+      if (searchResults.books?.length > 0) {
+        const book = searchResults.books[0];
+        
+        // Store the selected book for this session (simplified session management)
+        const sessionData = {
+          bookId: book.id,
+          currentPage: 1,
+          sessionId: sessionId || `session_${Date.now()}`,
+          selectedAt: new Date().toISOString()
+        };
+        
+        // In a real app, this would be stored in Redis or a session store
+        // For now, we'll use a simple in-memory store
+        global.bookSessions = global.bookSessions || new Map();
+        global.bookSessions.set(sessionData.sessionId, sessionData);
+        
+        res.json({
+          success: true,
+          book: {
+            id: book.id,
+            title: book.title,
+            author: book.author,
+            summary: book.summary,
+            totalPages: book.totalPages
+          },
+          sessionId: sessionData.sessionId,
+          message: `Found "${book.title}"! Ready to start reading.`
+        });
+      } else {
+        res.json({
+          success: false,
+          message: "No books found matching your search. Let me suggest something else!"
+        });
+      }
+    } catch (error) {
+      console.error("AI book search error:", error);
+      res.status(500).json({ 
+        success: false, 
+        error: "Failed to search books",
+        message: "I'm having trouble finding books right now. Let's try again in a moment!"
+      });
+    }
+  });
+
+  app.post("/api/ai/display-book-page", async (req: Request, res: Response) => {
+    try {
+      const { pageRequest, sessionId } = req.body;
+      
+      // Get session data
+      global.bookSessions = global.bookSessions || new Map();
+      const session = global.bookSessions.get(sessionId);
+      
+      if (!session) {
+        return res.status(400).json({
+          success: false,
+          error: "No book selected. Please search for a book first."
+        });
+      }
+      
+      // Determine page number
+      let pageNumber = session.currentPage || 1;
+      
+      if (pageRequest) {
+        if (pageRequest === 'first' || pageRequest === 'start') {
+          pageNumber = 1;
+        } else if (pageRequest === 'next') {
+          pageNumber = session.currentPage + 1;
+        } else if (pageRequest === 'previous' || pageRequest === 'back') {
+          pageNumber = Math.max(1, session.currentPage - 1);
+        } else if (!isNaN(parseInt(pageRequest))) {
+          pageNumber = parseInt(pageRequest);
+        }
+      }
+      
+      // Get book info to validate page range
+      const book = await storage.getBook(session.bookId);
+      if (!book) {
+        return res.status(400).json({
+          success: false,
+          error: "Book not found"
+        });
+      }
+      
+      // Validate page range
+      pageNumber = Math.max(1, Math.min(pageNumber, book.totalPages));
+      
+      // Update session
+      session.currentPage = pageNumber;
+      global.bookSessions.set(sessionId, session);
+      
+      // Get page data
+      const pageResponse = await storage.getBookPage(session.bookId, pageNumber);
+      
+      if (!pageResponse) {
+        return res.status(400).json({
+          success: false,
+          error: "Page not found"
+        });
+      }
+      
+      res.json({
+        success: true,
+        page: {
+          id: pageResponse.id,
+          pageNumber: pageResponse.pageNumber,
+          pageText: pageResponse.pageText,
+          imageUrl: pageResponse.imageUrl,
+          audioUrl: pageResponse.audioUrl,
+          imageDescription: pageResponse.imageDescription
+        },
+        book: {
+          title: book.title,
+          totalPages: book.totalPages
+        },
+        sessionId: sessionId,
+        message: `Displaying page ${pageNumber} of "${book.title}"`
+      });
+      
+    } catch (error) {
+      console.error("AI display book page error:", error);
+      res.status(500).json({ 
+        success: false,
+        error: "Failed to display book page",
+        message: "I'm having trouble showing the page right now."
+      });
+    }
+  });
+
+  app.get("/api/ai/book-session/:sessionId", async (req: Request, res: Response) => {
+    try {
+      const { sessionId } = req.params;
+      global.bookSessions = global.bookSessions || new Map();
+      const session = global.bookSessions.get(sessionId);
+      
+      if (!session) {
+        return res.status(404).json({
+          success: false,
+          error: "Session not found"
+        });
+      }
+      
+      const book = await storage.getBook(session.bookId);
+      res.json({
+        success: true,
+        session,
+        book: book ? {
+          id: book.id,
+          title: book.title,
+          author: book.author,
+          totalPages: book.totalPages
+        } : null
+      });
+    } catch (error) {
+      console.error("Get book session error:", error);
+      res.status(500).json({ success: false, error: "Failed to get session" });
+    }
+  });
+
   // Book upload and management endpoints
   app.post("/api/admin/upload-book", upload.single("pdf"), async (req: Request, res: Response) => {
     try {
@@ -1962,7 +2129,7 @@ app.get('/api/books/:bookId/page/:pageNumber', async (req, res) => {
       page: {
         id: page.id,
         pageNumber: page.pageNumber,
-        pageImageUrl: page.imageUrl,
+        imageUrl: page.imageUrl, // Fixed: was pageImageUrl 
         pageText: page.pageText,
         imageDescription: page.imageDescription,
         totalPages: book.totalPages,

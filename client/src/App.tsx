@@ -16,6 +16,7 @@ import WorkflowVisualizer from "./pages/WorkflowVisualizer";
 import FrameCaptureTest from "./components/FrameCaptureTest";
 import SimpleCameraTest from "./components/SimpleCameraTest";
 import AdminBookUpload from './pages/AdminBookUpload';
+import BookReading from './pages/BookReading';
 
 function Router() {
   return (
@@ -29,6 +30,7 @@ function Router() {
       <Route path="/frame-test" component={FrameCaptureTest} />
       <Route path="/camera-test" component={SimpleCameraTest} />
       <Route path="/admin/upload-book" component={AdminBookUpload} />
+      <Route path="/book-reading" component={BookReading} />
       <Route component={NotFound} />
     </Switch>
   );
