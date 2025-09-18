@@ -5,7 +5,7 @@ const logger = createServiceLogger('book-audio');
 
 interface UseBookAudioOptions {
   onAudioComplete?: () => void;
-  onSpeakingChange?: (speaking: boolean) => void;
+  // onSpeakingChange removed completely from simplified audio system
 }
 
 interface UseBookAudioReturn {

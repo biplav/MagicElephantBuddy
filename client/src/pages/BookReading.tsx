@@ -143,22 +143,8 @@ export default function BookReading() {
     setCurrentPage(1);
   };
 
-  // Placeholder for future pause management when child speaks
-  // Note: Disabled to prevent pause loop bug until real speech detection is implemented
-  // TODO: Implement actual microphone access and speech detection
-  /*
-  useEffect(() => {
-    if (isChildSpeaking && isAudioPlaying) {
-      pauseAudio();
-      const timer = setTimeout(() => {
-        if (!isChildSpeaking) {
-          resumeAudio();
-        }
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [isChildSpeaking, isAudioPlaying, pauseAudio, resumeAudio]);
-  */
+  // TODO: Implement pause management when child speaks with real speech detection
+  // Currently disabled to prevent audio interruption issues
 
   // Show book reading interface if book is selected and reading
   if (selectedBook && isReading && pageData) {
