@@ -3,7 +3,6 @@ import { createServiceLogger } from "@/lib/logger";
 import { useWebRTCConnection } from "./useWebRTCConnection";
 import { useOpenAISession } from "./useOpenAISession";
 import { useMediaManager } from "./useMediaManager";
-import { useBookManager } from "./useBookManager";
 
 interface OpenAIConnectionOptions {
   childId?: string;
@@ -51,8 +50,6 @@ interface UseOpenAIConnectionOptions {
   captureFrame?: () => string | null;
   // Workflow integration
   workflowStateMachine?: any;
-  // Pre-initialized book manager to prevent re-initialization
-  bookManager?: any;
 }
 
 export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
@@ -68,13 +65,7 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
   const [tokensUsed, setTokensUsed] = useState<number>(0);
   const [isUserSpeaking, setIsUserSpeaking] = useState<boolean>(false);
 
-  // Use passed book manager with fallback for singleton pattern
-  const bookManager = options.bookManager || {
-    // Minimal fallback interface to prevent crashes during singleton transition
-    handleStorybookPageDisplay: () => {},
-    handleFunctionCall: () => {},
-    state: { bookState: 'IDLE' }
-  };
+  // Book manager functionality removed - admin/upload-book only
 
   // Initialize media manager
   const mediaManager = useMediaManager({

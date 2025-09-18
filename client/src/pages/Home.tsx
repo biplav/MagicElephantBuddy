@@ -10,7 +10,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import useAudioRecorder from "@/hooks/useAudioRecorder";
 import { useStableRealtimeAudio } from "@/hooks/useStableRealtimeAudio";
 // Using stable refs instead of global services
-import StorybookDisplay from "../components/StorybookDisplay";
 import { CheckCircle, Mic, MicOff, Video, VideoOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import SilenceTestControls from "@/components/SilenceTestControls";
