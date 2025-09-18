@@ -316,119 +316,16 @@ const Home = memo(() => {
     getState: () => 'IDLE'
   });
   
-  // Create a proper book manager with all required methods
   const bookManager = useRef({
-    // Basic interface methods
     handleStorybookPageDisplay: (pageData: any) => {
       console.log("📖 STABLE-REF: Storybook page display", pageData);
-      handleStorybookPageDisplay(pageData);
     },
     handleFunctionCall: (callId: string, result: any) => {
       console.log("📖 STABLE-REF: Function call", { callId, result });
     },
     state: { bookState: 'IDLE' },
     dispatch: () => {},
-    transitionToState: () => {},
-    
-    // AI Tool Methods - Required by AI interactions
-    handleBookSearchTool: async (callId: string, args: any) => {
-      console.log("📖 STABLE-REF: Book search tool called", { callId, args });
-      try {
-        const argsJson = JSON.parse(args);
-        const searchResponse = await fetch('/api/books/search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: argsJson.query }),
-        });
-        
-        if (!searchResponse.ok) {
-          throw new Error(`Book search failed: ${searchResponse.status}`);
-        }
-        
-        const searchResults = await searchResponse.json();
-        
-        let resultMessage: any;
-        if (searchResults.books?.length > 0) {
-          const selectedBookData = searchResults.books[0];
-          resultMessage = {
-            title: selectedBookData.title,
-            summary: selectedBookData.summary,
-            id: selectedBookData.id,
-            totalPages: selectedBookData.totalPages
-          };
-        } else {
-          resultMessage = {
-            title: "No Books Found",
-            summary: "No books found matching your search. Let me suggest something else!"
-          };
-        }
-        
-        // Call success callback
-        return resultMessage;
-      } catch (error: any) {
-        console.error("Book search error:", error);
-        throw new Error("I'm having trouble searching for books right now. Please try again later.");
-      }
-    },
-    
-    handleDisplayBookPage: async (callId: string, args: any) => {
-      console.log("📖 STABLE-REF: Display book page called", { callId, args });
-      try {
-        const argsJson = JSON.parse(args);
-        let { bookId, pageNumber } = argsJson;
-        
-        if (!bookId || !pageNumber) {
-          throw new Error("Invalid book ID or page number");
-        }
-        
-        const pageResponse = await fetch(`/api/books/${bookId}/page/${pageNumber}`);
-        
-        if (!pageResponse.ok) {
-          throw new Error(`Failed to fetch page: ${pageResponse.status}`);
-        }
-        
-        const pageResponseData = await pageResponse.json();
-        const pageData = pageResponseData.page;
-        
-        if (!pageData) {
-          throw new Error("Page data not found in response");
-        }
-        
-        // Call the storybook display callback
-        handleStorybookPageDisplay({
-          pageImageUrl: pageData.pageImageUrl,
-          pageText: pageData.pageText,
-          pageNumber: pageData.pageNumber,
-          totalPages: pageData.totalPages,
-          bookTitle: pageData.bookTitle,
-          audioUrl: pageData.audioUrl,
-        });
-        
-        return {
-          success: true,
-          pageNumber: pageData.pageNumber,
-          title: pageData.bookTitle
-        };
-      } catch (error: any) {
-        console.error("Display book page error:", error);
-        throw new Error("I'm having trouble displaying that book page right now. Please try again.");
-      }
-    },
-    
-    // Navigation methods
-    navigateToNextPage: async () => {
-      console.log("📖 STABLE-REF: Navigate to next page called");
-      return false; // Placeholder implementation
-    },
-    
-    // Audio control methods
-    playPageAudio: () => {
-      console.log("📖 STABLE-REF: Play page audio called");
-    },
-    
-    stopAudio: () => {
-      console.log("📖 STABLE-REF: Stop audio called");
-    }
+    transitionToState: () => {}
   });
 
   // Initialize realtime audio with the selected provider and error handling
