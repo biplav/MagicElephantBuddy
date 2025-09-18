@@ -1,0 +1,90 @@
+📋 Prompt for Book Reading Code Rewrite
+
+CONTEXT: The current book reading code has become overly complex with heavy Redux state management, multiple service contexts, over-parameterized components, and intricate hook architectures. The goal is to create a simpler, more maintainable book reading experience that follows the clean patterns seen in AdminBookUpload.tsx.
+CURRENT COMPLEXITY ISSUES TO SOLVE:
+1. Over-engineered State Management:
+    * bookStore.ts has 15+ state transitions, complex Redux actions, global state synchronization
+    * useBookStateManager has 200+ lines managing Redux, API calls, and AI function calls
+2. Heavy Service Dependencies:
+    * StorybookDisplay requires 15+ props including openaiConnection, workflowStateMachine, onAppuSpeakingChange
+    * ServiceManagerContext creates tight coupling between unrelated services
+3. Functional Complexity:
+    * Mixed concerns: UI display, state management, API calls, AI integration all intertwined
+    * Function call handling for AI tools embedded deep in React hooks
+REWRITE REQUIREMENTS:
+✅ KEEP (Core Functionality):
+* Book search and selection
+* Page-by-page display with images and text
+* Page navigation (next/previous) with animations
+* Audio playback integration for page narration
+* AI integration (Appu can search books, display pages)
+* Close/exit book reading mode
+❌ SIMPLIFY (Architecture):
+* Remove Redux completely - Use simple React state like AdminBookUpload.tsx
+* Eliminate ServiceManagerContext dependency - Direct API calls like admin page
+* Reduce StorybookDisplay props from 15+ to ~5 essential ones
+* Move AI function handling to simple API endpoints instead of complex hook chains
+* Use TanStack Query for API state management (like admin page)
+🎯 TARGET ARCHITECTURE (Follow AdminBookUpload.tsx Pattern):
+// Simplified book reading page structure
+function BookReading() {
+// Simple state (no Redux)
+const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+const [currentPage, setCurrentPage] = useState(1);
+const [pageData, setPageData] = useState<PageData | null>(null);
+const [isPlaying, setIsPlaying] = useState(false);
+
+// TanStack Query for API calls (like AdminBookUpload)
+const { data: books } = useQuery({ queryKey: ['books'], queryFn: fetchBooks });
+const { data: pageContent } = useQuery({
+queryKey: ['book-page', selectedBook?.id, currentPage],
+queryFn: () => fetchBookPage(selectedBook?.id, currentPage)
+});
+
+// Simple functions (no complex hooks)
+const handleBookSearch = async (query: string) => { /* Simple fetch */ };
+const handleNextPage = () => { /* Simple state update */ };
+const handlePlayAudio = () => { /* Simple audio control */ };
+
+return (
+<div>
+{/* Simple component with minimal props */}
+<BookDisplay
+pageData={pageContent}
+onNextPage={handleNextPage}
+onPreviousPage={handlePreviousPage}
+onClose={() => setSelectedBook(null)}
+/>
+</div>
+);
+}
+
+📁 NEW FILE STRUCTURE:
+✅ client/src/pages/BookReading.tsx - Main reading page (simple state)
+✅ client/src/components/BookDisplay.tsx - Clean display component (5 props max)
+✅ client/src/hooks/useBookAudio.tsx - Simple audio playback hook
+❌ Remove: bookStore.ts, useBookStateManager.ts, ServiceManagerContext dependency
+
+🔗 AI INTEGRATION (Simplified):
+* Book Search: Simple /api/books/search endpoint (already exists)
+* Page Display: Simple /api/books/:id/pages/:page endpoint
+* AI Function Calls: Handle in parent component, not deep in hooks
+🎨 UI REQUIREMENTS:
+* Keep the beautiful animations and visual design from current StorybookDisplay
+* Maintain page flipping animations and responsive layout
+* Preserve audio integration and playback controls. Auto Play audio of the page and on completion, please handover to the next page
+* Keep the same user experience, just simpler code architecture.
+* Manage the pause in book reading when kid speaks something and let LLM decide to continue or not.
+🚀 SUCCESS CRITERIA:
+1. Reduced complexity: <100 lines for main book reading logic
+2. Fewer dependencies: No Redux, minimal context usage
+3. Cleaner component props: BookDisplay has ≤5 props
+4. Maintainable: Follows same patterns as AdminBookUpload.tsx
+5. Full functionality: All current features work (search, display, navigate, audio, AI)
+DO NOT:
+* Change the user experience or visual design
+* Remove any core functionality
+* Break AI integration (Appu should still be able to search/display books)
+* Over-engineer with new patterns - keep it simple like the admin page
+
+This prompt focuses on architectural simplicity while preserving all functionality, following the successful patterns already established in your cleaner admin code.
