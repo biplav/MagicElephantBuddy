@@ -390,8 +390,8 @@ const Home = memo(() => {
     dispatch: () => {},
     transitionToState: () => {},
     
-    // AI Tool Methods - Required by AI interactions - WITH PROPER FUNCTION CALL RESULT HANDLING
-    handleBookSearchTool: async (callId: string, args: any, sendFunctionCallOutput?: any, sendResponse?: any) => {
+    // AI Tool Methods - Required by AI interactions
+    handleBookSearchTool: async (callId: string, args: any) => {
       console.log("📖 STABLE-REF: Book search tool called", { callId, args });
       try {
         const argsJson = JSON.parse(args);
@@ -423,15 +423,15 @@ const Home = memo(() => {
           };
         }
         
-        console.log("📖 STABLE-REF: Book search successful, result:", resultMessage);
+        // Call success callback
         return resultMessage;
       } catch (error: any) {
-        console.error("📖 STABLE-REF: Book search error:", error);
-        throw error;
+        console.error("Book search error:", error);
+        throw new Error("I'm having trouble searching for books right now. Please try again later.");
       }
     },
     
-    handleDisplayBookPage: async (callId: string, args: any, sendFunctionCallOutput?: any, sendResponse?: any) => {
+    handleDisplayBookPage: async (callId: string, args: any) => {
       console.log("📖 STABLE-REF: Display book page called", { callId, args });
       try {
         const argsJson = JSON.parse(args);
@@ -464,17 +464,14 @@ const Home = memo(() => {
           audioUrl: pageData.audioUrl,
         });
         
-        const result = {
+        return {
           success: true,
           pageNumber: pageData.pageNumber,
           title: pageData.bookTitle
         };
-        
-        console.log("📖 STABLE-REF: Display book page successful, result:", result);
-        return result;
       } catch (error: any) {
-        console.error("📖 STABLE-REF: Display book page error:", error);
-        throw error;
+        console.error("Display book page error:", error);
+        throw new Error("I'm having trouble displaying that book page right now. Please try again.");
       }
     },
     

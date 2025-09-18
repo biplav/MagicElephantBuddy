@@ -488,14 +488,10 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
                   await handleGetEyesTool(message.call_id, message.arguments);
                 } else if (message.name === 'bookSearchTool' || message.name === 'book_search_tool') {
                   logger.info('🔧 Handling book_search_tool', { args: message.arguments });
-                  const result = await bookManager.handleBookSearchTool(message.call_id, message.arguments);
-                  sendFunctionCallOutput(message.call_id, result);
-                  dataChannelRef.current?.send(JSON.stringify({ type: 'response.create' }));
+                  bookManager.handleBookSearchTool(message.call_id, message.arguments);
                 } else if (message.name === 'display_book_page') {
                   logger.info('🔧 Handling display_book_page', { args: message.arguments });
-                  const result = await bookManager.handleDisplayBookPage(message.call_id, message.arguments);
-                  sendFunctionCallOutput(message.call_id, result);
-                  dataChannelRef.current?.send(JSON.stringify({ type: 'response.create' }));
+                  bookManager.handleDisplayBookPage(message.call_id, message.arguments);
                 } else {
                   logger.warn('🔧 Unknown function call', { name: message.name, callId: message.call_id });
                   sendFunctionCallError(message.call_id, `Unknown function: ${message.name}`);
