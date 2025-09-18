@@ -72,6 +72,7 @@ interface UseRealtimeAudioOptions {
   onAppuSpeakingChange?: (speaking: boolean) => void;
   modelType?: 'openai' | 'gemini';
   workflowStateMachine?: any;
+  bookManager?: any; // Pre-initialized book manager to prevent re-initialization
 }
 
 interface RealtimeAudioState {
@@ -86,7 +87,7 @@ interface RealtimeAudioState {
   isAppuSpeaking: boolean;
 }
 
-export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) {
+function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) {
   const logger = useMemo(() => createServiceLogger('realtime-audio'), []);
   const modelType = options.modelType || 'openai';
 
@@ -129,6 +130,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
   const openaiConnection = useOpenAIConnection({
     childId: options.childId,
     enableVideo: false, // Camera activated on-demand
+    bookManager: options.bookManager,
     onTranscriptionReceived: (transcription) => {
       logger.info('🎤 Transcription received', { transcription });
       // Assuming setLastTranscription is defined elsewhere or intended to be managed by the hook's state
@@ -317,3 +319,7 @@ export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) 
     lastCapturedFrame: modelType === 'openai' ? openaiConnection.lastCapturedFrame : null
   };
 }
+
+// Export both default and named for compatibility
+export { useRealtimeAudio };
+export default useRealtimeAudio;
