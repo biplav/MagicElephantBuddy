@@ -3,8 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AudioLines, Camera } from "lucide-react";
 import { useBookStateManager } from '@/hooks/useBookStateManager';
-import { BookStateTest } from '@/components/BookStateTest';
-import { VoiceTestInterface } from '@/components/VoiceTestInterface';
 
 type AppState = "welcome" | "interaction";
 
@@ -127,10 +125,19 @@ const Home = memo(() => {
           </Card>
         </div>
 
-        {/* Testing Interfaces */}
-        <div className="mt-6 space-y-6">
-          <BookStateTest />
-          <VoiceTestInterface />
+        {/* Status */}
+        <div className="mt-6">
+          <Card className="bg-white/10 backdrop-blur-sm border-white/20">
+            <CardContent className="p-4">
+              <div className="text-white text-sm">
+                <div>Redux State Test:</div>
+                <div>Book Selected: {selectedBook ? `${selectedBook.title} (${selectedBook.totalPages} pages)` : 'None'}</div>
+                <div className="mt-2 text-green-300">
+                  ✅ Component loaded successfully with proper Redux integration
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

@@ -52,14 +52,6 @@ export function ServiceManagerProvider({ children }: ServiceManagerProviderProps
   );
 }
 
-export function useServiceManager(): ServiceManagerContextType {
-  const context = useContext(ServiceManagerContext);
-  if (!context) {
-    throw new Error('useServiceManager must be used within a ServiceManagerProvider');
-  }
-  return context;
-}
-
 export function useGlobalServices(): ServiceManagerContextType {
   const context = useContext(ServiceManagerContext);
   
