@@ -87,7 +87,7 @@ interface RealtimeAudioState {
   isAppuSpeaking: boolean;
 }
 
-function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) {
+export default function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) {
   const logger = useMemo(() => createServiceLogger('realtime-audio'), []);
   const modelType = options.modelType || 'openai';
 
@@ -319,7 +319,3 @@ function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) {
     lastCapturedFrame: modelType === 'openai' ? openaiConnection.lastCapturedFrame : null
   };
 }
-
-// Export both default and named for compatibility
-export { useRealtimeAudio };
-export default useRealtimeAudio;

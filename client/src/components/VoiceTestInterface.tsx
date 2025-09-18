@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import useRealtimeAudio from '@/hooks/useRealtimeAudio';
+import { useStableRealtimeAudio } from '@/hooks/useStableRealtimeAudio';
 import { useServiceManager } from '@/context/ServiceManagerContext';
 import { useBookStateManager } from '@/hooks/useBookStateManager';
 
@@ -27,14 +27,8 @@ export function VoiceTestInterface() {
     state: { bookState: 'IDLE' },
     dispatch: () => {},
     transitionToState: () => {},
-    handleBookSearchTool: async (callId: string, args: any) => {
-      console.log("📖 Voice test: AI called bookSearchTool", { callId, args });
-      return await handleBookSearch(callId, args);
-    },
-    handleDisplayBookPage: async (callId: string, args: any) => {
-      console.log("📖 Voice test: AI called display_book_page", { callId, args });
-      return await handleDisplayBookPage(callId, args, handleStorybookPageDisplay);
-    }
+    handleBookSearchTool: (callId: string, args: any) => handleBookSearch(callId, args),
+    handleDisplayBookPage: (callId: string, args: any) => handleDisplayBookPage(callId, args, handleStorybookPageDisplay)
   };
 
   // Initialize voice functionality
@@ -42,17 +36,12 @@ export function VoiceTestInterface() {
     isConnected, 
     connect, 
     disconnect, 
-    isRecording 
-  } = useRealtimeAudio({
+    isRecording, 
+    isMuted, 
+    toggleMute 
+  } = useStableRealtimeAudio({
     modelType: 'openai',
-    enableVideo: false,
-    childId: '1',
-    onStorybookPageDisplay: handleStorybookPageDisplay,
-    onTranscriptionReceived: (text) => console.log("🎤 Transcription:", text),
-    onResponseReceived: (text) => console.log("💬 Response:", text),
-    onAudioResponseReceived: (data) => console.log("🔊 Audio received"),
-    onError: (error) => console.error("❌ Error:", error),
-    onAppuSpeakingChange: (speaking) => console.log("🗣️ Appu speaking:", speaking),
+    enableVideo: false
   }, {
     workflowStateMachine,
     bookManager,
@@ -110,7 +99,13 @@ export function VoiceTestInterface() {
           >
             Disconnect
           </Button>
-
+          <Button 
+            onClick={toggleMute} 
+            disabled={!isConnected}
+            variant="outline"
+          >
+            {isMuted ? "Unmute" : "Mute"}
+          </Button>
         </div>
 
         {/* Instructions */}
