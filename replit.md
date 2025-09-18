@@ -150,7 +150,6 @@ This is a full-stack Node.js application called "Appu" - an AI-powered magical e
 - August 3, 2025: Fixed critical infinite re-render loop in useSilenceDetection hook - completely refactored to separate internal state (refs) from UI state (useState), implemented performance optimizations with batched updates and stable callbacks, resolved circular dependency between handleAutoPageAdvance and handleNextPage in StorybookDisplay component
 - August 29, 2025: Consolidated book management architecture - removed duplicate useBookStateManager hook and standardized on Redux-based useBookManager only, eliminated selectedBook null reference conflicts that caused PostgreSQL parsing errors, unified book state management across all AI interaction flows
 - August 29, 2025: Implemented comprehensive service re-initialization fix - created ServiceManagerProvider at App.tsx level to prevent ALL services (book manager, workflow state machine, OpenAI event translator, media manager) from re-initializing during component re-renders, eliminated duplicate conversation creation and systemic hook re-initialization issues
-- August 29, 2025: Fixed critical Redux selectedBook null issue - eliminated useRef closure problems by creating dedicated useBookStateManager hook with direct Redux integration, replaced complex component with clean minimal version, removed obsolete code including useBookManager, BookManagerContext, broken component files, and unused hooks, streamlined ServiceManagerContext to focus on core services only
 
 ## User Preferences
 

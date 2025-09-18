@@ -88,9 +88,9 @@ export const useBookStateManager = () => {
         if (pageRequest === 'first' || pageRequest === 'start') {
           pageNumber = 1;
         } else if (pageRequest === 'next') {
-          pageNumber = 2; // Default next page since currentPage isn't tracked in SelectedBook
+          pageNumber = (selectedBook.currentPage || 1) + 1;
         } else if (pageRequest === 'previous' || pageRequest === 'back') {
-          pageNumber = 1; // Default to first page
+          pageNumber = Math.max(1, (selectedBook.currentPage || 1) - 1);
         } else if (!isNaN(parseInt(pageRequest))) {
           pageNumber = parseInt(pageRequest);
         }

@@ -1,13 +1,11 @@
 import React, { createContext, useContext, useRef, useEffect } from 'react';
 import { createServiceLogger } from '@/lib/logger';
+import { useBookManager } from '@/hooks/useBookManager';
 import { useWorkflowStateMachine } from '@/hooks/useWorkflowStateMachine';
-import { useMediaManager } from '@/hooks/useMediaManager';
-import { useOpenAIEventTranslator } from '@/hooks/useOpenAIEventTranslator';
 
 interface ServiceManagerContextType {
+  bookManager: ReturnType<typeof useBookManager>;
   workflowStateMachine: ReturnType<typeof useWorkflowStateMachine>;
-  mediaManager: ReturnType<typeof useMediaManager>;
-  openaiEventTranslator: ReturnType<typeof useOpenAIEventTranslator>;
   isInitialized: boolean;
 }
 
@@ -22,17 +20,27 @@ export function ServiceManagerProvider({ children }: ServiceManagerProviderProps
   const initializationRef = useRef(false);
   const servicesRef = useRef<ServiceManagerContextType | null>(null);
 
-  // Initialize core services ONCE at the top level (book state now handled by Redux)
+  // Initialize ALL core services ONCE at the top level
   const workflowStateMachine = useWorkflowStateMachine();
-  const mediaManager = useMediaManager({ enableVideo: false });
-  const openaiEventTranslator = useOpenAIEventTranslator();
+  
+  const bookManager = useBookManager({
+    workflowStateMachine,
+    onStorybookPageDisplay: (pageData: any) => {
+      logger.info("Global storybook page display", { pageData });
+    },
+    onFunctionCallResult: (callId: string, result: any) => {
+      logger.info("Global book function call result", { callId, result });
+    },
+    onError: (callId: string, error: string) => {
+      logger.error("Global book function call error", { callId, error });
+    }
+  });
 
   // Create stable services object that never changes reference
   if (!servicesRef.current) {
     servicesRef.current = {
+      bookManager,
       workflowStateMachine,
-      mediaManager,
-      openaiEventTranslator,
       isInitialized: true
     };
   }
@@ -41,7 +49,7 @@ export function ServiceManagerProvider({ children }: ServiceManagerProviderProps
   useEffect(() => {
     if (!initializationRef.current) {
       initializationRef.current = true;
-      logger.info("🚀 SERVICE-MANAGER: Core services initialized (book state handled by Redux)");
+      logger.info("🚀 SERVICE-MANAGER: All core services initialized ONCE at global level");
     }
   }, [logger]);
 
