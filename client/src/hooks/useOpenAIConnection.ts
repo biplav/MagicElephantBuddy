@@ -489,7 +489,7 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
                 } else if (message.name === 'bookSearchTool' || message.name === 'book_search_tool') {
                   logger.info('🔧 Handling book_search_tool', { args: message.arguments });
                   const result = await bookManager.handleBookSearchTool(message.call_id, message.arguments);
-                  sendFunctionCallResult(message.call_id, result);
+                  sendFunctionCallOutput(message.call_id, result);
                   dataChannelRef.current?.send(JSON.stringify({ type: 'response.create' }));
                 } else if (message.name === 'display_book_page') {
                   logger.info('🔧 Handling display_book_page', { args: message.arguments });
