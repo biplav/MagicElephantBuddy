@@ -222,44 +222,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log(`Audio downloaded: ${audioId}`);
   });
 
-  // Serve images and audio from object storage
+  // Serve images and audio from object storage or local filesystem in development
   app.get("/api/object-storage/:fileName", async (req: Request, res: Response) => {
     try {
       const fileName = decodeURIComponent(req.params.fileName);
-      console.log(`Serving file from object storage: ${fileName}`);
+      console.log(`Serving file: ${fileName}`);
+      console.log(`NODE_ENV: ${process.env.NODE_ENV}`);
 
-      const { Client } = await import('@replit/object-storage');
-      const objectStorage = new Client();
+      // In development, try to serve from local filesystem first
+      if (process.env.NODE_ENV === 'development') {
+        const path = await import('path');
+        const fs = await import('fs');
 
-      // Download the base64 data from object storage
-      const downloadResult = await objectStorage.downloadAsText(fileName);
+        // Try to find the file locally first
+        // Remove 'books/' prefix from fileName if it exists since we're already in the books directory
+        const cleanFileName = fileName.startsWith('books/') ? fileName.substring(6) : fileName;
+        const localPath = path.join(process.cwd(), 'public', 'books', cleanFileName);
+        console.log(`Looking for file at: ${localPath}`);
+        console.log(`File exists: ${fs.existsSync(localPath)}`);
 
-      if (!downloadResult.ok) {
-        console.error(`Failed to download ${fileName}:`, downloadResult.error);
-        return res.status(404).json({ error: "File not found in object storage" });
+        try {
+          if (fs.existsSync(localPath)) {
+            console.log(`Serving file from local filesystem: ${localPath}`);
+
+            // Determine content type based on file extension
+            let contentType = 'application/octet-stream';
+            if (fileName.endsWith('.png') || fileName.endsWith('.jpg') || fileName.endsWith('.jpeg')) {
+              contentType = fileName.endsWith('.png') ? 'image/png' : 'image/jpeg';
+            } else if (fileName.endsWith('.mp3')) {
+              contentType = 'audio/mpeg';
+            }
+
+            res.set({
+              'Content-Type': contentType,
+              'Cache-Control': 'public, max-age=86400' // Cache for 24 hours
+            });
+
+            return res.sendFile(localPath);
+          }
+        } catch (localError) {
+          console.log(`File not found locally: ${localPath}, trying object storage...`);
+        }
       }
 
-      // Convert base64 back to buffer
-      const fileBuffer = Buffer.from(downloadResult.value, 'base64');
+      // Fallback to object storage (for production or when file not found locally)
+      try {
+        const { Client } = await import('@replit/object-storage');
+        const objectStorage = new Client();
 
-      // Determine content type based on file extension
-      let contentType = 'application/octet-stream';
-      if (fileName.endsWith('.png') || fileName.endsWith('.jpg') || fileName.endsWith('.jpeg')) {
-        contentType = fileName.endsWith('.png') ? 'image/png' : 'image/jpeg';
-      } else if (fileName.endsWith('.mp3')) {
-        contentType = 'audio/mpeg';
+        // Download the base64 data from object storage
+        const downloadResult = await objectStorage.downloadAsText(fileName);
+
+        if (!downloadResult.ok) {
+          console.error(`Failed to download ${fileName}:`, downloadResult.error);
+          return res.status(404).json({ error: "File not found in object storage" });
+        }
+
+        // Convert base64 back to buffer
+        const fileBuffer = Buffer.from(downloadResult.value, 'base64');
+
+        // Determine content type based on file extension
+        let contentType = 'application/octet-stream';
+        if (fileName.endsWith('.png') || fileName.endsWith('.jpg') || fileName.endsWith('.jpeg')) {
+          contentType = fileName.endsWith('.png') ? 'image/png' : 'image/jpeg';
+        } else if (fileName.endsWith('.mp3')) {
+          contentType = 'audio/mpeg';
+        }
+
+        res.set({
+          'Content-Type': contentType,
+          'Content-Length': fileBuffer.length.toString(),
+          'Cache-Control': 'public, max-age=86400' // Cache for 24 hours
+        });
+
+        res.send(fileBuffer);
+        console.log(`Successfully served file from object storage: ${fileName}`);
+      } catch (objectStorageError) {
+        console.error("Object storage not available (expected in local development):", objectStorageError.message);
+        return res.status(404).json({ error: "File not found locally and object storage not available" });
       }
-
-      res.set({
-        'Content-Type': contentType,
-        'Content-Length': fileBuffer.length.toString(),
-        'Cache-Control': 'public, max-age=86400' // Cache for 24 hours
-      });
-
-      res.send(fileBuffer);
-      console.log(`Successfully served file: ${fileName}`);
     } catch (error) {
-      console.error("Error serving file from object storage:", error);
+      console.error("Error serving file:", error);
       res.status(500).json({ error: "Failed to serve file" });
     }
   });

@@ -3,7 +3,6 @@ import path from "path";
 import pdf2pic from "pdf2pic";
 import pdfParse from "pdf-parse";
 import { createAIService } from "./ai-service";
-import { Client } from "@replit/object-storage";
 
 export interface ProcessedPage {
   pageNumber: number;
@@ -31,13 +30,76 @@ interface ConversionResult {
 
 export class PDFProcessor {
   private aiService = createAIService("standard");
-  private objectStorage = new Client();
+  private isDevMode = process.env.NODE_ENV === 'development';
+  private objectStorage: any = null;
+  private currentPdfPath: string = '';
+  private currentTempDir: string = '';
+
+  constructor() {
+    // Only initialize object storage in production
+    if (!this.isDevMode) {
+      this.initObjectStorage();
+    }
+  }
+
+  private async initObjectStorage() {
+    try {
+      const { Client } = await import('@replit/object-storage');
+      this.objectStorage = new Client();
+    } catch (error) {
+      console.warn('Object storage not available:', error.message);
+    }
+  }
+
+  private async checkSystemDependencies(): Promise<void> {
+    const { execSync } = await import('child_process');
+
+    try {
+      // Check for ImageMagick
+      execSync('magick --version', { stdio: 'ignore' });
+      return;
+    } catch {
+      try {
+        // Check for convert command (older ImageMagick)
+        execSync('convert --version', { stdio: 'ignore' });
+        return;
+      } catch {
+        try {
+          // Check for poppler-utils (pdftoppm)
+          execSync('pdftoppm -h', { stdio: 'ignore' });
+          return;
+        } catch {
+          throw new Error(`PDF processing requires system dependencies. Please install one of the following:
+
+macOS (using Homebrew):
+  brew install imagemagick
+  OR
+  brew install poppler
+
+Ubuntu/Debian:
+  sudo apt-get install imagemagick
+  OR
+  sudo apt-get install poppler-utils
+
+The pdf2pic library needs these tools to convert PDF pages to images.`);
+        }
+      }
+    }
+  }
 
   async processPDF(
     pdfBuffer: Buffer,
     fileName: string,
   ): Promise<ProcessedBook> {
     console.log(`Processing PDF: ${fileName} (${pdfBuffer.length} bytes)`);
+
+    // Check system dependencies first
+    try {
+      await this.checkSystemDependencies();
+    } catch (error) {
+      console.error('System dependency check failed:', error.message);
+      throw error;
+    }
 
     // Create temporary directory for processing
     const tempDir = this.createTempDirectory();
@@ -145,6 +207,10 @@ export class PDFProcessor {
     fileName: string,
     tempDir: string,
   ): Promise<ProcessedPage[]> {
+    // Set current paths for fallback conversion
+    this.currentPdfPath = pdfPath;
+    this.currentTempDir = tempDir;
+
     const convert = this.createPDFConverter(pdfPath, tempDir);
     const pages: ProcessedPage[] = [];
 
@@ -160,7 +226,7 @@ export class PDFProcessor {
         );
         pages.push(page);
 
-        // Add delay between pages to avoid rate limits
+        // Add delay between pages to avoid rate limits and allow file system to settle
         if (pageNum < totalPages) {
           await this.addProcessingDelay();
         }
@@ -175,16 +241,65 @@ export class PDFProcessor {
   }
 
   private createPDFConverter(pdfPath: string, tempDir: string) {
+    // Try ImageMagick first since it's more reliable for this use case
     return pdf2pic.fromPath(pdfPath, {
-      density: 150,
+      density: 100, // Reduced density for better compatibility
       saveFilename: "page",
       savePath: tempDir,
       format: "png",
-      width: 800,
-      height: 1000,
-      quality: 85,
+      width: 600, // Reduced size for better performance
+      height: 800,
+      quality: 80,
       preserveAspectRatio: true,
+      // Use ImageMagick instead of GraphicsMagick for better PDF support
+      graphicsMagick: false,
     });
+  }
+
+  private async convertPageWithPoppler(
+    pdfPath: string,
+    pageNum: number,
+    tempDir: string,
+  ): Promise<Buffer> {
+    const { execSync } = await import('child_process');
+
+    try {
+      console.log(`Using poppler (pdftoppm) to convert page ${pageNum}...`);
+
+      // Generate output filename
+      const outputPrefix = path.join(tempDir, `poppler-page-${pageNum}`);
+
+      // Use pdftoppm to convert specific page to PNG
+      const command = `pdftoppm -png -f ${pageNum} -l ${pageNum} -scale-to-x 600 -scale-to-y 800 "${pdfPath}" "${outputPrefix}"`;
+
+      console.log(`Running command: ${command}`);
+      const output = execSync(command, { stdio: 'pipe', encoding: 'utf8' });
+      console.log(`pdftoppm output: ${output}`);
+
+      // pdftoppm creates files with format: prefix-pagenumber.png
+      // Sometimes it's 001, sometimes just 1, let's check both
+      let outputFile = `${outputPrefix}-${pageNum.toString().padStart(3, '0')}.png`;
+      if (!fs.existsSync(outputFile)) {
+        outputFile = `${outputPrefix}-${pageNum}.png`;
+      }
+
+      console.log(`Looking for output file: ${outputFile}`);
+
+      if (fs.existsSync(outputFile)) {
+        const imageBuffer = fs.readFileSync(outputFile);
+        console.log(`Successfully read ${imageBuffer.length} bytes from ${outputFile}`);
+
+        // Clean up the temporary file
+        fs.unlinkSync(outputFile);
+
+        return imageBuffer;
+      } else {
+        throw new Error(`Output file not found: ${outputFile}`);
+      }
+    } catch (error) {
+      console.error(`Poppler conversion failed for page ${pageNum}:`, error);
+      throw error;
+    }
   }
 
   private async processPage(
@@ -193,8 +308,26 @@ export class PDFProcessor {
     fileName: string,
     totalPages: number,
   ): Promise<ProcessedPage> {
-    // Convert page to image
-    const imageBuffer = await this.convertPageToImage(convert, pageNum);
+    // Convert page to image - try pdf2pic first, then poppler as fallback
+    let imageBuffer: Buffer;
+    try {
+      imageBuffer = await this.convertPageToImage(convert, pageNum);
+    } catch (error) {
+      console.warn(`pdf2pic failed for page ${pageNum}, trying poppler fallback:`, error.message);
+      console.log(`Current PDF path: ${this.currentPdfPath}`);
+      console.log(`Current temp dir: ${this.currentTempDir}`);
+
+      try {
+        // Get the PDF path from the converter function (we'll need to pass it)
+        const pdfPath = this.currentPdfPath; // We'll set this in processPages
+        const tempDir = this.currentTempDir; // We'll set this in processPages
+        imageBuffer = await this.convertPageWithPoppler(pdfPath, pageNum, tempDir);
+        console.log(`✅ Poppler fallback succeeded for page ${pageNum}`);
+      } catch (fallbackError) {
+        console.error(`❌ Poppler fallback also failed for page ${pageNum}:`, fallbackError);
+        throw new Error(`Both pdf2pic and poppler failed for page ${pageNum}. pdf2pic: ${error.message}, poppler: ${fallbackError.message}`);
+      }
+    }
 
     // Store image in object storage
     const imageUrl = await this.storeImageInObjectStorage(
@@ -234,25 +367,67 @@ export class PDFProcessor {
   ): Promise<Buffer> {
     console.log(`Converting page ${pageNum} to image...`);
 
-    const result: ConversionResult = await convert(pageNum, {
-      responseType: "buffer",
-    });
+    try {
+      // Try the conversion with better error handling
+      const result: ConversionResult = await convert(pageNum, {
+        responseType: "buffer",
+      });
 
-    console.log(`Conversion result for page ${pageNum}:`, {
-      hasBuffer: !!result.buffer,
-      bufferLength: result.size,
-      page: result.page,
-      size: result.buffer ? Buffer.byteLength(result.buffer) : 0,
-    });
+      console.log(`Conversion result for page ${pageNum}:`, {
+        hasBuffer: !!result.buffer,
+        bufferLength: result.size,
+        page: result.page,
+        actualBufferSize: result.buffer ? Buffer.byteLength(result.buffer) : 0,
+        resultType: typeof result.buffer,
+      });
 
-    if (!result.buffer || Buffer.byteLength(result.buffer) === 0) {
-      throw new Error(`Empty image buffer for page ${pageNum}`);
+      // Check if result.buffer exists and has content
+      if (!result.buffer) {
+        throw new Error(`No buffer returned for page ${pageNum}`);
+      }
+
+      // Convert result.buffer to actual Buffer if it's not already
+      let imageBuffer: Buffer;
+      if (Buffer.isBuffer(result.buffer)) {
+        imageBuffer = result.buffer;
+      } else {
+        // Sometimes pdf2pic returns a different format, try to convert it
+        imageBuffer = Buffer.from(result.buffer);
+      }
+
+      if (imageBuffer.length === 0) {
+        throw new Error(`Empty image buffer for page ${pageNum}`);
+      }
+
+      console.log(
+        `Successfully generated image buffer for page ${pageNum}: ${imageBuffer.length} bytes`,
+      );
+      return imageBuffer;
+
+    } catch (error) {
+      console.error(`PDF conversion error for page ${pageNum}:`, error);
+
+      // Try alternative conversion method
+      console.log(`Attempting alternative conversion method for page ${pageNum}...`);
+
+      try {
+        // Alternative: try converting without explicit buffer request
+        const altResult = await convert(pageNum);
+        console.log(`Alternative conversion result:`, {
+          type: typeof altResult,
+          hasBuffer: !!altResult.buffer,
+          keys: Object.keys(altResult || {}),
+        });
+
+        if (altResult && altResult.buffer && Buffer.byteLength(altResult.buffer) > 0) {
+          return Buffer.isBuffer(altResult.buffer) ? altResult.buffer : Buffer.from(altResult.buffer);
+        }
+      } catch (altError) {
+        console.error(`Alternative conversion also failed for page ${pageNum}:`, altError);
+      }
+
+      throw new Error(`Failed to convert page ${pageNum} to image: ${error.message}`);
     }
-
-    console.log(
-      `Successfully generated image buffer for page ${pageNum}: ${result.buffer.length} bytes`,
-    );
-    return result.buffer;
   }
 
   private async storeImageInObjectStorage(
@@ -260,11 +435,48 @@ export class PDFProcessor {
     fileName: string,
     pageNum: number,
   ): Promise<string> {
-    const imageFileName = `books/${fileName.replace(".pdf", "")}-page-${pageNum}.png`;
+    const cleanFileName = fileName.replace(".pdf", "");
+    const imageFileName = `${cleanFileName}-page-${pageNum}.png`;
+
+    if (this.isDevMode) {
+      // Store locally in development
+      return this.storeImageLocally(imageBuffer, imageFileName);
+    } else {
+      // Store in object storage in production
+      return this.storeImageInObjectStorageProduction(imageBuffer, imageFileName);
+    }
+  }
+
+  private storeImageLocally(imageBuffer: Buffer, imageFileName: string): string {
+    // Ensure public/books directory exists
+    const booksDir = path.join(process.cwd(), 'public', 'books');
+    if (!fs.existsSync(booksDir)) {
+      fs.mkdirSync(booksDir, { recursive: true });
+    }
+
+    // Save image file locally
+    const localImagePath = path.join(booksDir, imageFileName);
+    fs.writeFileSync(localImagePath, imageBuffer);
+
+    const imageUrl = `/books/${imageFileName}`;
+    console.log(`Stored image locally: ${imageUrl}`);
+    return imageUrl;
+  }
+
+  private async storeImageInObjectStorageProduction(imageBuffer: Buffer, imageFileName: string): Promise<string> {
+    if (!this.objectStorage) {
+      await this.initObjectStorage();
+    }
+
+    if (!this.objectStorage) {
+      throw new Error('Object storage not available');
+    }
+
+    const fullImageFileName = `books/${imageFileName}`;
     const base64Image = imageBuffer.toString("base64");
 
     const uploadResult = await this.objectStorage.uploadFromText(
-      imageFileName,
+      fullImageFileName,
       base64Image,
     );
 
@@ -274,7 +486,7 @@ export class PDFProcessor {
       );
     }
 
-    const imageUrl = `/api/object-storage/${encodeURIComponent(imageFileName)}`;
+    const imageUrl = `/api/object-storage/${encodeURIComponent(fullImageFileName)}`;
     console.log(`Stored image in object storage: ${imageUrl}`);
 
     return imageUrl;
@@ -369,31 +581,68 @@ Emotional Care: Prioritize the child's feeling of safety. If the story has a mom
       // Convert response to buffer
       const buffer = Buffer.from(await ttsResponse.arrayBuffer());
 
-      // Store audio in object storage
-      const audioFileName = `books/${fileName.replace(".pdf", "")}-page-${pageNum}-audio.mp3`;
-      const base64Audio = buffer.toString("base64");
+      // Store audio file
+      const cleanFileName = fileName.replace(".pdf", "");
+      const audioFileName = `${cleanFileName}-page-${pageNum}-audio.mp3`;
 
-      const uploadResult = await this.objectStorage.uploadFromText(
-        audioFileName,
-        base64Audio,
-      );
-
-      if (!uploadResult.ok) {
-        throw new Error(
-          `Failed to upload audio to object storage: ${uploadResult.error}`,
-        );
+      if (this.isDevMode) {
+        // Store locally in development
+        return this.storeAudioLocally(buffer, audioFileName, pageNum);
+      } else {
+        // Store in object storage in production
+        return this.storeAudioInObjectStorageProduction(buffer, audioFileName, pageNum);
       }
-
-      const audioUrl = `/api/object-storage/${encodeURIComponent(audioFileName)}`;
-      console.log(
-        `Generated and stored audio for page ${pageNum}: ${audioUrl}`,
-      );
-
-      return audioUrl;
     } catch (error) {
       console.error(`Error generating audio for page ${pageNum}:`, error);
       return "";
     }
+  }
+
+  private storeAudioLocally(buffer: Buffer, audioFileName: string, pageNum: number): string {
+    // Ensure public/books directory exists
+    const booksDir = path.join(process.cwd(), 'public', 'books');
+    if (!fs.existsSync(booksDir)) {
+      fs.mkdirSync(booksDir, { recursive: true });
+    }
+
+    // Save audio file locally
+    const localAudioPath = path.join(booksDir, audioFileName);
+    fs.writeFileSync(localAudioPath, buffer);
+
+    const audioUrl = `/books/${audioFileName}`;
+    console.log(`Generated and stored audio locally for page ${pageNum}: ${audioUrl}`);
+    return audioUrl;
+  }
+
+  private async storeAudioInObjectStorageProduction(buffer: Buffer, audioFileName: string, pageNum: number): Promise<string> {
+    if (!this.objectStorage) {
+      await this.initObjectStorage();
+    }
+
+    if (!this.objectStorage) {
+      throw new Error('Object storage not available');
+    }
+
+    const fullAudioFileName = `books/${audioFileName}`;
+    const base64Audio = buffer.toString("base64");
+
+    const uploadResult = await this.objectStorage.uploadFromText(
+      fullAudioFileName,
+      base64Audio,
+    );
+
+    if (!uploadResult.ok) {
+      throw new Error(
+        `Failed to upload audio to object storage: ${uploadResult.error}`,
+      );
+    }
+
+    const audioUrl = `/api/object-storage/${encodeURIComponent(fullAudioFileName)}`;
+    console.log(
+      `Generated and stored audio in object storage for page ${pageNum}: ${audioUrl}`,
+    );
+
+    return audioUrl;
   }
 
   private prepareChildFriendlyNarration(text: string, pageNum: number): string {
@@ -434,8 +683,8 @@ Emotional Care: Prioritize the child's feeling of safety. If the story has a mom
   }
 
   private async addProcessingDelay(): Promise<void> {
-    // 200ms delay between pages to avoid rate limits (increased for audio generation)
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    // 500ms delay between pages to allow file system operations to complete
+    await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
   private cleanupTempDirectory(tempDir: string): void {

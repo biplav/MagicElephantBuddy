@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic } from "./vite";
@@ -13,6 +14,10 @@ process.env.TZ = 'Asia/Kolkata';
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Serve static files from public directory (for uploaded books, images, etc.)
+app.use('/public', express.static('public'));
+app.use('/books', express.static('public/books'));
 
 app.use((req, res, next) => {
   const start = Date.now();

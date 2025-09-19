@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,45 +21,64 @@ interface BookDisplayProps {
   onPreviousPage: () => void;
   onClose: () => void;
   autoPlay?: boolean;
+  showAudioControls?: boolean;
+  onAudioStateChange?: (isPlaying: boolean) => void;
+  externalAudioControl?: 'play' | 'pause' | 'toggle' | null;
 }
 
 export default function BookDisplay({
   pageData,
   onNextPage,
-  onPreviousPage, 
+  onPreviousPage,
   onClose,
-  autoPlay = true
+  autoPlay = true,
+  showAudioControls = true,
+  onAudioStateChange,
+  externalAudioControl
 }: BookDisplayProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isFlipping, setIsFlipping] = useState(false);
   const [flipDirection, setFlipDirection] = useState<'next' | 'previous'>('next');
+  const [hasAutoPlayed, setHasAutoPlayed] = useState(false);
 
-  // Audio hook for playback control
-  const { 
-    playPageAudio, 
-    isAudioPlaying, 
-    pauseAudio, 
-    resumeAudio,
-    stopAudio,
-    audioProgress
+  // Memoize audio completion handler to prevent re-renders
+  const handleAudioComplete = useCallback(() => {
+    console.log('📖 Page audio completed');
+    onAudioStateChange?.(false);
+  }, [onAudioStateChange]);
+
+  // Simple audio state
+  const {
+    playPageAudio,
+    isAudioPlaying,
+    pauseAudio,
+    stopAudio
   } = useBookAudio({
-    onAudioComplete: () => {
-      // Parent component handles auto-advance
-      console.log('📖 Page audio completed');
-    }
+    onAudioComplete: handleAudioComplete
   });
 
-  // Reset image loading state when page changes
+  // Reset image loading state and auto-play flag when page changes
   useEffect(() => {
     setImageLoaded(false);
+    setHasAutoPlayed(false);
   }, [pageData?.id]);
 
-  // Auto-play audio when image finishes loading
+  // Memoize auto-play logic to prevent unnecessary effect runs
+  const shouldAutoPlay = useMemo(() => {
+    return pageData?.audioUrl && autoPlay && imageLoaded && !hasAutoPlayed;
+  }, [pageData?.audioUrl, autoPlay, imageLoaded, hasAutoPlayed]);
+
+  // Auto-play audio when conditions are met (only once per page)
   useEffect(() => {
-    if (pageData?.audioUrl && autoPlay && imageLoaded) {
-      playPageAudio(pageData.audioUrl);
+    if (shouldAutoPlay) {
+      setHasAutoPlayed(true);
+      playPageAudio(pageData.audioUrl!).then(() => {
+        onAudioStateChange?.(true);
+      }).catch((error) => {
+        console.error('Auto-play failed:', error);
+      });
     }
-  }, [pageData?.audioUrl, autoPlay, playPageAudio, imageLoaded]);
+  }, [shouldAutoPlay]);
 
   // Handle page navigation with animations
   const handleNextPage = useCallback(async () => {
@@ -90,22 +109,56 @@ export default function BookDisplay({
     }
   }, [isFlipping, onPreviousPage]);
 
-  const handleClose = () => {
+  // Memoize handlers to prevent re-renders
+  const handleClose = useCallback(() => {
     stopAudio();
     onClose();
-  };
+  }, [stopAudio, onClose]);
 
-  const toggleAudio = () => {
+  // Simple audio toggle function
+  const toggleAudio = useCallback(() => {
     if (isAudioPlaying) {
       pauseAudio();
+      onAudioStateChange?.(false);
     } else if (pageData?.audioUrl) {
-      if (audioProgress > 0) {
-        resumeAudio();
-      } else {
-        playPageAudio(pageData.audioUrl);
-      }
+      playPageAudio(pageData.audioUrl).then(() => {
+        onAudioStateChange?.(true);
+      }).catch((error) => {
+        console.error('Audio play failed:', error);
+      });
     }
-  };
+  }, [isAudioPlaying, pageData?.audioUrl, pauseAudio, playPageAudio, onAudioStateChange]);
+
+  // Memoize external control execution to reduce effect complexity
+  const executeExternalControl = useCallback(() => {
+    if (!externalAudioControl || !pageData?.audioUrl) return;
+
+    switch (externalAudioControl) {
+      case 'play':
+        if (!isAudioPlaying) {
+          playPageAudio(pageData.audioUrl).then(() => {
+            onAudioStateChange?.(true);
+          }).catch((error) => {
+            console.error('External play failed:', error);
+          });
+        }
+        break;
+      case 'pause':
+        if (isAudioPlaying) {
+          pauseAudio();
+          onAudioStateChange?.(false);
+        }
+        break;
+      case 'toggle':
+        toggleAudio();
+        break;
+    }
+  }, [externalAudioControl, isAudioPlaying, pageData?.audioUrl, playPageAudio, pauseAudio, onAudioStateChange, toggleAudio]);
+
+  // Handle external audio control commands
+  useEffect(() => {
+    executeExternalControl();
+  }, [executeExternalControl]);
 
   if (!pageData) {
     return (
@@ -136,21 +189,21 @@ export default function BookDisplay({
         <AnimatePresence mode="wait">
           <motion.div
             key={pageData.id}
-            initial={{
+            initial={useMemo(() => ({
               x: flipDirection === 'next' ? 300 : -300,
               opacity: 0,
               rotateY: flipDirection === 'next' ? 45 : -45
-            }}
+            }), [flipDirection])}
             animate={{
               x: 0,
               opacity: 1,
               rotateY: 0
             }}
-            exit={{
+            exit={useMemo(() => ({
               x: flipDirection === 'next' ? -300 : 300,
               opacity: 0,
               rotateY: flipDirection === 'next' ? -45 : 45
-            }}
+            }), [flipDirection])}
             transition={{
               duration: 0.3,
               ease: "easeInOut"
@@ -168,43 +221,37 @@ export default function BookDisplay({
                       <Book className="h-5 w-5" />
                       <span className="font-medium">Page {pageData.pageNumber}</span>
                     </div>
-                    
-                    {/* Audio controls */}
-                    {pageData.audioUrl && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={toggleAudio}
-                        className="text-white hover:bg-white/20"
-                        data-testid="button-toggle-audio"
-                      >
-                        {isAudioPlaying ? (
-                          <VolumeX className="h-4 w-4 mr-2" />
-                        ) : (
-                          <Volume2 className="h-4 w-4 mr-2" />
-                        )}
-                        {isAudioPlaying ? 'Pause' : 'Play'}
-                      </Button>
+
+                    {/* Audio controls - centered */}
+                    {pageData.audioUrl && showAudioControls && (
+                      <div className="absolute left-1/2 transform -translate-x-1/2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={toggleAudio}
+                          className="text-white hover:bg-white/20"
+                          data-testid="button-toggle-audio"
+                        >
+                          {isAudioPlaying ? (
+                            <VolumeX className="h-4 w-4 mr-2" />
+                          ) : (
+                            <Volume2 className="h-4 w-4 mr-2" />
+                          )}
+                          {isAudioPlaying ? 'Pause' : 'Play'}
+                        </Button>
+                      </div>
                     )}
+
+                    {/* Empty space for balance */}
+                    <div className="w-[60px]"></div>
                   </div>
 
-                  {/* Audio progress bar */}
-                  {audioProgress > 0 && (
-                    <div className="mt-2">
-                      <div className="w-full bg-white/20 rounded-full h-2">
-                        <div 
-                          className="bg-white h-2 rounded-full transition-all duration-200"
-                          style={{ width: `${audioProgress}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {/* Page content */}
-                <div className="grid md:grid-cols-2 gap-0 min-h-[400px]">
-                  {/* Page image */}
-                  <div className="relative bg-gray-50 flex items-center justify-center">
+                <div className="flex flex-col">
+                  {/* Page image - maximized space */}
+                  <div className="relative bg-gray-50 flex items-center justify-center min-h-[500px] flex-1">
                     {pageData.imageUrl ? (
                       <img
                         src={pageData.imageUrl}
@@ -219,7 +266,7 @@ export default function BookDisplay({
                         <p>Image not available</p>
                       </div>
                     )}
-                    
+
                     {/* Loading indicator */}
                     {!imageLoaded && pageData.imageUrl && (
                       <div className="absolute inset-0 bg-gray-200 animate-pulse flex items-center justify-center">
@@ -228,40 +275,42 @@ export default function BookDisplay({
                     )}
                   </div>
 
-                  {/* Page text */}
-                  <div className="p-6 flex flex-col justify-center">
-                    <div className="prose prose-lg max-w-none">
-                      <p 
-                        className="text-gray-800 leading-relaxed text-lg"
+                  {/* Page text - compact below image */}
+                  <div className="p-4 bg-white">
+                    <div className="prose prose-sm max-w-none">
+                      <p
+                        className="text-gray-800 leading-relaxed text-base mb-2"
                         data-testid="text-page-content"
                       >
                         {pageData.pageText}
                       </p>
                     </div>
-                    
-                    {/* Image description (if available) */}
-                    {pageData.imageDescription && (
-                      <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                        <p 
-                          className="text-sm text-blue-800 italic"
-                          data-testid="text-image-description"
-                        >
-                          {pageData.imageDescription}
-                        </p>
-                      </div>
-                    )}
 
-                    {/* Audio status indicator */}
-                    {isAudioPlaying && (
-                      <div className="mt-4 flex items-center gap-2 text-blue-600">
-                        <div className="flex space-x-1">
-                          <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
-                          <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse delay-100"></div>
-                          <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse delay-200"></div>
+                    <div className="flex flex-col sm:flex-row gap-2 items-start">
+                      {/* Image description (if available) */}
+                      {pageData.imageDescription && (
+                        <div className="flex-1 p-2 bg-blue-50 rounded text-xs">
+                          <p
+                            className="text-blue-800 italic"
+                            data-testid="text-image-description"
+                          >
+                            {pageData.imageDescription}
+                          </p>
                         </div>
-                        <span className="text-sm">Appu is reading...</span>
-                      </div>
-                    )}
+                      )}
+
+                      {/* Audio status indicator */}
+                      {isAudioPlaying && (
+                        <div className="flex items-center gap-2 text-blue-600">
+                          <div className="flex space-x-1">
+                            <div className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-pulse"></div>
+                            <div className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-pulse delay-100"></div>
+                            <div className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-pulse delay-200"></div>
+                          </div>
+                          <span className="text-xs">Appu is reading...</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
