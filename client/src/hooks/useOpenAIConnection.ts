@@ -49,6 +49,12 @@ interface UseOpenAIConnectionOptions {
   onUserSpeakingChange?: (isSpeaking: boolean) => void;
   // Media functions
   captureFrame?: () => string | null;
+  triggerFrameCapture?: (context: {
+    reason?: string;
+    lookingFor?: string;
+    context?: string;
+    conversationId?: string;
+  }) => Promise<string>;
   // Workflow integration
   workflowStateMachine?: any;
   // Pre-initialized book manager to prevent re-initialization
@@ -257,30 +263,69 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
         logger.info("getEyesTool was called!", { callId, args });
 
         try {
-          const analysisResult = await mediaManager.getFrameAnalysis({
-            reason: args.reason || "Child wants to show something",
-            lookingFor: args.lookingFor || null,
-            context: args.context || null,
-            conversationId: conversationIdRef.current?.toString(),
-          });
+          // Check if triggerFrameCapture is available (new dialog-based approach)
+          if (options.triggerFrameCapture) {
+            logger.info("Using dialog-based frame capture");
 
-          if (analysisResult.success && analysisResult.analysis) {
-            const frameData = mediaManager.captureFrame();
+            const frameData = await options.triggerFrameCapture({
+              reason: args.reason || "Child wants to show something",
+              lookingFor: args.lookingFor || null,
+              context: args.context || null,
+              conversationId: conversationIdRef.current?.toString(),
+            });
+
             if (frameData) {
               setLastCapturedFrame(frameData);
+
+              // Send frame for analysis
+              const analysisResult = await fetch('/api/analyze-frame', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  frameData,
+                  childId: options.childId,
+                  reason: args.reason || "Child wants to show something",
+                  lookingFor: args.lookingFor || null,
+                  context: args.context || null,
+                  conversationId: conversationIdRef.current?.toString(),
+                }),
+              });
+
+              if (analysisResult.ok) {
+                const result = await analysisResult.json();
+                sendFunctionCallResult(callId, result.analysis || "I can see the image clearly. What would you like to know about it?");
+              } else {
+                sendFunctionCallError(callId, "I can see the image, but I'm having trouble analyzing it right now. Can you tell me what you're showing me?");
+              }
+            } else {
+              sendFunctionCallError(callId, "I couldn't capture the image. Could you try showing me again?");
             }
+          } else {
+            // Fallback to old direct capture method
+            logger.info("Using direct frame capture (fallback)");
+
+            const analysisResult = await mediaManager.getFrameAnalysis({
+              reason: args.reason || "Child wants to show something",
+              lookingFor: args.lookingFor || null,
+              context: args.context || null,
+              conversationId: conversationIdRef.current?.toString(),
+            });
+
+            if (analysisResult.success && analysisResult.analysis) {
+              const frameData = mediaManager.captureFrame();
+              if (frameData) {
+                setLastCapturedFrame(frameData);
+              }
+              sendFunctionCallResult(callId, analysisResult.message);
+            } else {
+              sendFunctionCallError(callId, analysisResult.message);
+            }
+
+            logger.info("Completed getEyesTool processing using fallback method", {
+              success: analysisResult.success,
+              hasAnalysis: !!analysisResult.analysis
+            });
           }
-
-          sendFunctionCallOutput(callId, analysisResult.message);
-
-          dataChannelRef.current?.send(JSON.stringify({
-            type: 'response.create'
-          }));
-
-          logger.info("Completed getEyesTool processing", {
-            success: analysisResult.success,
-            hasAnalysis: !!analysisResult.analysis
-          });
 
         } catch (error: any) {
           logger.error("Error handling getEyesTool", {
@@ -288,15 +333,87 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
             stack: error.stack,
           });
 
-          sendFunctionCallOutput(
+          sendFunctionCallError(
             callId,
-            "I'm having trouble seeing what you're showing me right now. Can you try again?",
+            "I'm having trouble seeing what you're showing me right now. Can you try again?"
           );
+        }
+      };
 
-          dataChannelRef.current?.send(JSON.stringify({
-            type: 'response.create'
-          }));
-          logger.info("Triggered response.create after error function call");
+      const handleStartBookReading = async (callId: string, args: any) => {
+        logger.info("startBookReadingTool was called!", { callId, args });
+
+        try {
+          // Fetch complete book data for reading mode
+          const response = await fetch('/api/ai/start-book-reading', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookId: args.bookId,
+              startMessage: args.startMessage,
+              sessionId: callId,
+            }),
+          });
+
+          const result = await response.json();
+
+          if (result.success && result.action === 'START_BOOK_READING') {
+            // Trigger book reading mode
+            options.onBookReadingStart?.(result.bookData);
+            sendFunctionCallResult(callId, result.message);
+          } else {
+            const errorMessage = result.message || "I'm having trouble starting the book. Let's try a different one!";
+            sendFunctionCallError(callId, errorMessage);
+          }
+
+          logger.info("Completed startBookReadingTool", {
+            success: result.success,
+            bookTitle: result.bookData?.title
+          });
+
+        } catch (error: any) {
+          logger.error("Error handling startBookReadingTool", { error: error.message });
+          sendFunctionCallError(callId, "I'm having trouble starting the book. Let me find another story!");
+        }
+      };
+
+      const handleFindAndReadBook = async (callId: string, args: any) => {
+        logger.info("findAndReadBookTool was called!", { callId, args });
+
+        try {
+          // Use the streamlined endpoint that can search and start reading
+          const response = await fetch('/api/ai/start-book-reading', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              startMessage: args.startMessage,
+              sessionId: callId,
+              searchParams: {
+                context: args.context,
+                keywords: args.keywords
+              }
+            }),
+          });
+
+          const result = await response.json();
+
+          if (result.success && result.action === 'START_BOOK_READING') {
+            // Trigger book reading mode
+            options.onBookReadingStart?.(result.bookData);
+            sendFunctionCallResult(callId, result.message);
+          } else {
+            const errorMessage = result.message || "I couldn't find a good book right now. Let me suggest something else!";
+            sendFunctionCallError(callId, errorMessage);
+          }
+
+          logger.info("Completed findAndReadBookTool", {
+            success: result.success,
+            bookTitle: result.bookData?.title
+          });
+
+        } catch (error: any) {
+          logger.error("Error handling findAndReadBookTool", { error: error.message });
+          sendFunctionCallError(callId, "I'm having trouble finding a book. Let me try again!");
         }
       };
 
@@ -498,7 +615,6 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
                   const result = await bookManager.handleBookSearchTool(message.call_id, message.arguments);
                   logger.info('🔧 Book search result', { callId: message.call_id, result });
                   sendFunctionCallResult(message.call_id, result);
-                  dataChannelRef.current?.send(JSON.stringify({ type: 'response.create' }));
                 } else if (message.name === 'display_book_page') {
                   logger.info('🔧 Handling display_book_page', { callId: message.call_id, args: message.arguments });
                   if (!bookManager.handleDisplayBookPage) {
@@ -508,8 +624,13 @@ export function useOpenAIConnection(options: UseOpenAIConnectionOptions = {}) {
                   }
                   const result = await bookManager.handleDisplayBookPage(message.call_id, message.arguments);
                   logger.info('🔧 Page display result', { callId: message.call_id, result });
-                  sendFunctionCallOutput(message.call_id, result);
-                  dataChannelRef.current?.send(JSON.stringify({ type: 'response.create' }));
+                  sendFunctionCallResult(message.call_id, result);
+                } else if (message.name === 'startBookReadingTool') {
+                  logger.info('🔧 Handling startBookReadingTool', { callId: message.call_id, args: message.arguments });
+                  await handleStartBookReading(message.call_id, message.arguments);
+                } else if (message.name === 'findAndReadBookTool') {
+                  logger.info('🔧 Handling findAndReadBookTool (streamlined)', { callId: message.call_id, args: message.arguments });
+                  await handleFindAndReadBook(message.call_id, message.arguments);
                 } else {
                   logger.warn('🔧 Unknown function call', { name: message.name, callId: message.call_id });
                   sendFunctionCallError(message.call_id, `Unknown function: ${message.name}`);

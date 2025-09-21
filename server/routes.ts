@@ -880,6 +880,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log(`🔍 Analyzing frame for child ${childId}:`, { reason, lookingFor, context, conversationId });
+      console.log('🔍 Debug frameData info:', {
+        frameDataType: typeof frameData,
+        frameDataLength: frameData?.length || 0,
+        frameDataStart: frameData?.substring(0, 50) || 'empty',
+        startsWithDataImage: frameData?.startsWith('data:image/') || false
+      });
+
+      // Extract base64 data from data URL if needed
+      let base64Data = frameData;
+      if (frameData.startsWith('data:image/')) {
+        // Extract just the base64 part from data URL
+        base64Data = frameData.split(',')[1];
+        console.log('🔍 Extracted base64 data from data URL');
+      }
 
       // Build context-aware prompt
       let analysisPrompt = "A child is showing something to their AI companion Appu. Analyze this image and describe what you see.";
@@ -915,7 +929,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               {
                 type: "image_url",
                 image_url: {
-                  url: `data:image/png;base64,${frameData}`
+                  url: `data:image/jpeg;base64,${base64Data}`
                 }
               }
             ]
@@ -1091,6 +1105,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         },
         required: ["pageRequest"]
+      }
+    },
+    {
+      type: "function",
+      name: "startBookReadingTool",
+      description: "Start an interactive book reading session after finding a book. This opens the book in full reading mode with voice navigation. Use after bookSearchTool when child wants to read a story.",
+      parameters: {
+        type: "object",
+        properties: {
+          bookId: {
+            type: "string",
+            description: "The ID of the book to start reading"
+          },
+          startMessage: {
+            type: "string",
+            description: "What to say before starting the book (e.g., 'Let me read this wonderful story to you!')"
+          }
+        },
+        required: ["bookId", "startMessage"]
+      }
+    },
+    {
+      type: "function",
+      name: "findAndReadBookTool",
+      description: "PREFERRED: Find and immediately start reading a book in one step. Use this instead of separate bookSearchTool + startBookReadingTool when child asks for stories.",
+      parameters: {
+        type: "object",
+        properties: {
+          context: {
+            type: "string",
+            description: "Why you're searching for books (e.g., 'child asked for bedtime story', 'teaching about animals')"
+          },
+          keywords: {
+            type: "string",
+            description: "Keywords or themes to search for (e.g., 'dragon adventure', 'counting numbers', 'friendship story')"
+          },
+          startMessage: {
+            type: "string",
+            description: "What to say when starting the book (e.g., 'I found a wonderful story about animals!')"
+          }
+        },
+        required: ["context", "startMessage"]
       }
     }
   ];
@@ -1806,6 +1862,109 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Start book reading mode - for LLM tool integration
+  app.post("/api/ai/start-book-reading", async (req: Request, res: Response) => {
+    try {
+      const { bookId, startMessage, sessionId, searchParams } = req.body;
+
+      console.log("📚 Start book reading request:", { bookId, hasSearchParams: !!searchParams, searchParams });
+
+      let targetBookId = bookId;
+
+      // If no bookId provided, try to search or use default
+      if (!targetBookId) {
+        console.log("📚 No bookId provided, attempting search or fallback");
+
+        // Use the same search logic as /api/books/search (hardcoded for now)
+        const babyTigerBook = await storage.getBookByTitle('Bal Hanuman And Orange');
+        if (babyTigerBook) {
+          targetBookId = babyTigerBook.id;
+          console.log("📚 Found book via search:", babyTigerBook.title, "ID:", targetBookId);
+        } else {
+          console.log("📚 No book found in search, trying fallback");
+
+          // Fallback: get any available book
+          const allBooks = await storage.getAllBooks();
+          if (allBooks && allBooks.length > 0) {
+            targetBookId = allBooks[0].id;
+            console.log("📚 Using fallback book:", allBooks[0].title, "ID:", targetBookId);
+          }
+        }
+      }
+
+      if (!targetBookId) {
+        console.log("📚 No targetBookId after search attempt");
+        return res.status(400).json({
+          success: false,
+          error: "Book ID is required or search failed",
+          message: "I couldn't find a book to read. Let me suggest something else!"
+        });
+      }
+
+      console.log("📚 Proceeding with targetBookId:", targetBookId);
+
+      // Get the full book with all pages
+      const book = await storage.getBook(targetBookId);
+      if (!book) {
+        return res.status(404).json({
+          success: false,
+          error: "Book not found",
+          message: "I couldn't find that book. Let me search for another one!"
+        });
+      }
+
+      // Get all pages for the book
+      const pages = await storage.getPagesByBook(targetBookId.toString());
+
+      if (!pages || pages.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: "No pages found for book",
+          message: "This book doesn't have any pages yet."
+        });
+      }
+
+      // Format book data for BookDisplay component
+      const bookData = {
+        ...book,
+        pages: pages.map(page => ({
+          id: `${book.id}-${page.pageNumber}`,
+          pageNumber: page.pageNumber,
+          pageText: page.text,
+          imageUrl: page.imageUrl,
+          imageDescription: page.imageDescription,
+          audioUrl: page.audioUrl
+        }))
+      };
+
+      // Store in session if sessionId provided
+      if (sessionId) {
+        global.bookSessions = global.bookSessions || new Map();
+        global.bookSessions.set(sessionId, {
+          sessionId,
+          bookId: book.id,
+          currentPage: 1,
+          bookData
+        });
+      }
+
+      res.json({
+        success: true,
+        action: "START_BOOK_READING",
+        bookData,
+        message: startMessage || `Let me read "${book.title}" to you!`
+      });
+
+    } catch (error) {
+      console.error("Start book reading error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to start book reading",
+        message: "I'm having trouble starting the book. Let's try again!"
+      });
+    }
+  });
+
   // Book upload and management endpoints
   app.post("/api/admin/upload-book", upload.single("pdf"), async (req: Request, res: Response) => {
     try {
@@ -1922,7 +2081,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Book not found" });
       }
 
-      const pages = await storage.getPagesByBook(bookId.toString());
+      const pages = await storage.getPagesByBook(bookId);
 
       // Delete images from object storage
       const { Client } = await import('@replit/object-storage');
@@ -2110,9 +2269,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get specific book with all pages
   app.get("/api/books/:bookId/full", async (req: Request, res: Response) => {
     try {
-      const bookId = parseInt(req.params.bookId);
+      const bookId = req.params.bookId;
 
-      if (isNaN(bookId)) {
+      if (!bookId) {
         return res.status(400).json({ error: "Invalid book ID" });
       }
 
@@ -2124,7 +2283,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const pages = await storage.getPagesByBook(bookId.toString());
+      const pages = await storage.getPagesByBook(bookId);
 
       res.json({
         success: true,

@@ -17,8 +17,11 @@ export function useStableRealtimeAudio(options: any) {
     options.onError,
     options.onConversationStart,
     options.onStorybookPageDisplay,
+    options.onBookReadingStart,
     options.onAudioPlaybook,
-    options.onCapturedFrame
+    options.onCapturedFrame,
+    options.onAppuSpeakingChange,
+    options.triggerFrameCapture
   ]);
 
   // Always call useRealtimeAudio (never conditional) - this prevents hook order violations

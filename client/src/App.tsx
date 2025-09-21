@@ -17,6 +17,7 @@ import FrameCaptureTest from "./components/FrameCaptureTest";
 import SimpleCameraTest from "./components/SimpleCameraTest";
 import AdminBookUpload from './pages/AdminBookUpload';
 import BookReading from './pages/BookReading';
+import GetEyePage from './pages/GetEyePage';
 
 function Router() {
   return (
@@ -31,6 +32,7 @@ function Router() {
       <Route path="/camera-test" component={SimpleCameraTest} />
       <Route path="/admin/upload-book" component={AdminBookUpload} />
       <Route path="/book-reading" component={BookReading} />
+      <Route path="/get-eye" component={GetEyePage} />
       <Route component={NotFound} />
     </Switch>
   );

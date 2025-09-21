@@ -68,11 +68,18 @@ interface UseRealtimeAudioOptions {
     totalPages: number;
     bookTitle: string;
   }) => void;
+  onBookReadingStart?: (bookData: any) => void;
   onBookSelected?: (book: any) => void;
   onAppuSpeakingChange?: (speaking: boolean) => void;
   modelType?: 'openai' | 'gemini';
   workflowStateMachine?: any;
   bookManager?: any; // Pre-initialized book manager to prevent re-initialization
+  triggerFrameCapture?: (context: {
+    reason?: string;
+    lookingFor?: string;
+    context?: string;
+    conversationId?: string;
+  }) => Promise<string>; // LLM frame capture trigger function
 }
 
 interface RealtimeAudioState {
@@ -109,9 +116,10 @@ function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) {
     onAudioResponseReceived: options.onAudioResponseReceived,
     onError: options.onError,
     onStorybookPageDisplay: options.onStorybookPageDisplay,
+    onBookReadingStart: options.onBookReadingStart,
     onBookSelected: options.onBookSelected,
     onAppuSpeakingChange: options.onAppuSpeakingChange
-  }), [options.onTranscriptionReceived, options.onResponseReceived, options.onAudioResponseReceived, options.onError, options.onStorybookPageDisplay, options.onBookSelected, options.onAppuSpeakingChange]);
+  }), [options.onTranscriptionReceived, options.onResponseReceived, options.onAudioResponseReceived, options.onError, options.onStorybookPageDisplay, options.onBookReadingStart, options.onBookSelected, options.onAppuSpeakingChange]);
 
   // Initialize media manager - camera will be activated on-demand via getFrameAnalysis
   const mediaManager = useMediaCapture({ enableVideo: false });
@@ -131,6 +139,7 @@ function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) {
     childId: options.childId,
     enableVideo: false, // Camera activated on-demand
     bookManager: options.bookManager,
+    triggerFrameCapture: options.triggerFrameCapture, // Pass through LLM frame capture trigger
     onTranscriptionReceived: (transcription) => {
       logger.info('🎤 Transcription received', { transcription });
       // Assuming setLastTranscription is defined elsewhere or intended to be managed by the hook's state
@@ -150,6 +159,7 @@ function useRealtimeAudio(options: UseRealtimeAudioOptions = {}) {
       options.onError?.(error);
     },
     onStorybookPageDisplay: options.onStorybookPageDisplay,
+    onBookReadingStart: options.onBookReadingStart,
     onAppuSpeakingChange: (speaking) => {
       logger.info('🗣️ Appu speaking change', { speaking });
       // Assuming setIsAppuSpeaking is defined elsewhere or intended to be managed by the hook's state

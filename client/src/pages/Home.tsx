@@ -4,6 +4,7 @@ import { Settings, Bug, Speaker, User, Brain, Eye, EyeOff } from "lucide-react";
 import { Link } from "wouter";
 import Elephant from "@/components/Elephant";
 import PermissionModal from "@/components/PermissionModal";
+import CaptureDialog from "@/components/CaptureDialog";
 import { VideoDisplay } from "@/components/VideoDisplay";
 import { CapturedFrameDisplay } from "@/components/CapturedFrameDisplay";
 import { motion, AnimatePresence } from "framer-motion";
@@ -16,9 +17,11 @@ import SilenceTestControls from "@/components/SilenceTestControls";
 import { useSilenceDetection } from '@/hooks/useSilenceDetection';
 // useWorkflowStateMachine now comes from ServiceManagerContext
 import { useOpenAIEventTranslator } from '@/hooks/useOpenAIEventTranslator';
+import BookDisplay from '@/components/BookDisplay';
 
 
 type AppState = "welcome" | "interaction";
+type ConversationMode = "chat" | "reading";
 
 const Home = memo(() => {
   const [appState, setAppState] = useState<AppState>("welcome");
@@ -60,6 +63,26 @@ const Home = memo(() => {
   } | null>(null);
   const [isStorybookVisible, setIsStorybookVisible] = useState<boolean>(false);
   const [enableVideo, setEnableVideo] = useState<boolean>(false);
+
+  // Book reading mode state
+  const [conversationMode, setConversationMode] = useState<ConversationMode>("chat");
+  const [activeBook, setActiveBook] = useState<any>(null);
+  const [currentBookPage, setCurrentBookPage] = useState<number>(1);
+  const [bookVoiceCommand, setBookVoiceCommand] = useState<string | null>(null);
+
+  // Speaking state for audio coordination (needed early for useStableRealtimeAudio)
+  const [isAppuSpeaking, setIsAppuSpeaking] = useState(false);
+
+  // LLM getEyesTool capture dialog state
+  const [isLLMCaptureDialogOpen, setIsLLMCaptureDialogOpen] = useState<boolean>(false);
+  const [llmCaptureContext, setLLMCaptureContext] = useState<{
+    reason?: string;
+    lookingFor?: string;
+    context?: string;
+    conversationId?: string;
+    resolveCapture?: (frameData: string) => void;
+    rejectCapture?: (error: Error) => void;
+  } | null>(null);
 
   // Derive aiProvider from saved settings
   const aiProvider: 'openai' | 'gemini' = aiSettings.voiceMode === 'gemini' ? 'gemini' : 'openai';
@@ -153,6 +176,38 @@ const Home = memo(() => {
     }
   }, []); // Remove selectedChildId dependency to break circular dependency
 
+  // Parse voice commands for book navigation
+  const parseBookCommand = useCallback((text: string): string | null => {
+    const normalizedText = text.toLowerCase();
+
+    // Check for explicit BOOK_COMMAND format first
+    const commandMatch = normalizedText.match(/book_command:\s*(\w+)/);
+    if (commandMatch) {
+      return commandMatch[1];
+    }
+
+    // Fallback to pattern matching for natural language
+    const commandPatterns = {
+      'next': ['next page', 'turn the page', 'go forward', 'next'],
+      'previous': ['go back', 'previous page', 'back', 'previous', 'last page'],
+      'repeat': ['read that again', 'repeat', 'again', 'one more time'],
+      'pause': ['pause', 'stop', 'wait'],
+      'play': ['play', 'continue', 'resume', 'keep reading'],
+      'exit': ['stop reading', 'close book', 'done', 'finish', 'exit']
+    };
+
+    // Check for book command patterns
+    for (const [command, patterns] of Object.entries(commandPatterns)) {
+      for (const pattern of patterns) {
+        if (normalizedText.includes(pattern)) {
+          return command;
+        }
+      }
+    }
+
+    return null;
+  }, []);
+
   // Load available children when parent logs in
   useEffect(() => {
     if (isParentLoggedIn) {
@@ -199,17 +254,34 @@ const Home = memo(() => {
   }, []);
 
   const handleResponse = useCallback((text: string) => {
-    setElephantState("speaking");
-    setSpeechText(text);
+    // Check if we're in reading mode and this is a voice command
+    if (conversationMode === "reading") {
+      const command = parseBookCommand(text);
+      if (command) {
+        console.log('📖 Detected book command:', command);
+        setBookVoiceCommand(command);
+        // Don't speak the command, just process it
+        return;
+      }
+    }
 
-    // Return to idle state after speaking
-    setTimeout(() => {
-      setElephantState("idle");
+    // Normal conversation response handling (only if not in reading mode)
+    if (conversationMode === "chat") {
+      setElephantState("speaking");
+      setSpeechText(text);
+
+      // Return to idle state after speaking
       setTimeout(() => {
-        setSpeechText(undefined);
-      }, 1000);
-    }, 4000);
-  }, []);
+        setElephantState("idle");
+        setTimeout(() => {
+          setSpeechText(undefined);
+        }, 1000);
+      }, 4000);
+    } else {
+      // In reading mode, keep responses brief and don't interrupt book audio
+      console.log('📖 In reading mode, got response:', text);
+    }
+  }, [conversationMode, parseBookCommand]);
 
   const handleAudioResponse = useCallback((audioData: string) => {
     if (enableLocalPlayback) {
@@ -308,17 +380,209 @@ const Home = memo(() => {
     }
   }, [enableLocalPlayback]);
 
+  // Book reading mode handlers
+  const startBookReading = useCallback((bookData: any) => {
+    console.log('📖 Starting book reading mode:', bookData.title);
+    setActiveBook(bookData);
+    setCurrentBookPage(1);
+    setConversationMode("reading");
+  }, []);
+
+  const stopBookReading = useCallback(() => {
+    console.log('📖 Stopping book reading mode');
+    setActiveBook(null);
+    setCurrentBookPage(1);
+    setBookVoiceCommand(null);
+    setConversationMode("chat");
+
+    // Resume normal conversation mode - LLM can speak again
+    setElephantState("idle");
+  }, []);
+
+  const handleBookPageChange = useCallback((direction: 'next' | 'previous') => {
+    if (!activeBook) return;
+
+    setCurrentBookPage(prev => {
+      if (direction === 'next') {
+        return Math.min(prev + 1, activeBook.totalPages);
+      } else {
+        return Math.max(prev - 1, 1);
+      }
+    });
+  }, [activeBook]);
+
+  const handleVoiceCommandProcessed = useCallback(() => {
+    // Clear the voice command after it's been processed
+    setBookVoiceCommand(null);
+  }, []);
+
+  // Book reading start handler (defined after book reading functions)
+  const handleBookReadingStart = useCallback((bookData: any) => {
+    console.log("📖 Book reading start callback received:", bookData);
+
+    // Pause any ongoing LLM audio before starting book reading
+    setElephantState("idle");
+    setSpeechText(undefined);
+
+    startBookReading(bookData);
+  }, [startBookReading]);
+
+  // LLM getEyesTool capture handlers
+  const triggerLLMFrameCapture = useCallback((context: {
+    reason?: string;
+    lookingFor?: string;
+    context?: string;
+    conversationId?: string;
+  }): Promise<string> => {
+    console.log('🎥 LLM triggered frame capture:', context);
+
+    return new Promise((resolve, reject) => {
+      setLLMCaptureContext({
+        ...context,
+        resolveCapture: resolve,
+        rejectCapture: reject
+      });
+      setIsLLMCaptureDialogOpen(true);
+    });
+  }, []);
+
+  const handleLLMFrameCaptured = useCallback((frameData: string) => {
+    console.log('🎥 LLM frame captured successfully');
+
+    if (llmCaptureContext?.resolveCapture) {
+      llmCaptureContext.resolveCapture(frameData);
+    }
+
+    // Clean up
+    setIsLLMCaptureDialogOpen(false);
+    setLLMCaptureContext(null);
+  }, [llmCaptureContext]);
+
+  const handleLLMCaptureDialogClose = useCallback(() => {
+    console.log('🎥 LLM capture dialog closed');
+
+    if (llmCaptureContext?.rejectCapture) {
+      llmCaptureContext.rejectCapture(new Error('Capture cancelled by user'));
+    }
+
+    // Clean up
+    setIsLLMCaptureDialogOpen(false);
+    setLLMCaptureContext(null);
+  }, [llmCaptureContext]);
+
   // Use stable refs to prevent re-initialization (fixed approach)
   const workflowStateMachine = useRef({
     state: 'IDLE',
+    currentState: 'IDLE',
     setState: () => {},
-    getState: () => 'IDLE'
+    getState: () => 'IDLE',
+    handleLoading: () => {
+      console.log('🔄 Workflow: Loading');
+    },
+    handleIdle: () => {
+      console.log('🔄 Workflow: Idle');
+    },
+    handleAppuThinking: () => {
+      console.log('🔄 Workflow: Appu Thinking');
+    },
+    handleAppuSpeakingStart: () => {
+      console.log('🔄 Workflow: Appu Speaking Start');
+      setIsAppuSpeaking(true);
+    },
+    handleAppuSpeakingStop: () => {
+      console.log('🔄 Workflow: Appu Speaking Stop');
+      setIsAppuSpeaking(false);
+    },
+    handleChildSpeechStart: () => {
+      console.log('🔄 Workflow: Child Speech Start');
+    },
+    handleChildSpeechStop: () => {
+      console.log('🔄 Workflow: Child Speech Stop');
+    },
+    handleListening: () => {
+      console.log('🔄 Workflow: Listening');
+    }
   });
   
+  // Centralized book service functions
+  const bookService = useMemo(() => ({
+    searchBooks: async (searchParams: { context: string; bookTitle?: string; keywords?: string; ageRange?: string }) => {
+      const response = await fetch('/api/books/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ageRange: '3-5 years', ...searchParams }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Search failed: ${response.status}`);
+      }
+
+      return response.json();
+    },
+
+    getFullBookData: async (bookId: string) => {
+      const response = await fetch('/api/ai/start-book-reading', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookId, startMessage: '' }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Book fetch failed: ${response.status}`);
+      }
+
+      return response.json();
+    }
+  }), []);
+
+  // Simplified book manager with clear separation of concerns
   const bookManager = useRef({
+    // Legacy storybook support
     handleStorybookPageDisplay: (pageData: any) => {
       console.log("📖 STABLE-REF: Storybook page display", pageData);
     },
+
+    // Book search handler - now streamlined
+    handleBookSearchTool: async (callId: string, args: any) => {
+      console.log("📖 Book search tool called", { callId, args });
+
+      try {
+        const result = await bookService.searchBooks(args);
+
+        if (result.success && result.books?.length > 0) {
+          const book = result.books[0];
+          return {
+            success: true,
+            message: `Found "${book.title}"! Would you like me to read it to you?`,
+            bookId: book.id,
+            bookTitle: book.title,
+            totalPages: book.totalPages || book.pages?.length || 0
+          };
+        } else {
+          return {
+            success: false,
+            message: result.message || "I couldn't find any books matching that request. Would you like me to suggest a different story?"
+          };
+        }
+      } catch (error) {
+        console.error("Error in book search:", error);
+        return {
+          success: false,
+          message: "I'm having trouble searching for books right now. Let me try again in a moment!"
+        };
+      }
+    },
+
+    // Simplified page display handler
+    handleDisplayBookPage: async (callId: string, args: any) => {
+      console.log("📖 Display book page tool called - redirecting to new reading mode", { callId, args });
+      return {
+        success: true,
+        message: "Let me start the interactive reading mode for you instead!"
+      };
+    },
+
+    // Legacy state management
     handleFunctionCall: (callId: string, result: any) => {
       console.log("📖 STABLE-REF: Function call", { callId, result });
     },
@@ -352,11 +616,14 @@ const Home = memo(() => {
     onError: handleError,
     onConversationStart: handleConversationStart,
     onStorybookPageDisplay: handleStorybookPageDisplay,
+    onBookReadingStart: handleBookReadingStart,
     onAudioPlaybook: handleAudioPlayback,
     onCapturedFrame: setCapturedFrame,
+    onAppuSpeakingChange: setIsAppuSpeaking, // Update Appu speaking state for book auto-play
     selectedChildId: selectedChildId || undefined,
     workflowStateMachine: workflowStateMachine.current,
-    bookManager: bookManager.current // Pass stable ref instances
+    bookManager: bookManager.current, // Pass stable ref instances
+    triggerFrameCapture: triggerLLMFrameCapture // Pass LLM capture trigger function
   });
 
   // Initialize OpenAI event translator AFTER both dependencies are available
@@ -718,7 +985,6 @@ const Home = memo(() => {
 
   // Dummy variables for StorybookDisplay props to satisfy the type checker
   const [autoPageTurnEnabled, setAutoPageTurnEnabled] = useState(false);
-  const [isAppuSpeaking, setIsAppuSpeaking] = useState(false);
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
 
 
@@ -893,6 +1159,16 @@ const Home = memo(() => {
               className="p-1 sm:p-2"
             >
               <Brain className="h-4 w-4 sm:h-5 sm:w-5 text-neutral" />
+            </Button>
+          </Link>
+          <Link href="/get-eye">
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="GetEye Tool"
+              className="p-1 sm:p-2"
+            >
+              <Eye className="h-4 w-4 sm:h-5 sm:w-5 text-neutral" />
             </Button>
           </Link>
           <Link href="/settings">
@@ -1469,6 +1745,29 @@ const Home = memo(() => {
           workflowStateMachine={workflowStateMachine}
         />
       )}
+
+      {/* Book Reading Mode Overlay */}
+      {conversationMode === "reading" && activeBook && activeBook.pages && (
+        <BookDisplay
+          pageData={activeBook.pages[currentBookPage - 1]}
+          onNextPage={() => handleBookPageChange('next')}
+          onPreviousPage={() => handleBookPageChange('previous')}
+          onClose={stopBookReading}
+          autoPlay={true}
+          autoAdvancePage={true}
+          isAppuSpeaking={isAppuSpeaking}
+          showAudioControls={true}
+          voiceCommand={bookVoiceCommand}
+          onVoiceCommandProcessed={handleVoiceCommandProcessed}
+        />
+      )}
+
+      {/* LLM getEyesTool Capture Dialog */}
+      <CaptureDialog
+        isOpen={isLLMCaptureDialogOpen}
+        onClose={handleLLMCaptureDialogClose}
+        onFrameCaptured={handleLLMFrameCaptured}
+      />
     </div>
   );
 });

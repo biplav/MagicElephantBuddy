@@ -217,19 +217,29 @@ export const useMediaCapture = ({ enableVideo }: MediaCaptureOptions) => {
   }, [stableEnableVideo, createMediaConstraints, setupVideoElements]);
 
   const cleanup = useCallback(() => {
+    console.log('🎥 useMediaCapture cleanup called');
+
     if (videoRef.current && document.body.contains(videoRef.current)) {
+      console.log('🎥 Removing video element from DOM');
       document.body.removeChild(videoRef.current);
       videoRef.current = null;
     }
 
     if (canvasRef.current && document.body.contains(canvasRef.current)) {
+      console.log('🎥 Removing canvas element from DOM');
       document.body.removeChild(canvasRef.current);
       canvasRef.current = null;
     }
 
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
+      console.log('🎥 Stopping camera tracks:', streamRef.current.getTracks().length);
+      streamRef.current.getTracks().forEach(track => {
+        console.log('🎥 Stopping track:', track.kind, track.label);
+        track.stop();
+      });
       streamRef.current = null;
+    } else {
+      console.log('🎥 No active stream to cleanup');
     }
 
     setState({
@@ -237,6 +247,8 @@ export const useMediaCapture = ({ enableVideo }: MediaCaptureOptions) => {
       videoEnabled: false,
       hasVideoPermission: false,
     });
+
+    console.log('🎥 useMediaCapture cleanup completed');
   }, []);
 
   return {

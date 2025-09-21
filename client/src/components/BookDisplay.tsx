@@ -21,9 +21,13 @@ interface BookDisplayProps {
   onPreviousPage: () => void;
   onClose: () => void;
   autoPlay?: boolean;
+  autoAdvancePage?: boolean;
+  isAppuSpeaking?: boolean;
   showAudioControls?: boolean;
   onAudioStateChange?: (isPlaying: boolean) => void;
   externalAudioControl?: 'play' | 'pause' | 'toggle' | null;
+  voiceCommand?: 'next' | 'previous' | 'repeat' | 'pause' | 'play' | 'exit' | null;
+  onVoiceCommandProcessed?: () => void;
 }
 
 export default function BookDisplay({
@@ -32,20 +36,34 @@ export default function BookDisplay({
   onPreviousPage,
   onClose,
   autoPlay = true,
+  autoAdvancePage = true,
+  isAppuSpeaking = false,
   showAudioControls = true,
   onAudioStateChange,
-  externalAudioControl
+  externalAudioControl,
+  voiceCommand,
+  onVoiceCommandProcessed
 }: BookDisplayProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isFlipping, setIsFlipping] = useState(false);
   const [flipDirection, setFlipDirection] = useState<'next' | 'previous'>('next');
   const [hasAutoPlayed, setHasAutoPlayed] = useState(false);
+  const [hasAppuSpokenForThisPage, setHasAppuSpokenForThisPage] = useState(false);
 
   // Memoize audio completion handler to prevent re-renders
   const handleAudioComplete = useCallback(() => {
     console.log('📖 Page audio completed');
     onAudioStateChange?.(false);
-  }, [onAudioStateChange]);
+
+    // Auto-advance to next page if enabled
+    if (autoAdvancePage) {
+      console.log('📖 Auto-advancing to next page');
+      // Small delay to ensure smooth transition
+      setTimeout(() => {
+        onNextPage();
+      }, 1000); // 1 second delay for better UX
+    }
+  }, [onAudioStateChange, autoAdvancePage, onNextPage]);
 
   // Simple audio state
   const {
@@ -61,16 +79,25 @@ export default function BookDisplay({
   useEffect(() => {
     setImageLoaded(false);
     setHasAutoPlayed(false);
+    setHasAppuSpokenForThisPage(false);
   }, [pageData?.id]);
+
+  // Track when Appu has spoken for this page
+  useEffect(() => {
+    if (isAppuSpeaking) {
+      setHasAppuSpokenForThisPage(true);
+    }
+  }, [isAppuSpeaking]);
 
   // Memoize auto-play logic to prevent unnecessary effect runs
   const shouldAutoPlay = useMemo(() => {
-    return pageData?.audioUrl && autoPlay && imageLoaded && !hasAutoPlayed;
-  }, [pageData?.audioUrl, autoPlay, imageLoaded, hasAutoPlayed]);
+    return pageData?.audioUrl && autoPlay && imageLoaded && !hasAutoPlayed && !isAppuSpeaking && hasAppuSpokenForThisPage;
+  }, [pageData?.audioUrl, autoPlay, imageLoaded, hasAutoPlayed, isAppuSpeaking, hasAppuSpokenForThisPage]);
 
-  // Auto-play audio when conditions are met (only once per page)
+  // Auto-play audio when conditions are met (only once per page, after Appu has spoken and stopped)
   useEffect(() => {
     if (shouldAutoPlay) {
+      console.log('📖 Auto-playing page audio after Appu finished speaking for this page');
       setHasAutoPlayed(true);
       playPageAudio(pageData.audioUrl!).then(() => {
         onAudioStateChange?.(true);
@@ -78,7 +105,7 @@ export default function BookDisplay({
         console.error('Auto-play failed:', error);
       });
     }
-  }, [shouldAutoPlay]);
+  }, [shouldAutoPlay, playPageAudio, pageData.audioUrl, onAudioStateChange]);
 
   // Handle page navigation with animations
   const handleNextPage = useCallback(async () => {
@@ -159,6 +186,51 @@ export default function BookDisplay({
   useEffect(() => {
     executeExternalControl();
   }, [executeExternalControl]);
+
+  // Handle voice commands from LLM conversation
+  useEffect(() => {
+    if (!voiceCommand) return;
+
+    console.log('📖 Processing voice command:', voiceCommand);
+
+    switch (voiceCommand) {
+      case 'next':
+        handleNextPage();
+        break;
+      case 'previous':
+        handlePreviousPage();
+        break;
+      case 'repeat':
+        // Restart current page audio
+        if (pageData?.audioUrl) {
+          playPageAudio(pageData.audioUrl).then(() => {
+            onAudioStateChange?.(true);
+          }).catch((error) => {
+            console.error('Voice command repeat failed:', error);
+          });
+        }
+        break;
+      case 'pause':
+        pauseAudio();
+        onAudioStateChange?.(false);
+        break;
+      case 'play':
+        if (pageData?.audioUrl) {
+          playPageAudio(pageData.audioUrl).then(() => {
+            onAudioStateChange?.(true);
+          }).catch((error) => {
+            console.error('Voice command play failed:', error);
+          });
+        }
+        break;
+      case 'exit':
+        handleClose();
+        break;
+    }
+
+    // Notify parent that command was processed
+    onVoiceCommandProcessed?.();
+  }, [voiceCommand, handleNextPage, handlePreviousPage, handleClose, pageData?.audioUrl, playPageAudio, pauseAudio, onAudioStateChange, onVoiceCommandProcessed]);
 
   if (!pageData) {
     return (

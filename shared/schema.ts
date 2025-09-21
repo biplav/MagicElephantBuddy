@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, json, doublePrecision, vector } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, json, doublePrecision, vector, bigint } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -381,7 +381,7 @@ export const capturedFrames = pgTable("captured_frames", {
 
 // Books table for storybook feature
 export const books = pgTable("books", {
-  id: serial("id").primaryKey(),
+  id: text("id").primaryKey(),
   title: text("title").notNull(),
   author: text("author"),
   genre: text("genre"),
@@ -399,7 +399,7 @@ export const books = pgTable("books", {
 // Pages table for individual book pages
 export const pages = pgTable("pages", {
   id: serial("id").primaryKey(),
-  bookId: integer("book_id").notNull().references(() => books.id),
+  bookId: text("book_id").notNull().references(() => books.id),
   pageNumber: integer("page_number").notNull(),
   imageUrl: text("image_url").notNull(),
   pageText: text("page_text").notNull(),

@@ -82,16 +82,16 @@ export interface IStorage {
 
   // Book management
   createBook(book: InsertBook): Promise<Book>;
-  getBook(bookId: number): Promise<Book | undefined>;
+  getBook(bookId: string): Promise<Book | undefined>;
   getBookByTitle(title: string): Promise<Book | undefined>;
   getBookByTitleAndMetadata(title: string, metadata: any): Promise<Book | undefined>;
   searchBooks(searchTerms: string, ageRange?: string): Promise<Book[]>;
-  updateBook(bookId: number, updates: Partial<InsertBook>): Promise<Book>;
-  deleteBook(bookId: number): Promise<void>;
+  updateBook(bookId: string, updates: Partial<InsertBook>): Promise<Book>;
+  deleteBook(bookId: string): Promise<void>;
   createPage(page: InsertPage): Promise<Page>;
   getPagesByBook(bookId: string): Promise<Page[]>;
   getPageByBookByPageNumber(bookId: string, pageNumber: string): Promise<Page | undefined>;
-  deletePagesByBook(bookId: number): Promise<void>;
+  deletePagesByBook(bookId: string): Promise<void>;
   getAllBooks(): Promise<Book[]>;
 
   // Captured frames
@@ -666,7 +666,7 @@ export class DatabaseStorage implements IStorage {
     return matchingBooks;
   }
 
-  async updateBook(bookId: number, updates: Partial<InsertBook>): Promise<Book> {
+  async updateBook(bookId: string, updates: Partial<InsertBook>): Promise<Book> {
     const [book] = await db
       .update(books)
       .set({ ...updates, updatedAt: new Date() })
@@ -698,11 +698,11 @@ export class DatabaseStorage implements IStorage {
     return page || undefined;
   }
 
-  async deletePagesByBook(bookId: number): Promise<void> {
+  async deletePagesByBook(bookId: string): Promise<void> {
     await db.delete(pages).where(eq(pages.bookId, bookId));
   }
 
-  async deleteBook(bookId: number): Promise<void> {
+  async deleteBook(bookId: string): Promise<void> {
     await db.delete(books).where(eq(books.id, bookId));
   }
 
