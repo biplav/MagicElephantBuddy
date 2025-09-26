@@ -21,15 +21,17 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
 
   // Parent dashboard methods
-  getParent(id: number): Promise<Parent | undefined>;
+  getParent(id: string | number): Promise<Parent | undefined>;
   getParentByEmail(email: string): Promise<Parent | undefined>;
   createParent(parent: InsertParent): Promise<Parent>;
+  getAllParents(): Promise<Parent[]>;
 
   // Child management
   createChild(child: InsertChild): Promise<Child>;
   getChildrenByParent(parentId: string | number): Promise<Child[]>;
   getChild(id: number): Promise<Child | undefined>;
   updateChildProfile(childId: number, profile: any): Promise<Child>;
+  getAllChildren(): Promise<Child[]>;
 
   // Conversation management
   createConversation(conversation: InsertConversation): Promise<Conversation>;
@@ -119,7 +121,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Parent methods
-  async getParent(id: number): Promise<Parent | undefined> {
+  async getParent(id: string | number): Promise<Parent | undefined> {
     const [parent] = await db.select().from(parents).where(eq(parents.id, id));
     return parent || undefined;
   }
@@ -132,6 +134,10 @@ export class DatabaseStorage implements IStorage {
   async createParent(insertParent: InsertParent): Promise<Parent> {
     const [parent] = await db.insert(parents).values(insertParent).returning();
     return parent;
+  }
+
+  async getAllParents(): Promise<Parent[]> {
+    return await db.select().from(parents).orderBy(desc(parents.createdAt));
   }
 
   // Child methods
@@ -160,6 +166,10 @@ export class DatabaseStorage implements IStorage {
       .where(eq(children.id, childId))
       .returning();
     return child;
+  }
+
+  async getAllChildren(): Promise<Child[]> {
+    return await db.select().from(children).where(eq(children.isActive, true));
   }
 
   // Conversation methods
@@ -566,22 +576,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   async searchBooks(searchTerms: string, ageRange?: string): Promise<Book[]> {
-    // TEMPORARY HACK: Return "the baby tiger" book when searching for it
-    if (searchTerms.toLowerCase().includes('baby tiger') || searchTerms.toLowerCase().includes('tiger')) {
-      const babyTigerBook = await db
-        .select()
-        .from(books)
-        .where(and(
-          eq(books.isActive, true),
-          eq(books.title, 'the baby tiger')
-        ))
-        .limit(1);
-
-      if (babyTigerBook.length > 0) {
-        return babyTigerBook;
-      }
-    }
-
     // Split search terms into individual words for better matching
     const terms = searchTerms.toLowerCase().split(' ').filter(term => term.length > 1);
 

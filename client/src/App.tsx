@@ -18,6 +18,7 @@ import SimpleCameraTest from "./components/SimpleCameraTest";
 import AdminBookUpload from './pages/AdminBookUpload';
 import BookReading from './pages/BookReading';
 import GetEyePage from './pages/GetEyePage';
+import AdminDashboard from './pages/AdminDashboard';
 
 function Router() {
   return (
@@ -30,6 +31,7 @@ function Router() {
       <Route path="/workflow-visualizer" component={WorkflowVisualizer} />
       <Route path="/frame-test" component={FrameCaptureTest} />
       <Route path="/camera-test" component={SimpleCameraTest} />
+      <Route path="/admin" component={AdminDashboard} />
       <Route path="/admin/upload-book" component={AdminBookUpload} />
       <Route path="/book-reading" component={BookReading} />
       <Route path="/get-eye" component={GetEyePage} />

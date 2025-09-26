@@ -686,6 +686,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { parentId, name, age, profile } = req.body;
       const child = await storage.createChild({ parentId, name, age, profile });
+
+      // Initialize default milestones for the new child
+      await milestoneService.initializeMilestonesForChild(child.id);
+      console.log(`✅ Initialized default milestones for child ${child.id} (${child.name})`);
+
       res.json(child);
     } catch (error) {
       console.error("Error creating child:", error);
@@ -1875,15 +1880,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!targetBookId) {
         console.log("📚 No bookId provided, attempting search or fallback");
 
-        // Use the same search logic as /api/books/search (hardcoded for now)
-        const babyTigerBook = await storage.getBookByTitle('Bal Hanuman And Orange');
-        if (babyTigerBook) {
-          targetBookId = babyTigerBook.id;
-          console.log("📚 Found book via search:", babyTigerBook.title, "ID:", targetBookId);
-        } else {
-          console.log("📚 No book found in search, trying fallback");
+        if (searchParams) {
+          // Use search parameters to find appropriate book
+          const searchTerms = searchParams.context || searchParams.keywords || '';
+          console.log("📚 Searching with terms:", searchTerms);
 
-          // Fallback: get any available book
+          if (searchTerms) {
+            const searchResults = await storage.searchBooks(searchTerms, searchParams.ageRange);
+            if (searchResults && searchResults.length > 0) {
+              targetBookId = searchResults[0].id;
+              console.log("📚 Found book via search:", searchResults[0].title, "ID:", targetBookId);
+            }
+          }
+        }
+
+        // If still no book found, use fallback
+        if (!targetBookId) {
+          console.log("📚 No book found in search, trying fallback");
           const allBooks = await storage.getAllBooks();
           if (allBooks && allBooks.length > 0) {
             targetBookId = allBooks[0].id;
@@ -2129,27 +2142,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/books/search", async (req: Request, res: Response) => {
     try {
       const { context, bookTitle, keywords, ageRange } = req.body;
-      
-      if(req) {
-        //Below code is a hack needs to be removed later
-        const babyTigerBook = await storage.getBookByTitle('Bal Hanuman And Orange');
-        const babyTigerBookPages = await storage.getPagesByBook(babyTigerBook.id.toString());
-        return res.json({
-          success: true,
-          message: `I found "${babyTigerBookPages.title}"! This looks like a wonderful story.`,
-          books: [{
-            ...babyTigerBook,
-            pages: babyTigerBookPages.map(page => ({
-              pageNumber: page.pageNumber,
-              imageUrl: page.imageUrl,
-              pageText: page.pageText,
-              imageDescription: page.imageDescription
-            }))
-          }]
-        });
-        //Above code is a hack needs to be removed later
-      }
-      
 
       console.log(`📚 Book search request:`, { context, bookTitle, keywords, ageRange });
 
@@ -2945,6 +2937,265 @@ Answer the parent question using this data. Be specific, helpful, and encouragin
     } catch (error) {
       console.error("Error getting job status:", error);
       res.status(500).json({ message: "Failed to get job status" });
+    }
+  });
+
+  // Admin authentication middleware
+  const isAdmin = async (req: Request, res: Response, next: any) => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        return res.status(401).json({ error: "Email required for admin access" });
+      }
+
+      // Check if user is admin (demo@parent.com)
+      if (email !== "demo@parent.com") {
+        return res.status(403).json({ error: "Admin access denied" });
+      }
+
+      // Verify the user exists
+      const parent = await storage.getParentByEmail(email);
+      if (!parent) {
+        return res.status(404).json({ error: "Admin user not found" });
+      }
+
+      next();
+    } catch (error) {
+      console.error("Admin auth error:", error);
+      res.status(500).json({ error: "Admin authentication failed" });
+    }
+  };
+
+  // Admin login endpoint
+  app.post("/api/admin/login", async (req: Request, res: Response) => {
+    try {
+      const { email, password } = req.body;
+
+      if (email !== "demo@parent.com") {
+        return res.status(403).json({ error: "Admin access denied" });
+      }
+
+      const parent = await storage.getParentByEmail(email);
+      if (!parent || parent.password !== password) {
+        return res.status(401).json({ error: "Invalid admin credentials" });
+      }
+
+      res.json({
+        admin: true,
+        parent: { id: parent.id, email: parent.email, name: parent.name }
+      });
+    } catch (error) {
+      console.error("Admin login error:", error);
+      res.status(500).json({ error: "Admin login failed" });
+    }
+  });
+
+  // Get all parents and their children (admin only)
+  app.post("/api/admin/users", isAdmin, async (req: Request, res: Response) => {
+    try {
+      const allParents = await storage.getAllParents();
+      const usersWithChildren = [];
+
+      for (const parent of allParents) {
+        const children = await storage.getChildrenByParent(parent.id);
+        const childrenWithMilestones = [];
+
+        for (const child of children) {
+          const milestones = await storage.getMilestonesByChild(child.id);
+          const conversations = await storage.getConversationsByChild(child.id, 5);
+
+          childrenWithMilestones.push({
+            ...child,
+            milestonesCount: milestones.length,
+            conversationsCount: conversations.length,
+            completedMilestones: milestones.filter(m => m.isCompleted).length
+          });
+        }
+
+        usersWithChildren.push({
+          parent: {
+            id: parent.id,
+            email: parent.email,
+            name: parent.name,
+            createdAt: parent.createdAt
+          },
+          children: childrenWithMilestones,
+          totalChildren: children.length
+        });
+      }
+
+      res.json({
+        users: usersWithChildren,
+        totalParents: allParents.length,
+        totalChildren: usersWithChildren.reduce((sum, user) => sum + user.totalChildren, 0)
+      });
+    } catch (error) {
+      console.error("Error fetching admin users:", error);
+      res.status(500).json({ error: "Failed to fetch users" });
+    }
+  });
+
+  // Initialize milestones for existing children (retroactive fix)
+  app.post("/api/admin/initialize-milestones", async (req: Request, res: Response) => {
+    try {
+      const { childId } = req.body;
+
+      if (childId) {
+        // Initialize for specific child
+        const child = await storage.getChild(childId);
+        if (!child) {
+          return res.status(404).json({ error: "Child not found" });
+        }
+
+        // Check if milestones already exist
+        const existingMilestones = await storage.getMilestonesByChild(childId);
+        if (existingMilestones.length > 0) {
+          return res.json({
+            message: `Child ${child.name} already has ${existingMilestones.length} milestones`,
+            childId,
+            existingMilestones: existingMilestones.length
+          });
+        }
+
+        await milestoneService.initializeMilestonesForChild(childId);
+        const newMilestones = await storage.getMilestonesByChild(childId);
+
+        res.json({
+          message: `Successfully initialized ${newMilestones.length} milestones for ${child.name}`,
+          childId,
+          milestonesCreated: newMilestones.length,
+          milestones: newMilestones
+        });
+      } else {
+        // Initialize for all children without milestones
+        const allChildren = await storage.getAllChildren();
+        const results = [];
+
+        for (const child of allChildren) {
+          const existingMilestones = await storage.getMilestonesByChild(child.id);
+          if (existingMilestones.length === 0) {
+            await milestoneService.initializeMilestonesForChild(child.id);
+            const newMilestones = await storage.getMilestonesByChild(child.id);
+            results.push({
+              childId: child.id,
+              childName: child.name,
+              milestonesCreated: newMilestones.length
+            });
+          }
+        }
+
+        res.json({
+          message: `Initialized milestones for ${results.length} children`,
+          results
+        });
+      }
+    } catch (error) {
+      console.error("Error initializing milestones:", error);
+      res.status(500).json({ error: "Failed to initialize milestones" });
+    }
+  });
+
+  // Admin create parent endpoint
+  app.post("/api/admin/create-parent", isAdmin, async (req: Request, res: Response) => {
+    try {
+      const { name, parentEmail, parentPassword } = req.body;
+
+      // Validate required fields
+      if (!name || !parentEmail || !parentPassword) {
+        return res.status(400).json({ error: "Name, email, and password are required" });
+      }
+
+      // Check if parent already exists
+      const existingParent = await storage.getParentByEmail(parentEmail);
+      if (existingParent) {
+        return res.status(400).json({ error: "Parent with this email already exists" });
+      }
+
+      // Create new parent
+      const newParent = await storage.createParent({
+        name,
+        email: parentEmail,
+        password: parentPassword, // In production, hash this password
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+
+      console.log(`✅ Admin created parent: ${newParent.name} (${newParent.email})`);
+
+      res.json({
+        success: true,
+        message: "Parent created successfully",
+        parent: {
+          id: newParent.id,
+          name: newParent.name,
+          email: newParent.email,
+          createdAt: newParent.createdAt
+        }
+      });
+    } catch (error) {
+      console.error("Error creating parent:", error);
+      res.status(500).json({ error: "Failed to create parent" });
+    }
+  });
+
+  // Admin create child endpoint
+  app.post("/api/admin/create-child", isAdmin, async (req: Request, res: Response) => {
+    try {
+      const { parentId, name, nickname, age, interests, learningGoals } = req.body;
+
+      // Validate required fields
+      if (!parentId || !name || !age) {
+        return res.status(400).json({ error: "Parent ID, name, and age are required" });
+      }
+
+      // Check if parent exists
+      const parent = await storage.getParent(parentId);
+      if (!parent) {
+        return res.status(404).json({ error: "Parent not found" });
+      }
+
+      // Create child profile
+      const profile = {
+        name,
+        nick_name: nickname || '',
+        age: parseInt(age),
+        interests: interests || [],
+        learningGoals: learningGoals || [],
+        preferredLearningStyle: "interactive",
+        currentLevel: "beginner"
+      };
+
+      // Create new child
+      const newChild = await storage.createChild({
+        parentId: String(parentId),
+        name,
+        age: parseInt(age),
+        profile,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+
+      // Initialize milestones for the new child
+      const { milestoneService } = await import('./milestone-service');
+      await milestoneService.initializeMilestonesForChild(newChild.id);
+
+      console.log(`✅ Admin created child: ${newChild.name} (Age ${newChild.age}) for parent ${parent.name}`);
+
+      res.json({
+        success: true,
+        message: "Child created successfully",
+        child: {
+          id: newChild.id,
+          name: newChild.name,
+          age: newChild.age,
+          parentId: newChild.parentId,
+          createdAt: newChild.createdAt
+        }
+      });
+    } catch (error) {
+      console.error("Error creating child:", error);
+      res.status(500).json({ error: "Failed to create child" });
     }
   });
 
